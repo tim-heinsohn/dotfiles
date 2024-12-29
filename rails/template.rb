@@ -30,3 +30,43 @@ rake "db:create"
 run "cp ~/dotfiles/rubocop/rubocop.yml .rubocop.yml"
 run "rubocop -A"
 
+# Add documentation comments to core classes
+inject_into_file "app/controllers/application_controller.rb", before: "class ApplicationController < ActionController::Base" do
+  <<~RUBY
+    # The ApplicationController is the parent controller for all controllers in the application.
+    # It provides common functionality and configuration for all controllers.
+    #
+  RUBY
+end
+
+inject_into_file "app/helpers/application_helper.rb", before: "module ApplicationHelper" do
+  <<~RUBY
+    # The ApplicationHelper module provides helper methods that are available across all views.
+    #
+  RUBY
+end
+
+inject_into_file "app/mailers/application_mailer.rb", before: "class ApplicationMailer < ActionMailer::Base" do
+  <<~RUBY
+    # The ApplicationMailer is the parent mailer for all mailers in the application.
+    # It provides common functionality and configuration for all mailers.
+    #
+  RUBY
+end
+
+inject_into_file "app/models/application_record.rb", before: "class ApplicationRecord < ActiveRecord::Base" do
+  <<~RUBY
+    # The ApplicationRecord is the parent class for all models in the application.
+    # It provides common functionality and configuration for all models.
+    #
+  RUBY
+end
+
+inject_into_file "config/application.rb", before: "class Application < Rails::Application" do
+  <<~RUBY
+    # The Application class is the main configuration class for the Rails application.
+    # It contains settings and configurations that affect the entire application.
+    #
+  RUBY
+end
+
