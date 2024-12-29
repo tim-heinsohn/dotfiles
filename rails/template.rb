@@ -24,4 +24,9 @@ gem_group :development, :test do
   gem "solargraph-rails"
 end
 
+generate "rspec:install"
+rake "db:create"
+
 run "cp ~/dotfiles/rubocop/rubocop.yml .rubocop.yml"
+run "rubocop -A"
+
