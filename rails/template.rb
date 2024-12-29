@@ -24,6 +24,7 @@ gem_group :development, :test do
   gem "solargraph-rails"
 end
 
+run "bundle install"
 generate "rspec:install"
 rake "db:create"
 
