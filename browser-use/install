@@ -15,12 +15,15 @@ source ~/.browser-use-venv/bin/activate
 # Install main package
 uv pip install "browser-use-webui @ git+https://github.com/warmshao/browser-use-webui.git"
 
+exit
+
+
 # Install Playwright
 uv pip install playwright
 
 # Install browser dependencies
 echo "Installing Playwright browsers..."
-python -m playwright install --with-deps chromium
+./playwright/install
 
 # Install additional requirements
 if [ -f requirements.txt ]; then
