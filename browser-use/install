@@ -8,14 +8,13 @@ echo "Installing system dependencies..."
 echo "Creating virtual environment..."
 uv venv --python python3.12 ~/.browser-use-venv
 
-# Install browser-use-webui and dependencies
-echo "Installing browser-use-webui and dependencies..."
+# Install dependencies
+echo "Installing browser-use and dependencies..."
 source ~/.browser-use-venv/bin/activate
 
-# Install main package
-uv pip install "browser-use-webui @ git+https://github.com/warmshao/browser-use-webui.git"
-
-exit
+# Install main packages
+uv pip install browser-use
+uv pip install gradio fastapi uvicorn
 
 
 # Install Playwright
