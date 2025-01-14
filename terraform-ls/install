@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Create temporary directory for downloads
+TEMP_DIR=$(mktemp -d)
+cleanup() {
+    rm -rf "$TEMP_DIR"
+}
+trap cleanup EXIT
+
+# Get latest version from releases page
+LATEST_VERSION=$(curl -s https://releases.hashicorp.com/terraform-ls/ | grep -o 'terraform-ls_[0-9]\+\.[0-9]\+\.[0-9]\+' | head -n1 | cut -d'_' -f2)
+
+# Set variables for download
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    ARCH="amd64"
+elif [ "$ARCH" = "aarch64" ]; then
+    ARCH="arm64"
+fi
+
+FILENAME="terraform-ls_${LATEST_VERSION}_${OS}_${ARCH}.zip"
+CHECKSUM_FILE="terraform-ls_${LATEST_VERSION}_SHA256SUMS"
+
+# Download files
+echo "Downloading terraform-ls version ${LATEST_VERSION}..."
+curl -s -o "$TEMP_DIR/$FILENAME" "https://releases.hashicorp.com/terraform-ls/${LATEST_VERSION}/${FILENAME}"
+curl -s -o "$TEMP_DIR/$CHECKSUM_FILE" "https://releases.hashicorp.com/terraform-ls/${LATEST_VERSION}/${CHECKSUM_FILE}"
+
+# Verify checksum
+cd "$TEMP_DIR"
+if ! sha256sum -c --ignore-missing "$CHECKSUM_FILE"; then
+    echo "Checksum verification failed!"
+    exit 1
+fi
+
+# Install binary
+echo "Installing terraform-ls..."
+unzip -o "$FILENAME"
+sudo mkdir -p /usr/local/bin
+sudo mv terraform-ls /usr/local/bin/
+sudo chmod +x /usr/local/bin/terraform-ls
+
+# Verify installation
+if terraform-ls -v; then
+    echo "terraform-ls installed successfully!"
+else
+    echo "Installation failed!"
+    exit 1
+fi
