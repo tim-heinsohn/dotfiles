@@ -58,6 +58,8 @@ vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
 })
 lspconfig.dockerls.setup{}
 
+lspconfig.terraformls.setup{}
+
 vim.diagnostic.config({
   float = {
     show_header = true,

@@ -92,6 +92,7 @@ bindsym $mod+e exec --no-startup-id rofi -show emoji -modi emoji theme DarkBlue
 # password manager
 #bindsym $mod+p exec rofi-pass
 bindsym $mod+p exec --no-startup-id rofi-pass -theme DarkBlue --root $HOME/.password-store/inaudito-private:$HOME/ia.passwords/:$HOME/.password-store
+bindsym $mod+Shift+p exec --no-startup-id rofi-pass -theme DarkBlue --root $HOME/ia.passwords:/$HOME/.password-store/inaudito-private
 
 # change focus
 bindsym $mod+h focus left

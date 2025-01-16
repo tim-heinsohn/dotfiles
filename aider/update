@@ -1,5 +1,52 @@
 #!/bin/bash
 
-pipx upgrade aider-chat
-pipx runpip aider-chat install --upgrade --upgrade-strategy only-if-needed aider-chat[help,playwright]
-pipx inject aider-chat boto3
+# Issue: <https://github.com/Aider-AI/aider/issues/1984>
+ #!/bin/bash
+
+# Update Aider using uv
+echo "Updating aider-chat..."
+uv tool install --python python3.12 --upgrade aider-chat
+
+# Update dependencies in virtual environment
+if [ -d ~/.aider-venv ]; then
+  echo "Updating dependencies..."
+  source ~/.aider-venv/bin/activate
+  uv pip install --upgrade aider-chat[help,playwright] boto3
+  deactivate
+else
+  echo "Virtual environment not found. Running full installation..."
+  ./aider/install
+  exit 0
+fi
+
+# Verify and update Playwright
+echo "Verifying Playwright installation..."
+if ~/.aider-venv/bin/python -c "import playwright; print('Playwright version:', playwright.__version__)"; then
+  echo "Playwright is installed"
+
+  # Check if browsers are installed
+  echo "Checking installed browsers..."
+  if ~/.aider-venv/bin/python -m playwright install --dry-run chromium; then
+    echo "Browsers are already installed"
+  else
+    echo "Attempting to install browsers..."
+    if ~/.aider-venv/bin/python -m playwright install --with-deps chromium; then
+      echo "Playwright browsers installed successfully"
+    else
+      echo "Warning: Could not install browsers automatically"
+      echo "You may need to install system dependencies manually:"
+      echo "For Arch Linux: sudo pacman -S --noconfirm libnsl nss nspr gtk3 libxss alsa-lib"
+      echo "Then try running: ~/.aider-venv/bin/python -m playwright install chromium"
+    fi
+  fi
+else
+  echo "Error: Playwright is not installed correctly"
+  echo "Attempting to reinstall Playwright..."
+  source ~/.aider-venv/bin/activate
+  uv pip install --force-reinstall playwright
+  deactivate
+fi
+
+# Verify installation
+echo "Verifying installation..."
+~/.local/bin/aider --version

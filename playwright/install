@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# <https://blog.nicoandres.dev/use-playwright-in-arch-linux/>
+# <https://github.com/microsoft/playwright/issues/2621#issuecomment-2083083392>
+sudo pacman -S --needed core/nss core/nspr extra/at-spi2-core extra/libcups extra/libdrm core/dbus extra/libxcb extra/libxkbcommon extra/at-spi2-core extra/libx11 extra/libxcomposite extra/libxdamage extra/libxext extra/libxfixes extra/libxrandr extra/mesa extra/pango extra/cairo extra/alsa-lib extra/xorg-server-xvfb
+yay -S icu66 enchant libffi7
+sudo pacman -S woff2 hyphen
+sudo ln -s /usr/lib/libpcre.so /usr/lib/libpcre.so.3
+
+yay -S libwebp
+sudo ln -s /usr/lib/libwebp.so.7 /usr/lib/libwebp.so.6
+
+git clone https://github.com/festvox/flite.git /tmp/flite
+cd /tmp/flite
+./configure --enable-shared
+make
+make get_voices
+sudo cp build/x86_64-linux-gnu/lib/libflite.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_grapheme_lang.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_grapheme_lex.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_indic_lang.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_indic_lex.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_time_awb.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_awb.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_kal.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_kal16.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_rms.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_slt.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_cmulex.so.1 /usr/lib
+sudo cp build/x86_64-linux-gnu/lib/libflite_usenglish.so.1 /usr/lib
+
+yay -S playwright
+
+playwright install

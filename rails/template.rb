@@ -24,12 +24,10 @@ gem_group :development, :test do
   gem "solargraph-rails"
 end
 
-run "bundle install"
 generate "rspec:install"
 rake "db:create"
 
 run "cp ~/dotfiles/rubocop/rubocop.yml .rubocop.yml"
-run "rubocop -A"
 
 # Add documentation comments to core classes
 inject_into_file "app/controllers/application_controller.rb", before: "class ApplicationController < ActionController::Base" do
@@ -71,3 +69,4 @@ inject_into_file "config/application.rb", before: "class Application < Rails::Ap
   RUBY
 end
 
+run "rubocop -A"

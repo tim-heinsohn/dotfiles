@@ -48,6 +48,9 @@ eval "$(sheldon source)" # sheldon
 [[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm"
 [[ -s "$HOME/.rvm/scripts/completion" ]] && source "$HOME/.rvm/scripts/completion"
 
+# nvm
+[[ -s "/usr/share/nvm/init-nvm.sh" ]] && source "/usr/share/nvm/init-nvm.sh"
+
 # history
 # see </usr/share/doc/zsh-history-substring-search/README.md>
 source $ZSH_PLUGINS/zsh-history-substring-search/zsh-history-substring-search.zsh

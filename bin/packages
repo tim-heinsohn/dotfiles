@@ -188,7 +188,10 @@ extra/zip
     Compressor/archiver for creating and modifying zipfiles
 extra/zsh-history-substring-search
     ZSH port of Fish history search (up arrow)
+aur/google-chrome
+aur/html2md
 aur/neovim-remote
+aur/nvm
 aur/pinentry-rofi
 aur/spotify
 aur/zsh-theme-powerlevel10k
@@ -206,6 +209,7 @@ extra/chromium
 extra/evolution
 extra/flameshot
 extra/gcompris-qt
+extra/github-cli
 extra/glab
 extra/gopass
 extra/htop
@@ -218,6 +222,7 @@ extra/pavucontrol
 extra/postgresql
 extra/pv
 extra/python-pipx
+extra/python-psycopg2
 extra/rclone
 extra/redis
 extra/repgrep
@@ -225,10 +230,12 @@ extra/signal-desktop
 extra/speech-dispatcher
 extra/tealdeer
 extra/telegram-desktop
+extra/tflint
 extra/thunderbird
 extra/typescript-language-server
 extra/unzip
 extra/upower
+extra/uv
 extra/vice
 extra/vlc
 extra/xorg-xkill

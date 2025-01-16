@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# A wrapper around `rails new` that works with RVM.
+#
+# Usage: ~/dotfiles/rails-new APP_PATH [options]
+if [ -z "$1" ]; then
+  echo "Usage: $0 <app_name>"
+  exit 1
+fi
+
+# prepare RVM if RVM is installed
+if [[ -s "$HOME/.rvm/scripts/rvm" ]]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.rvm/scripts/rvm"
+  DESIRED_RUBY=$(rvm current | awk '{print $1}')
+  rvm use "$DESIRED_RUBY"
+fi
+
+# run rails new
+APP_NAME=$1
+shift  # remove first argument (APP_NAME) from arguments
+rails new "$APP_NAME" "$@"
