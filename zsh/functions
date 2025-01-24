@@ -27,6 +27,26 @@ function gpfzf() {
   echo $pw
 }
 
+# WezTerm tab management
+# Current tab title only
+function wttitle() {
+  wezterm cli set-tab-title "$1"
+}
+
+# Triple-tab creation with naming pattern for multiple terms
+function wttabs() {
+  for term in "$@"; do
+    # Rename current tab to #term
+    wezterm cli set-tab-title "#${term}"
+    # Create tab 2 (~ suffix)
+    wezterm cli spawn -- zsh -c "echo -ne '\e]0;${term}~\a'; zsh -l"
+    # Create tab 3 (> suffix)
+    wezterm cli spawn -- zsh -c "echo -ne '\e]0;${term}>\a'; zsh -l"
+    # Create empty unnamed tab
+    wezterm cli spawn -- zsh -l
+  done
+}
+
 # tldr w/ fuzzy search
 tldr-fzf() {
   selected=$(tldr --list | fzf \
