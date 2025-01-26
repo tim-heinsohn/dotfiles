@@ -4,8 +4,10 @@
 # <https://github.com/Aider-AI/aider/issues/1984>
 
  # Install Aider with uv
- echo "Installing aider-chat..."
- uv tool install --python python3.12 --force aider-chat &&
+ # Use VERSION=0.72 to install specific version:
+ #   VERSION=0.72 ./aider/install
+ echo "Installing aider-chat${VERSION:+ version $VERSION}..."
+ uv tool install --python python3.12 --force aider-chat${VERSION:+==$VERSION} &&
 
  # Create virtual environment
  echo "Creating virtual environment..." &&
