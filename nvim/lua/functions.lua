@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local M = {}
 
 -- Close all tabs to the left of current tab
