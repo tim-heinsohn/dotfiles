@@ -3,8 +3,9 @@ local M = {}
 -- Close all tabs to the left of current tab
 function M.tabcloseleft()
   local current_tab = vim.api.nvim_tabpage_get_number(0)
-  for i = 1, current_tab - 1 do
-    vim.cmd("tabclose 1")
+  -- Close tabs from right to left to prevent shifting
+  for i = current_tab - 1, 1, -1 do
+    vim.cmd("tabclose " .. i)
   end
 end
 
