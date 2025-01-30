@@ -73,10 +73,16 @@ function M.setup()
     { noremap = true, silent = true, desc = "Close diff view" })
 
   -- Tig mappings
-  vim.keymap.set('n', '<Leader>tr', '<cmd>TigOpenProjectRootDir<CR>', { desc = "Tig Open Project Root" })
+  vim.keymap.set('n', '<Leader>tt', '<cmd>TigOpenProjectRootDir<CR>', { desc = "Tig Open Project Root" })
   vim.keymap.set('n', '<Leader>tc', '<cmd>TigOpenCurrentFile<CR>', { desc = "Tig Open Current File" })
   vim.keymap.set('n', '<Leader>tb', '<cmd>TigBlame<CR>', { desc = "Tig Blame" })
-  vim.keymap.set('n', '<Leader>tl', '<cmd>TigOpenCurrentFile<CR>', { desc = "Tig Open Current File" })
+  vim.keymap.set('n', '<Leader>tf', '<cmd>TigOpenCurrentFile<CR>', { desc = "Tig Open Current File" })
+
+  -- Tab management
+  vim.keymap.set('n', '<leader>tl', function() require('functions').tabcloseleft() end,
+    { desc = "Close tabs to the left" })
+  vim.keymap.set('n', '<leader>tr', function() require('functions').tabcloseright() end,
+    { desc = "Close tabs to the right" })
 
   -- Ruby documentation
   vim.keymap.set('n', '<leader>y', '<Plug>(doge-generate)', { desc = "Generate documentation" })

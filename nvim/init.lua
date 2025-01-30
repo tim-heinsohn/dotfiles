@@ -4,6 +4,9 @@
 vim.g.mapleader = "_"
 vim.g.maplocalleader = "\\"
 
+-- Load custom functions
+require('functions')
+
 -- source existing ~/.vimrc
 vim.cmd('source ~/.vimrc')
 
