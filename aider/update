@@ -4,10 +4,8 @@
  #!/bin/bash
 
 # Update Aider using uv
-# To rollback/downgrade, specify VERSION:
-#   VERSION=0.72 ./aider/update
-echo "Updating aider-chat${VERSION:+ to version $VERSION}..."
-uv tool install --python python3.12 ${VERSION:+--force} "aider-chat${VERSION:+==$VERSION}" ${VERSION:---upgrade aider-chat}
+echo "Updating aider-chat..."
+uv tool install --python python3.12 --upgrade aider-chat
 
 # Update dependencies in virtual environment
 if [ -d ~/.aider-venv ]; then
