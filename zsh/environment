@@ -13,6 +13,17 @@ export LESS="-R --ignore-case -P ?f%f:stdin.  line %lt–%lb/%L  ?e(END):%PB\%."
 export PATH="$PATH:$HOME/bin:$HOME/.local/bin:$HOME/.rvm/bin"
 export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/ssh-agent.socket
 
+# Configure GPG based on environment
+if [ -n "$DISPLAY" ]; then
+  # GUI environment - use rofi pinentry
+  export GPG_TTY=$(tty)
+  gpg-connect-agent --quiet "OPTION pinentry-program=/usr/bin/pinentry-rofi" /bye
+else
+  # Non-GUI environment (SSH) - use console pinentry
+  export GPG_TTY=$(tty)
+  gpg-connect-agent --quiet "OPTION pinentry-program=/usr/bin/pinentry-curses" /bye
+fi
+
 if [ -f "/usr/bin/gopass" ]; then
   GEMINI_API_KEY=$(gopass show t/ai/gemini/api-key)
   export GEMINI_API_KEY
