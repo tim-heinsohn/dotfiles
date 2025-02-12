@@ -1,23 +1,19 @@
-# ! After changing this file, reload the agent via:
-#   gpg-connect-agent reloadagent /bye
-
-# ! Test whether agent is working via
-#   gpg -d ~/.password-store/test.gpg
-
-# ! Monitor in htop via filter 'gpg' to
-#   ensure no gpg-agent instance is hanging
-
-# https://wiki.archlinux.org/title/GnuPG#pinentry
-# – define how gpg agent password is requested
+# GPG Agent configuration
 #
+# After changing this file, reload the agent via:
+#   gpg-connect-agent reloadagent /bye
+#
+# Test whether agent is working via:
+#   gpg -d ~/.password-store/test.gpg
+#
+# Monitor in htop via filter 'gpg' to ensure no gpg-agent instance is hanging
+
+# Pinentry configuration
+# https://wiki.archlinux.org/title/GnuPG#pinentry
 # NOTE: pinentry-qt requires qt5-base!
 #       – possibly also: kguiaddons
-# ! the line below MUST NOT contain a # comment at the end
-#pinentry-program /usr/bin/pinentry-qt
-#
-# Run `gpg-connect-agent reloadagent /bye` to reload the agent.
-# Comment out or remove the static pinentry-program line since we're setting it dynamically
-# pinentry-program /usr/bin/pinentry-curses
+# pinentry-program /usr/bin/pinentry-qt  # Uncomment and configure as needed
+# pinentry-program /usr/bin/pinentry-curses  # Alternative option
 
-# remember unused keys for ... seconds
-default-cache-ttl 28800
+# Cache settings
+default-cache-ttl 28800  # Remember unused keys for 28800 seconds (8 hours)
