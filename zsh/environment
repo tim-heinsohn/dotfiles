@@ -17,11 +17,11 @@ export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/ssh-agent.socket
 if [ -n "$DISPLAY" ]; then
   # GUI environment - use rofi pinentry
   export GPG_TTY=$(tty)
-  gpg-connect-agent --quiet "OPTION pinentry-program=/usr/bin/pinentry-rofi" /bye
+  gpg-connect-agent --quiet "OPTION --pinentry-program=/usr/bin/pinentry-rofi" /bye
 else
   # Non-GUI environment (SSH) - use console pinentry
   export GPG_TTY=$(tty)
-  gpg-connect-agent --quiet "OPTION pinentry-program=/usr/bin/pinentry-curses" /bye
+  gpg-connect-agent --quiet "OPTION --pinentry-program=/usr/bin/pinentry-curses" /bye
 fi
 
 if [ -f "/usr/bin/gopass" ]; then

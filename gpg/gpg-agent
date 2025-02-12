@@ -16,7 +16,8 @@
 #pinentry-program /usr/bin/pinentry-qt
 #
 # Run `gpg-connect-agent reloadagent /bye` to reload the agent.
-pinentry-program /usr/bin/pinentry-curses
+# Comment out or remove the static pinentry-program line since we're setting it dynamically
+# pinentry-program /usr/bin/pinentry-curses
 
 # remember unused keys for ... seconds
 default-cache-ttl 28800
