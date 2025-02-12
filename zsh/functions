@@ -66,4 +66,31 @@ tldr-fzf() {
   fi
 }
 
+# Add GitLab merge request fetch refspec
+function glab-mr-fetch() {
+  if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+    echo "Not a git repository"
+    return 1
+  fi
+
+  local origin_url=$(git config --get remote.origin.url)
+  if [[ -z "$origin_url" ]]; then
+    echo "No remote 'origin' configured"
+    return 1
+  fi
+
+  if [[ "$origin_url" != *"gitlab.com"* ]]; then
+    echo "Remote origin is not a GitLab repository"
+    return 0
+  fi
+
+  if git config --get-all remote.origin.fetch | grep -q 'refs/merge-requests/\*/head:refs/remotes/origin/mr/\*'; then
+    echo "Merge request fetch refspec already exists"
+    return 0
+  fi
+
+  git config --add remote.origin.fetch '+refs/merge-requests/*/head:refs/remotes/origin/mr/*'
+  echo "Added merge request fetch refspec to origin remote"
+}
+
 # vim: set ft=zsh:
