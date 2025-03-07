@@ -93,4 +93,9 @@ function glab-mr-fetch() {
   echo "Added merge request fetch refspec to origin remote"
 }
 
+# Rails migration timestamp
+function rails_migration_date() {
+  print -n $(date "+%Y%m%d%H%M%S")
+}
+
 # vim: set ft=zsh:
