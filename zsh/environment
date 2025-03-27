@@ -1,6 +1,7 @@
 # ENVIRONMENT
 
 export AIDER_DARK_MODE=true
+export AIDER_AUTO_ACCEPT_ARCHITECT=false
 export BAT_THEME="Monokai Extended" # bat --list-themes
 export EDITOR="nvim"
 export DOTFILES_DIR="$HOME/dotfiles"

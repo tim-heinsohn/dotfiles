@@ -193,6 +193,7 @@ aur/html2md
 aur/neovim-remote
 aur/nvm
 aur/pinentry-rofi
+aur/pg_top
 aur/spotify
 aur/zsh-theme-powerlevel10k
 core/base-devel
@@ -211,6 +212,7 @@ extra/flameshot
 extra/gcompris-qt
 extra/github-cli
 extra/glab
+extra/glow
 extra/gopass
 extra/htop
 extra/i3-wm
@@ -221,6 +223,7 @@ extra/p7zip
 extra/pavucontrol
 extra/postgresql
 extra/pv
+extra/python-bcrypt
 extra/python-pipx
 extra/python-psycopg2
 extra/rclone
