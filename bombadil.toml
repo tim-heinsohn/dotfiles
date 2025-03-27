@@ -19,6 +19,7 @@ gpg_agent = { source = "gpg/gpg-agent", target = ".gnupg/gpg-agent.conf" }
 i3 = { source = "i3/config", target = ".config/i3/config" }
 i3_status = { source = "i3/i3status.conf", target = ".config/i3status/config" }
 nvim_init_lua = { source = "nvim/init.lua", target = ".config/nvim/init.lua" }
+nvim_functions = { source = "nvim/lua/functions.lua", target = ".config/nvim/lua/functions.lua" }
 nvim_keymaps = { source = "nvim/lua/keymaps.lua", target = ".config/nvim/lua/keymaps.lua" }
 nvim_plugins = { source = "nvim/lua/plugins.lua", target = ".config/nvim/lua/plugins.lua" }
 nvim_lsp_setup = { source = "nvim/lua/lsp_setup.lua", target = ".config/nvim/lua/lsp_setup.lua" }

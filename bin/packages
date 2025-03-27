@@ -215,6 +215,7 @@ extra/glab
 extra/glow
 extra/gopass
 extra/htop
+extra/httrack
 extra/i3-wm
 extra/lsof
 extra/lua-language-server

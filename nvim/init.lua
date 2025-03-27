@@ -4,9 +4,6 @@
 vim.g.mapleader = "_"
 vim.g.maplocalleader = "\\"
 
--- Load custom functions
-require('functions')
-
 -- source existing ~/.vimrc
 vim.cmd('source ~/.vimrc')
 
@@ -60,6 +57,9 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.isfname:append("?")
   end
 })
+
+-- Load custom functions
+require('functions').setup()
 
 -- Load keymaps
 require('keymaps').setup()

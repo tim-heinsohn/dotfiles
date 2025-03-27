@@ -11,7 +11,6 @@ cd ${DOTFILES_DIR} &&
 ./aur/yay-install &&
 ./packages-install &&
 ./docker/docker-group-setup &&
-./ruby/rufo-install &&
 ./ruby/rvm-setup &&
 ./vundle-install &&
 bombadil link &&
@@ -31,6 +30,9 @@ npm install -g @microsoft/compose-language-service &&
 
  # docker
 npm install -g dockerfile-language-server-nodejs &&
+
+# overcommit
+gem install overcommit &&
 
 # sentry spotlight
 npm install -g @spotlightjs/spotlight &&
