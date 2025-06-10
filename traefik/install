@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# install package if not installed yet
+if ! command -v traefik &> /dev/null; then
+  sudo pacman -Sy --noconfirm traefik
+fi
+
+# allow traefik to bind port 80/443
+sudo setcap 'cap_net_bind_service=+ep' /usr/bin/traefik
+
+# allow traefik to start without sudo, to allow user service to run it and pass env
+echo "${USER} ALL=(root) NOPASSWD: /usr/bin/traefik" | sudo tee /etc/sudoers.d/traefik
+sudo chmod 0440 /etc/sudoers.d/traefik

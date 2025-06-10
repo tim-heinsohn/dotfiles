@@ -207,6 +207,7 @@ extra/bluez-utils
 extra/brightnessctl
 extra/caddy
 extra/chromium
+extra/docker-buildx
 extra/evolution
 extra/flameshot
 extra/gcompris-qt
@@ -220,6 +221,7 @@ extra/i3-wm
 extra/lsof
 extra/lua-language-server
 extra/ncdu
+extra/obs-studio
 extra/p7zip
 extra/pavucontrol
 extra/postgresql
@@ -228,14 +230,17 @@ extra/python-bcrypt
 extra/python-pipx
 extra/python-psycopg2
 extra/rclone
+extra/recordmydesktop
 extra/redis
 extra/repgrep
 extra/signal-desktop
 extra/speech-dispatcher
 extra/tealdeer
 extra/telegram-desktop
+extra/texlive-binextra
 extra/tflint
 extra/thunderbird
+extra/traefik
 extra/typescript-language-server
 extra/unzip
 extra/upower
