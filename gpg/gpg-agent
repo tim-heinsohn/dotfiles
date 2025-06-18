@@ -1,5 +1,10 @@
 # GPG Agent configuration
 
+# NOTE:
+#   gpg-connect-agent reloadagent /bye
+#   echo "GETPIN" | pinentry-wrapper
+# for testing.
+
 # Pinentry configuration
 pinentry-program /usr/local/bin/pinentry-wrapper
 
