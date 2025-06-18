@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# Check and restore keyboard settings if needed
+restore_settings() {
+    # Check if Control_L is in the control modifier
+    if ! xmodmap -pm | grep 'control' | grep -q 'Control_L'; then
+        echo "$(date) - Keyboard settings lost. Restoring..."
+        setxkbmap fr
+        xmodmap ~/.Xmodmap
+    fi
+}
+
+# Main loop - check every 10 seconds
+while true; do
+    restore_settings
+    sleep 10
+done

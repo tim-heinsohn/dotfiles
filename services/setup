@@ -5,7 +5,9 @@ SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
 mkdir -p $SERVICE_DIR
 ln -fs "${SCRIPT_DIR}/spotlight.service" $SERVICE_DIR
+ln -fs "${SCRIPT_DIR}/xmodmap-watchdog.service" $SERVICE_DIR
 
 systemctl --user daemon-reload
 systemctl --user enable --now spotlight
+systemctl --user enable --now xmodmap-watchdog
 

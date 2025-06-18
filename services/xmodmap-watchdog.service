@@ -1,0 +1,12 @@
+[Unit]
+Description=Keyboard settings watchdog
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.bin/xmodmap-watchdog
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
