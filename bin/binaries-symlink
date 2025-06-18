@@ -8,7 +8,7 @@ for file in "$DOTFILES_DIR"/bin/*; do
     # Get the base name of the file
     filename=$(basename "$file")
     echo "Symlinking $file in ~/bin"
-    
+
     # Create symbolic link in ~/bin
     ln -sf "$file" ~/bin/"$filename"
 done

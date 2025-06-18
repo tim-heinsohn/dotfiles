@@ -4,7 +4,7 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.bin/xmodmap-watchdog
+ExecStart=%h/bin/xmodmap-watchdog
 Restart=always
 RestartSec=10
 
