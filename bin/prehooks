@@ -13,3 +13,15 @@ cd ~/.config && mkdir -p \
 mkdir -p \
   ~/.gnupg \
   ~/.zsh
+
+# Install pinentry wrapper if changed
+WRAPPER_SOURCE="$HOME/dotfiles/gpg/pinentry-wrapper"
+WRAPPER_TARGET="/usr/local/bin/pinentry-wrapper"
+
+if [ -f "$WRAPPER_SOURCE" ]; then
+  if ! sudo cmp -s "$WRAPPER_SOURCE" "$WRAPPER_TARGET" 2>/dev/null; then
+    echo "Updating pinentry wrapper"
+    sudo cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
+    sudo chmod +x "$WRAPPER_TARGET"
+  fi
+fi

@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Dynamically select pinentry based on $DISPLAY
+if [ -n "$DISPLAY" ]; then
+    exec /usr/bin/pinentry-rofi "$@"
+else
+    exec /usr/bin/pinentry-curses "$@"
+fi

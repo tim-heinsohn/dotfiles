@@ -28,34 +28,20 @@ export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/ssh-agent.socket
 export XCLIP_SELECTION="clipboard"
 
 
-# gpg-agent
-#
-# NOTE: Run `gpgconf --list-options gpg-agent | sort` to see
-#       how to set pinentry in the current version of gpg-agent
-if [ -n "$DISPLAY" ]; then
-  # GUI environment - use rofi pinentry
-  echo "gpg: DISPLAY"
-  export GPG_TTY=$(tty)
-  gpg-connect-agent --quiet "OPTION --pinentry-program=/usr/bin/pinentry-rofi" /bye
+export GPG_TTY=$(tty)
 
-  # Only load gopass secrets in GUI environments
-  if [ -f "/usr/bin/gopass" ]; then
-    GEMINI_API_KEY=$(gopass show t/ai/gemini/api-key)
-    export GEMINI_API_KEY
-    MISTRAL_API_KEY=$(gopass show t/ai/mistral/api-key)
-    export MISTRAL_API_KEY
-    ANTHROPIC_API_KEY=$(gopass show t/ai/claude/api-key)
-    export ANTHROPIC_API_KEY
-    DEEPSEEK_API_KEY=$(gopass show t/ai/deepseek/api-key)
-    export DEEPSEEK_API_KEY
-    OPENROUTER_API_KEY=$(gopass show -o t/ai/openrouter.ai)
-    export OPENROUTER_API_KEY
-  fi
-else
-  # Non-GUI environment (SSH) - use console pinentry
-  echo "gpg: Console"
-  export GPG_TTY=$(tty)
-  gpg-connect-agent --quiet "OPTION --pinentry-program=/usr/bin/pinentry-curses" /bye
+# Only load gopass secrets in GUI environments
+if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ]; then
+  GEMINI_API_KEY=$(gopass show t/ai/gemini/api-key)
+  export GEMINI_API_KEY
+  MISTRAL_API_KEY=$(gopass show t/ai/mistral/api-key)
+  export MISTRAL_API_KEY
+  ANTHROPIC_API_KEY=$(gopass show t/ai/claude/api-key)
+  export ANTHROPIC_API_KEY
+  DEEPSEEK_API_KEY=$(gopass show t/ai/deepseek/api-key)
+  export DEEPSEEK_API_KEY
+  OPENROUTER_API_KEY=$(gopass show -o t/ai/openrouter.ai)
+  export OPENROUTER_API_KEY
 fi
 
 if [ -f "/usr/bin/wezterm" ]; then

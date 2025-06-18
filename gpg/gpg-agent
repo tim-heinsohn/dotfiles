@@ -1,23 +1,7 @@
 # GPG Agent configuration
-#
-# -----------------------------------------------------------------------------
-# NOTE: see zsh environment for dynamic setting of gpg-connect-agent / pinentry
-# -----------------------------------------------------------------------------
-#
-# After changing this file, reload the agent via:
-#   gpg-connect-agent reloadagent /bye
-#
-# Test whether agent is working via:
-#   gpg -d ~/.password-store/test.gpg
-#
-# Monitor in htop via filter 'gpg' to ensure no gpg-agent instance is hanging
 
 # Pinentry configuration
-# https://wiki.archlinux.org/title/GnuPG#pinentry
-# NOTE: pinentry-qt requires qt5-base!
-#       – possibly also: kguiaddons
-# pinentry-program /usr/bin/pinentry-qt  # Uncomment and configure as needed
-# pinentry-program /usr/bin/pinentry-curses  # Alternative option
+pinentry-program /usr/local/bin/pinentry-wrapper
 
 # Cache settings
 default-cache-ttl 28800  # Remember unused keys for 28800 seconds (8 hours)
