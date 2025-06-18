@@ -1,5 +1,9 @@
 # GPG Agent configuration
 #
+# -----------------------------------------------------------------------------
+# NOTE: see zsh environment for dynamic setting of gpg-connect-agent / pinentry
+# -----------------------------------------------------------------------------
+#
 # After changing this file, reload the agent via:
 #   gpg-connect-agent reloadagent /bye
 #

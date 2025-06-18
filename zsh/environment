@@ -1,7 +1,19 @@
 # ENVIRONMENT
-
-export AIDER_DARK_MODE=true
 export AIDER_AUTO_ACCEPT_ARCHITECT=false
+export AIDER_AUTO_TEST=false
+export AIDER_CHAT_LANGUAGE=en
+export AIDER_COMMIT_LANGUAGE=en
+export AIDER_DARK_MODE=true
+export AIDER_DISABLE_PLAYWRIGHT=true
+export AIDER_GITIGNORE=false
+export AIDER_GIT_COMMIT_VERIFY=true
+export AIDER_LINT=false
+export ## Specify lint commands to run for different languages, eg: "python: flake8 --select=..." (can be used multiple times)
+# export AIDER_LINT_CMD=
+export AIDER_SHOW_RELEASE_NOTES=false
+export AIDER_SUGGEST_SHELL_COMMANDS=true
+export AIDER_TEST_CMD=
+export AIDER_VIM=true
 export BAT_THEME="Monokai Extended" # bat --list-themes
 export EDITOR="nvim"
 export DOTFILES_DIR="$HOME/dotfiles"
@@ -13,14 +25,21 @@ export GTK_THEME=Adwaita:dark
 export LESS="-R --ignore-case -P ?f%f:stdin.  line %lt–%lb/%L  ?e(END):%PB\%."
 export PATH="$PATH:$HOME/bin:$HOME/.local/bin:$HOME/.rvm/bin"
 export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/ssh-agent.socket
+export XCLIP_SELECTION="clipboard"
 
-# Configure GPG based on environment
+
+# gpg-agent
+#
+# NOTE: Run `gpgconf --list-options gpg-agent | sort` to see
+#       how to set pinentry in the current version of gpg-agent
 if [ -n "$DISPLAY" ]; then
   # GUI environment - use rofi pinentry
+  echo "gpg: DISPLAY"
   export GPG_TTY=$(tty)
   gpg-connect-agent --quiet "OPTION --pinentry-program=/usr/bin/pinentry-rofi" /bye
 else
   # Non-GUI environment (SSH) - use console pinentry
+  echo "gpg: Console"
   export GPG_TTY=$(tty)
   gpg-connect-agent --quiet "OPTION --pinentry-program=/usr/bin/pinentry-curses" /bye
 fi
@@ -31,6 +50,7 @@ if [ -f "/usr/bin/gopass" ]; then
   MISTRAL_API_KEY=$(gopass show t/ai/mistral/api-key)
   export MISTRAL_API_KEY
 fi
+
 
 if [ -f "/usr/bin/wezterm" ]; then
   export TERMINAL=/usr/bin/wezterm

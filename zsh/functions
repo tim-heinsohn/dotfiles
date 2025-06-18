@@ -41,10 +41,10 @@ function wta() {
     wezterm cli set-tab-title "#${term}"
 
     # Create tab 2 (~ suffix) with proper directory and title
-    wezterm cli spawn --cwd "$dir" -- zsh -lic "echo -ne '\e]0;${term}~\a'; zsh"
+    wezterm cli spawn --cwd "$dir" -- zsh -lic "echo -ne '\e]0;${term}>\a'; zsh"
 
     # Create tab 3 (> suffix) with proper directory and title
-    wezterm cli spawn --cwd "$dir" -- zsh -lic "echo -ne '\e]0;${term}>\a'; zsh"
+    wezterm cli spawn --cwd "$dir" -- zsh -lic "echo -ne '\e]0;${term}~\a'; zsh"
 
     # Create empty tab with default directory
     wezterm cli spawn -- zsh -l

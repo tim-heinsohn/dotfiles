@@ -211,6 +211,7 @@ extra/docker-buildx
 extra/evolution
 extra/flameshot
 extra/gcompris-qt
+extra/gimagereader-qt
 extra/github-cli
 extra/glab
 extra/glow
@@ -237,6 +238,8 @@ extra/signal-desktop
 extra/speech-dispatcher
 extra/tealdeer
 extra/telegram-desktop
+extra/tesseract-data-eng
+extra/tesseract-data-deu
 extra/texlive-binextra
 extra/tflint
 extra/thunderbird
@@ -247,6 +250,7 @@ extra/upower
 extra/uv
 extra/vice
 extra/vlc
+extra/wireguard-tools
 extra/xorg-xkill
 extra/xterm
 extra/yamllint
