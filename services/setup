@@ -3,11 +3,23 @@
 SERVICE_DIR=~/.config/systemd/user/
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
-mkdir -p $SERVICE_DIR
-ln -fs "${SCRIPT_DIR}/spotlight.service" $SERVICE_DIR
-ln -fs "${SCRIPT_DIR}/xmodmap-watchdog.service" $SERVICE_DIR
+mkdir -p "$SERVICE_DIR"
+
+# Find all service files
+service_files=("$SCRIPT_DIR"/*.service)
+
+# Symlink all services
+for service_file in "${service_files[@]}"; do
+    ln -fs "$service_file" "$SERVICE_DIR"
+done
 
 systemctl --user daemon-reload
-systemctl --user enable --now spotlight
-systemctl --user enable --now xmodmap-watchdog
+
+# Enable/start and show status for each service
+for service_file in "${service_files[@]}"; do
+    service_name=$(basename "$service_file")
+    echo -e "\n=== Setting up $service_name ==="
+    systemctl --user enable --now "${service_name}"
+    systemctl --user status "${service_name}" --no-pager
+done
 
