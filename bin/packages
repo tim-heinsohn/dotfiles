@@ -188,6 +188,7 @@ extra/zip
     Compressor/archiver for creating and modifying zipfiles
 extra/zsh-history-substring-search
     ZSH port of Fish history search (up arrow)
+aur/exif
 aur/google-chrome
 aur/html2md
 aur/neovim-remote
