@@ -22,6 +22,9 @@ npm install -g @ansible/ansible-language-server
 # bash
 npm install -g bash-language-server &&
 
+# claude code
+npm install -g @anthropic-ai/claude-code
+
 # eslint
 npm install -g vscode-langservers-extracted &&
 
