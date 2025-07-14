@@ -223,6 +223,7 @@ extra/i3-wm
 extra/lsof
 extra/lua-language-server
 extra/ncdu
+extra/nvm
 extra/obs-studio
 extra/p7zip
 extra/pavucontrol

@@ -16,6 +16,10 @@ cd ${DOTFILES_DIR} &&
 bombadil link &&
 sheldeon lock &&
 
+yay -S nvm
+[ -s "/usr/share/nvm/init-nvm.sh" ] && source /usr/share/nvm/init-nvm.sh
+nvm alias default 24.4.0
+
 # ansible
 npm install -g @ansible/ansible-language-server
 

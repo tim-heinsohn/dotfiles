@@ -58,5 +58,6 @@ export REDIS_URL=redis://localhost:6379
 
 # f.dev
 export F_BANK_TRANSACTIONS_PATH="$HOME/f.doc.2023/Banken/"
+export F_BANK_DOCUMENTS_PATH="$HOME/f.doc.2023/Steuern/Einkommensteuer/"
 
 # vim: set ft=zsh:
