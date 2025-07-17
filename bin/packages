@@ -208,6 +208,7 @@ extra/bluez-utils
 extra/brightnessctl
 extra/caddy
 extra/chromium
+extra/dnsmasq
 extra/docker-buildx
 extra/evolution
 extra/flameshot
