@@ -1,12 +1,11 @@
 [alias]
     ci = commit
     co = checkout
-    cof = !git checkout `git branch | fzf`
-    st = status
-    ss = stash save
-    sp = stash pop
+    cof = !git checkout `git branch | fzf` # checkout (branch) via fzf
+    rb = "!git checkout $(git reflog -n 100 | grep -oP 'checkout: moving from \\K[^ ]+' | awk '!seen[$0]++' | head -7 | fzf)" # recent branch
     rv = remote -v
     fa = fetch --all
+    tu = !git ls-files --others --exclude-standard | tree --fromfile # tree unversioned
 
 [color]
     ui = auto

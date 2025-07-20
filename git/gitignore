@@ -1,10 +1,14 @@
 *~
 .*.sw?
 .agignore
+.aider*
 .envrc
 .fdignore
 .nvimrc
 .vim*
+.yardoc
 .~lock.*#
+CLAUDE.local.md
+TODO.local.md
 tags
 vendor/*
