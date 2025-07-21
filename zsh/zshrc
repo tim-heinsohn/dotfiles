@@ -20,11 +20,11 @@ autoload -Uz compinit
 compinit
 
 # environment (to be read before aliases)
-source ~/.zsh/environment
+source ~/.zsh/environment >/dev/null 2>&1
 
 if command -v npm >/dev/null 2>&1; then
   mkdir -p "${HOME}/.npm-global"
-  npm config set prefix "${HOME}/.npm-global"
+  # npm config set prefix "${HOME}/.npm-global"
   export PATH="${HOME}/.npm-global/bin:$PATH"
 fi
 
@@ -55,7 +55,8 @@ eval "$(sheldon source)" # sheldon
 [[ -s "$HOME/.rvm/scripts/completion" ]] && source "$HOME/.rvm/scripts/completion"
 
 # nvm
-[ -s "/usr/share/nvm/init-nvm.sh" ] && source /usr/share/nvm/init-nvm.sh
+[ -s "/usr/share/nvm/init-nvm.sh" ]  && npm config delete prefix 2>/dev/null && source /usr/share/nvm/init-nvm.sh
+
 
 
 # history
@@ -87,6 +88,8 @@ source /usr/share/z/z.sh
 # run `p10k configure` or edit ~/.p10k.zsh for customization
 source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+# custom p10k segments
+source ~/.zsh/p10k.custom.zsh
 
 # allow output on zsh init, and output quote
 # typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet

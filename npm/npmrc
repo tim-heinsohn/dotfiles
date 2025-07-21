@@ -1,0 +1,9 @@
+# npm configuration
+# This file is managed by bombadil dotfiles
+
+# Registry settings
+registry=https://registry.npmjs.org/
+
+# Security settings
+audit-level=moderate
+fund=false

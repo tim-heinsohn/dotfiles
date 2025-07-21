@@ -14,14 +14,16 @@ mkdir -p \
   ~/.gnupg \
   ~/.zsh
 
-# Install pinentry wrapper if changed
+# Install pinentry wrapper if changed (skip if not interactive)
 WRAPPER_SOURCE="$HOME/dotfiles/gpg/pinentry-wrapper"
 WRAPPER_TARGET="/usr/local/bin/pinentry-wrapper"
 
-if [ -f "$WRAPPER_SOURCE" ]; then
+if [ -f "$WRAPPER_SOURCE" ] && [ -t 0 ]; then
   if ! sudo cmp -s "$WRAPPER_SOURCE" "$WRAPPER_TARGET" 2>/dev/null; then
     echo "Updating pinentry wrapper"
     sudo cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
     sudo chmod +x "$WRAPPER_TARGET"
   fi
+elif [ -f "$WRAPPER_SOURCE" ]; then
+  echo "Skipping pinentry wrapper update (non-interactive session)"
 fi
