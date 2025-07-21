@@ -29,14 +29,17 @@ npm install -g bash-language-server &&
 # claude code
 npm install -g @anthropic-ai/claude-code
 
-# eslint
-npm install -g vscode-langservers-extracted &&
-
 # docker compose
 npm install -g @microsoft/compose-language-service &&
 
  # docker
 npm install -g dockerfile-language-server-nodejs &&
+
+# gemini
+npm install -g @google/gemini-cli
+
+# eslint
+npm install -g vscode-langservers-extracted &&
 
 # overcommit
 gem install overcommit &&
