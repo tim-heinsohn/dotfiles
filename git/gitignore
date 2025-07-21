@@ -2,6 +2,7 @@
 .*.sw?
 .agignore
 .aider*
+.claude/*.local.json
 .envrc
 .fdignore
 .nvimrc
