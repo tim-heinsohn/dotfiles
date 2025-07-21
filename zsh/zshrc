@@ -33,6 +33,9 @@ source ~/.zsh/aliases
 
 # direnv
 eval "$(direnv hook zsh)"
+if [ -f .envrc ]; then
+  direnv reload
+fi
 
 # functions
 source ~/.zsh/functions
