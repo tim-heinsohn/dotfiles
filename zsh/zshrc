@@ -101,3 +101,8 @@ source ~/.zsh/p10k.custom.zsh
 #    [[ ! -v POWERLEVEL9K_INSTANT_PROMPT ]] || (( ! ${+POWERLEVEL9K_INSTANT_PROMPT_LOADED:-0} )) || return
 #    fortune 1% wisdom 99% $HOME/dotfiles/goodies/fortune
 # }
+
+# Set Kimi mode if enabled
+if kimi_enabled; then
+  kimi_set "on" >/dev/null 2>&1
+fi

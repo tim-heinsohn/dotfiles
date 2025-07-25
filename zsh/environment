@@ -49,6 +49,7 @@ if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ]; then
   export OPENROUTER_API_KEY
   MOONSHOT_AI_API_KEY=$(gopass show -o t/ai/moonshot.ai)
   export MOONSHOT_AI_API_KEY
+  export PERSONAL_MOONSHOT_AI_API_KEY=$MOONSHOT_AI_API_KEY
 fi
 
 if [ -f "/usr/bin/wezterm" ]; then

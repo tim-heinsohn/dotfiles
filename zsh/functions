@@ -98,4 +98,34 @@ function rails_migration_date() {
   print -n $(date "+%Y%m%d%H%M%S")
 }
 
+# Kimi provider toggle
+function kimi_enabled() {
+  [ -f "/tmp/kimi_mode" ]
+}
+
+function kimi_set() {
+  if [[ "$1" == "on" ]]; then
+    touch /tmp/kimi_mode
+    unset ANTHROPIC_API_KEY
+    export ANTHROPIC_AUTH_TOKEN="$(gopass show -o t/ai/moonshot.ai)"
+    export ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic
+    echo "Kimi mode enabled."
+  else
+    rm -f /tmp/kimi_mode
+    unset ANTHROPIC_BASE_URL
+    unset ANTHROPIC_AUTH_TOKEN
+    export ANTHROPIC_API_KEY=$(gopass show t/ai/claude/api-key)
+    echo "Anthropic mode enabled."
+  fi
+}
+
+function kimi_toggle() {
+  if kimi_enabled; then
+    kimi_set "off"
+  else
+    kimi_set "on"
+  fi
+}
+alias kt=kimi_toggle
+
 # vim: set ft=zsh:
