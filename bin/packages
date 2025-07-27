@@ -253,6 +253,8 @@ extra/typescript-language-server
 extra/unzip
 extra/upower
 extra/uv
+extra/valkey
+    A new fork of Redis that is an in-memory data structure store, used as a database, cache and message broker.
 extra/vice
 extra/vlc
 extra/wireguard-tools
