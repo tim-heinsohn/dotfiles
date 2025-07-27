@@ -92,6 +92,8 @@ extra/libreoffice-fresh
     LibreOffice branch which contains new features and program enhancements
 extra/magic-wormhole
     Securely transfer data between computers
+extra/mariadb
+    Fast, stable and multi-threaded SQL database server
 extra/menyoki
     Screen{shot,cast} and perform ImageOps on the command line
 extra/mitmproxy

@@ -1,0 +1,64 @@
+#!/bin/bash
+set -euo pipefail
+
+# This script installs and sets up MariaDB on Arch Linux.
+# It creates an admin user with a password retrieved from gopass.
+# The script is designed to be idempotent.
+
+# 1. Install MariaDB
+echo "Installing MariaDB..."
+if ! command -v yay &> /dev/null; then
+    echo "yay is not installed. Please install it first."
+    exit 1
+fi
+yay -S --needed mariadb
+
+# 2. Initialize the database directory if it doesn't exist
+if [ ! -d /var/lib/mysql/mysql ]; then
+  echo "Initializing MariaDB data directory..."
+  # The command needs to be run with sudo
+  sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
+else
+  echo "MariaDB data directory already exists."
+fi
+
+# 3. Start and enable the MariaDB service
+echo "Starting and enabling MariaDB service..."
+sudo systemctl enable --now mariadb.service
+
+# 4. Retrieve admin user and password from gopass
+echo "Retrieving MariaDB admin credentials from gopass..."
+if ! command -v gopass &> /dev/null; then
+    echo "gopass is not installed. Please install it first."
+    exit 1
+fi
+
+if ! gopass ls t/dev/mariadb_admin_user > /dev/null 2>&1 > /dev/null 2>&1; then
+  echo "gopass entries t/dev/mariadb_admin_user not found."
+  echo "Please create them before running this script."
+  exit 1
+fi
+
+DB_ADMIN_USER=$(gopass show t/dev/mariadb_admin_user user)
+DB_ADMIN_PASSWORD=$(gopass show -o t/dev/mariadb_admin_user)
+
+if [ -z "$DB_ADMIN_USER" ] || [ -z "$DB_ADMIN_PASSWORD" ]; then
+    echo "Failed to retrieve MariaDB admin credentials from gopass."
+    exit 1
+fi
+
+# 5. Create/update admin user and grant privileges
+echo "Setting up MariaDB admin user '${DB_ADMIN_USER}'..."
+
+# Using a here document to pass SQL commands to mariadb.
+# We run this as the 'root' user, which on a default Arch install of MariaDB
+# can connect without a password from the local machine using sudo.
+# The commands are idempotent.
+sudo mariadb -u root <<EOF
+CREATE USER IF NOT EXISTS '${DB_ADMIN_USER}'@'localhost';
+ALTER USER '${DB_ADMIN_USER}'@'localhost' IDENTIFIED BY '${DB_ADMIN_PASSWORD}';
+GRANT ALL PRIVILEGES ON *.* TO '${DB_ADMIN_USER}'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EOF
+
+echo "MariaDB setup complete. User '${DB_ADMIN_USER}' is configured."
