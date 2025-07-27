@@ -213,14 +213,14 @@ bindsym $mod+Shift+Right move workspace to output right
 # finds out, if available)
 bar {
     # status_command i3status
-    status_command "/home/t/dotfiles/i3/i3status_with_hostname"
+    status_command /home/t/dotfiles/i3/i3status_with_hostname
     mode dock # always show the dock menu
     position top # put the window menu at the top
     font pango:Iosevka Light 9
     colors {
         # Whole color settings
         background #000000
-        statusline #ffffff
+        # statusline #ffffff
         separator  #333333
 
         # Type             border  background font

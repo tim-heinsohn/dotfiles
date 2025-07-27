@@ -1,8 +1,31 @@
 #!/bin/sh
+# A robust wrapper for i3status to add the hostname.
 
-# shell script to prepend i3status with more stuff
-i3status | while :
-do
-       read line
-       echo "$(hostnamectl hostname) | $line" || exit 1
-done
+# Start i3status and pipe its output for processing
+i3status | (
+    # Read and print the first two lines (header and opening bracket)
+    read -r line && echo "$line"
+    read -r line && echo "$line"
+
+    # Process each JSON array from i3status in a loop
+    while read -r line; do
+        # The line from i3status is a JSON array, sometimes with a leading comma.
+        # Store the comma and remove it for processing.
+        if echo "$line" | grep -q '^,'; then
+            line_to_process=$(echo "$line" | cut -c 2-)
+            leading_comma=","
+        else
+            line_to_process=$line
+            leading_comma=""
+        fi
+
+        # Inject hostname at the beginning of the array
+        with_hostname=$(echo "$line_to_process" | jq --arg host "$(hostnamectl hostname)" '[{ "full_text": $host, "name": "hostname" }] + .')
+
+        # Print the re-assembled line with the leading comma
+        echo "$leading_comma$with_hostname"
+    done
+)
+
+# vim: ft=sh ts=4 sw=4 et
+
