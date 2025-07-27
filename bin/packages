@@ -1,21 +1,51 @@
+aur/exif
+    A small command-line utility to show and change EXIF information in JPEG files.
+aur/google-chrome
+    A browser that combines a minimal design with sophisticated technology.
+aur/html2md
+    A command-line tool to convert HTML to Markdown.
+aur/neovim-remote
+    A tool to control Neovim instances from the command line.
+aur/nvm
+    A version manager for node.js, installed per-user, and invoked per-shell.
+aur/pg_top
+    A 'top' like tool for PostgreSQL.
+aur/pinentry-rofi
+    A rofi-based pinentry program.
 aur/qotd
     A simple RFC 865-compliant QOTD (quote of the day) daemon.
 aur/slackdump
     Save your private and public slack messages, threads, files, and users locally
 aur/spotrec
     Spotify desktop client recorder for PulseAudio
+aur/spotify
+    A digital music service that gives you access to millions of songs.
 aur/xlayoutdisplay
-    Detects and arranges linux display outputs, using XRandR for detection and xrandr for arrangement.
+    Detects and arranges linux display outputs, using XRandR.
 aur/yin-yang
-    Light/dark theme switcher for Linux. Supports popular Desktops, text editors and more!
+    Light/dark theme switcher for Linux. Supports popular Desktops and editors.
 aur/zoom
     Video Conferencing and Web Conferencing Service
+aur/zsh-theme-powerlevel10k
+    A theme for Zsh. It emphasizes speed, flexibility and out-of-the-box experience.
+core/base-devel
+    A meta-package that installs all packages required for building from source.
+core/gnupg
+    A complete and free implementation of the OpenPGP standard (RFC4880).
 core/openssh
-    SSH protocol implementation for remote login, command execution and file transfer
+    SSH protocol implementation for remote login, command execution and file transfer.
 core/sed
     GNU stream editor
 core/sudo
     Give certain users the ability to run some commands as root
+extra/acpid
+    A flexible and extensible daemon for delivering ACPI events.
+extra/aichat
+    A command-line tool for interacting with large language models.
+extra/ansible
+    A simple IT automation engine for cloud provisioning, config management, etc.
+extra/ansible-lint
+    A command-line tool for linting Ansible playbooks.
 extra/arandr
     Provide a simple visual front end for XRandR 1.2.
 extra/asciinema
@@ -24,10 +54,18 @@ extra/aws-cli
     Universal Command Line Interface for Amazon Web Services
 extra/bat
     Cat clone with syntax highlighting and git integration
-extra/blueman
-    GTK+ Bluetooth Manager
 extra/bluez
     Daemons for the bluetooth protocol stack
+extra/bluez-utils
+    Development and debugging utilities for the Bluetooth protocol stack.
+extra/blueman
+    GTK+ Bluetooth Manager
+extra/brightnessctl
+    A program to read and control device brightness.
+extra/caddy
+    A powerful, enterprise-ready, open source web server with automatic HTTPS.
+extra/chromium
+    An open-source browser project for a safer, faster, and more stable web.
 extra/cocogitto
     Set of CLI tools for the conventional commit and semver specifications
 extra/ctags
@@ -42,8 +80,12 @@ extra/diff-so-fancy
     Good-looking diffs with diff-highlight and more
 extra/direnv
     A shell extension that manages your environment
+extra/dnsmasq
+    A lightweight, easy to configure DNS forwarder and DHCP server.
 extra/docker
     Pack, ship and run any application as a lightweight container
+extra/docker-buildx
+    A Docker CLI plugin for extended build capabilities with BuildKit.
 extra/docker-compose
     Fast, isolated development environments using Docker
 extra/easytag
@@ -52,20 +94,32 @@ extra/eog
     Eye of Gnome: An image viewing and cataloging program
 extra/evince
     Document viewer (PDF, PostScript, XPS, djvu, dvi, tiff, cbr, cbz, cb7, cbt)
+extra/evolution
+    A personal information management application with mail, calendar and contacts.
 extra/fd
     Simple, fast and user-friendly alternative to find
 extra/ffmpeg4.4
     Complete solution to record, convert and stream audio and video
 extra/firefox
     Fast, Private & Safe Web Browser
+extra/flameshot
+    A powerful yet simple to use screenshot software.
 extra/fortune-mod
     The Fortune Cookie Program from BSD games
 extra/fzf
     Command-line fuzzy finder
+extra/gcompris-qt
+    A high quality educational software suite for children aged 2 to 10.
+extra/gimagereader-qt
+    A simple Gtk/Qt front-end to tesseract-ocr.
 extra/git
     the fast distributed version control system
+extra/github-cli
+    GitHub’s official command line tool.
 extra/glab
-    Cli tool to help work seamlessly with GitLab from the command line
+    A GitLab command line tool.
+extra/glow
+    A terminal based markdown reader.
 extra/gnome-online-accounts
     Single sign-on framework for GNOME
 extra/gopass
@@ -76,6 +130,12 @@ extra/graphviz
     Graph visualization software
 extra/gthumb
     Image browser and viewer for the GNOME Desktop
+extra/htop
+    An interactive process viewer for Unix systems.
+extra/httrack
+    An easy-to-use offline browser utility.
+extra/i3-wm
+    A tiling window manager, completely written from scratch.
 extra/imagemagick
     An image viewing/manipulation program
 extra/intel-ucode
@@ -90,6 +150,10 @@ extra/kwindowsystem
     Access to the windowing system
 extra/libreoffice-fresh
     LibreOffice branch which contains new features and program enhancements
+extra/lsof
+    A utility to list open files.
+extra/lua-language-server
+    A language server for Lua with features like auto-completion and go to definition.
 extra/magic-wormhole
     Securely transfer data between computers
 extra/mariadb
@@ -100,6 +164,8 @@ extra/mitmproxy
     SSL-capable man-in-the-middle HTTP proxy
 extra/mplayer
     Media player for Linux
+extra/ncdu
+    A disk usage analyzer with an ncurses interface.
 extra/neovim
     Fork of Vim aiming to improve user experience, plugins, and GUIs
 extra/network-manager-applet
@@ -110,22 +176,48 @@ extra/ntfs-3g
     NTFS filesystem driver and utilities
 extra/ntp
     Network Time Protocol reference implementation
+extra/obs-studio
+    Free and open source software for video recording and live streaming.
+extra/openssl
+    A robust, commercial-grade, and full-featured toolkit for TLS and SSL.
+extra/p7zip
+    A file archiver with a high compression ratio.
 extra/parted
     A program for creating, destroying, resizing, checking and copying partitions
+extra/pavucontrol
+    A volume control for the PulseAudio sound server.
 extra/pdftk
     Command-line tool for working with PDFs
 extra/plocate
     Alternative to locate, faster and compatible with mlocate's database.
+extra/postgresql
+    A powerful, open source object-relational database system.
 extra/postgresql-libs
     Libraries for use with PostgreSQL
+extra/pv
+    A terminal-based tool for monitoring the progress of data through a pipeline.
 extra/pulseaudio-bluetooth
     Bluetooth support for PulseAudio
+extra/python-bcrypt
+    A library for hashing passwords using the bcrypt algorithm.
+extra/python-pipx
+    A tool to install and run Python applications in isolated environments.
+extra/python-psycopg2
+    A PostgreSQL database adapter for the Python programming language.
 extra/qt5-base
     A cross-platform application and UI framework
 extra/ranger
     Simple, vim-like file manager
+extra/rclone
+    A command line program to sync files and directories to and from cloud storage.
 extra/recode
     Converts files between various character sets and usages
+extra/recordmydesktop
+    A program that records your desktop session to a file.
+extra/redis
+    An in-memory data structure store, used as a database, cache and message broker.
+extra/repgrep
+    A recursive search and replace tool.
 extra/ripgrep
     A search tool that combines the usability of ag with the raw speed of grep
 extra/rofi
@@ -145,25 +237,57 @@ extra/sheldon
 extra/sheldon-docs
     A fast and configurable shell plugin manager (documentation)
 extra/signal-desktop
-    Signal Private Messenger for Linux
+    A desktop client for the Signal private messenger.
+extra/speech-dispatcher
+    A common interface to speech synthesis.
+extra/tealdeer
+    A fast, unofficial tldr client.
+extra/telegram-desktop
+    The official desktop client for the Telegram messaging app.
 extra/termdown
     Countdown timer and stopwatch in your terminal
 extra/terraform
     HashiCorp tool for building and updating infrastructure as code idempotently
+extra/tesseract-data-deu
+    Tesseract OCR data for German.
+extra/tesseract-data-eng
+    Tesseract OCR data for English.
+extra/texlive-binextra
+    Extra binaries for TeX Live.
+extra/tflint
+    A Pluggable Terraform Linter.
 extra/the_silver_searcher
     Code searching tool similar to Ack, but faster
+extra/thunderbird
+    A free email application that’s easy to set up and customize.
 extra/tidy
     A tool to tidy down your HTML code to a clean style
 extra/tig
     Text-mode interface for Git.
 extra/toml-bombadil
     Adotfile manager with templating
+extra/traefik
+    A modern HTTP reverse proxy and load balancer for deploying microservices.
 extra/ttf-firacode-nerd
     Patched font Fira (Fura) Code from nerd fonts library
-extra/wezterm
-    A GPU-accelerated cross-platform terminal emulator and multiplexer
+extra/typescript-language-server
+    A language server for TypeScript with features like auto-completion.
+extra/unzip
+    A utility to extract files from a ZIP archive.
+extra/upower
+    A D-Bus service for querying and managing power devices.
+extra/uv
+    A fast, lightweight, and easy-to-use static file server.
+extra/valkey
+    A new fork of Redis that is an in-memory data structure store.
+extra/vice
+    A program that executes programs for old 8-bit computers.
+extra/vlc
+    A free and open source cross-platform multimedia player and framework.
 extra/wget
     Network utility to retrieve files from the Web
+extra/wireguard-tools
+    Tools for managing WireGuard interfaces.
 extra/xkeycaps
     A graphical front-end to xmodmap
 extra/xmlstarlet
@@ -176,10 +300,16 @@ extra/xorg-xev
     Print contents of X events
 extra/xorg-xinit
     X.Org initialisation program
+extra/xorg-xkill
+    A utility for forcing the X server to close connections to clients.
 extra/xorg-xmodmap
     Utility for modifying keymaps and button mappings
 extra/xss-lock
     Use external locker as X screen saver
+extra/xterm
+    A terminal emulator for the X Window System.
+extra/yamllint
+    A linter for YAML files.
 extra/yq
     Command-line YAML, XML, TOML processor - jq wrapper for YAML/XML/TOML documents
 extra/yt-dlp
@@ -188,77 +318,7 @@ extra/z
     Tracks your most used directories, based on 'frecency'
 extra/zip
     Compressor/archiver for creating and modifying zipfiles
+extra/zsh-autosuggestions
+    Fish-like autosuggestions for zsh.
 extra/zsh-history-substring-search
     ZSH port of Fish history search (up arrow)
-aur/exif
-aur/google-chrome
-aur/html2md
-aur/neovim-remote
-aur/nvm
-aur/pinentry-rofi
-aur/pg_top
-aur/spotify
-aur/zsh-theme-powerlevel10k
-core/base-devel
-core/gnupg
-core/openssl
-extra/acpid
-extra/aichat
-extra/ansible
-extra/ansible-lint
-extra/bluez-utils
-extra/brightnessctl
-extra/caddy
-extra/chromium
-extra/dnsmasq
-extra/docker-buildx
-extra/evolution
-extra/flameshot
-extra/gcompris-qt
-extra/gimagereader-qt
-extra/github-cli
-extra/glab
-extra/glow
-extra/gopass
-extra/htop
-extra/httrack
-extra/i3-wm
-extra/lsof
-extra/lua-language-server
-extra/ncdu
-extra/nvm
-extra/obs-studio
-extra/p7zip
-extra/pavucontrol
-extra/postgresql
-extra/pv
-extra/python-bcrypt
-extra/python-pipx
-extra/python-psycopg2
-extra/rclone
-extra/recordmydesktop
-extra/redis
-extra/repgrep
-extra/signal-desktop
-extra/speech-dispatcher
-extra/tealdeer
-extra/telegram-desktop
-extra/tesseract-data-eng
-extra/tesseract-data-deu
-extra/texlive-binextra
-extra/tflint
-extra/thunderbird
-extra/traefik
-extra/typescript-language-server
-extra/unzip
-extra/upower
-extra/uv
-extra/valkey
-    A new fork of Redis that is an in-memory data structure store, used as a database, cache and message broker.
-extra/vice
-extra/vlc
-extra/wireguard-tools
-extra/xorg-xkill
-extra/xterm
-extra/yamllint
-extra/zsh-autosuggestions
