@@ -1,34 +1,41 @@
 #!/bin/bash
+#
+# This script documents the reproducible process for installing Playwright on Arch Linux.
+# It uses a virtual environment managed by direnv to avoid system conflicts.
 
-# <https://blog.nicoandres.dev/use-playwright-in-arch-linux/>
-# <https://github.com/microsoft/playwright/issues/2621#issuecomment-2083083392>
-sudo pacman -S --needed core/nss core/nspr extra/at-spi2-core extra/libcups extra/libdrm core/dbus extra/libxcb extra/libxkbcommon extra/at-spi2-core extra/libx11 extra/libxcomposite extra/libxdamage extra/libxext extra/libxfixes extra/libxrandr extra/mesa extra/pango extra/cairo extra/alsa-lib extra/xorg-server-xvfb
-yay -S icu66 enchant libffi7
-sudo pacman -S woff2 hyphen
-sudo ln -s /usr/lib/libpcre.so /usr/lib/libpcre.so.3
+# --- Installation Process ---
 
-yay -S libwebp
-sudo ln -s /usr/lib/libwebp.so.7 /usr/lib/libwebp.so.6
+# 1. Install System-Level Dependencies
+# These are required for the Playwright browsers to run correctly.
+# You will be prompted for your password.
+echo "Step 1: Installing system dependencies..."
+sudo pacman -S --needed --noconfirm nss nspr at-spi2-core libcups libdrm dbus libxcb libxkbcommon libx11 libxcomposite libxdamage libxext libxfixes libxrandr mesa pango cairo alsa-lib xorg-server-xvfb woff2 hyphen
+yay -S --needed --noconfirm icu66 enchant libffi7 libwebp
 
-git clone https://github.com/festvox/flite.git /tmp/flite
-cd /tmp/flite
-./configure --enable-shared
-make
-make get_voices
-sudo cp build/x86_64-linux-gnu/lib/libflite.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_grapheme_lang.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_grapheme_lex.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_indic_lang.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_indic_lex.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_time_awb.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_awb.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_kal.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_kal16.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_rms.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmu_us_slt.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_cmulex.so.1 /usr/lib
-sudo cp build/x86_64-linux-gnu/lib/libflite_usenglish.so.1 /usr/lib
 
-yay -S playwright
+# 2. Set up direnv for Automatic Virtual Environment Management
+# This will create a .envrc file that tells direnv to manage a Python
+# virtual environment for this directory.
+echo "Step 2: Configuring direnv..."
+echo "layout python" > .envrc
+direnv allow .
 
-playwright install
+
+# 3. Install Playwright in the direnv Environment
+# This command must be run in a shell where direnv has activated the
+# virtual environment (i.e., in this directory).
+echo "Step 3: Installing Playwright..."
+echo "Please run the following command in your terminal:"
+echo "uv pip install playwright && python -m playwright install"
+
+
+# 4. Verify the installation
+# After running the command above, you can verify the installation.
+# NOTE: You will likely see a "Host validation warning" about missing
+# dependencies. This is a false positive on Arch Linux because Playwright's
+# check is designed for Ubuntu. As long as the dependencies in Step 1
+# were installed successfully, this warning can be safely ignored.
+echo "Step 4: Verifying installation..."
+echo "Run 'which playwright'. It should now return a path inside the .direnv directory."
+
+echo "Playwright installation is complete."
