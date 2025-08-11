@@ -9,18 +9,19 @@ gpgconf --kill all 2>/dev/null || true &&
 git -C "${DOTFILES_DIR}" pull || git clone "${DOTFILES_REPO}" "${DOTFILES_DIR}" &&
 ln -sf ${DOTFILES_DIR}/bombadil.toml ~/.config/bombadil.toml &&
 cd ${DOTFILES_DIR} &&
-./aider/install &&
-./aur/yay-install &&
-./packages-install &&
-./docker/docker-group-setup &&
-./ruby/rvm-setup &&
-./vundle-install &&
+"${DOTFILES_DIR}/aider/install" &&
+"${DOTFILES_DIR}/aur/yay-install" &&
+"${DOTFILES_DIR}/bin/packages-install" &&
+"${DOTFILES_DIR}/docker/docker-group-setup" &&
+"${DOTFILES_DIR}/ruby/rvm-setup" &&
+"${DOTFILES_DIR}/vundle-install" &&
 bombadil link &&
 sheldeon lock &&
 
 yay -S --needed --noconfirm nvm
 [ -s "/usr/share/nvm/init-nvm.sh" ] && source /usr/share/nvm/init-nvm.sh
-nvm alias default lts/jod
+nvm install 24.4.0
+nvm alias default 24.4.0
 
 # Install/update npm packages
 "${DOTFILES_DIR}/bin/npm-packages" auto &&
@@ -29,7 +30,7 @@ nvm alias default lts/jod
 gem list overcommit -i >/dev/null 2>&1 || gem install overcommit &&
 
 # terraform-ls
-./terraform-ls/install &&
+"${DOTFILES_DIR}/terraform-ls/install" &&
 
 # add user to wheel group to get sudo privileges granted, e. g. for journalctl
 # NOTE: requires "%wheel ALL=(ALL) ALL" in visudo
