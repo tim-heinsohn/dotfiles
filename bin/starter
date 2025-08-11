@@ -1,11 +1,13 @@
 #/bin/bash
 
-DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tqmz/dotfiles.git}
+DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 
 sudo pacman -Suy --needed git &&
+# Restart gpg daemons to use updated versions after system update
+gpgconf --kill all 2>/dev/null || true &&
 git -C "${DOTFILES_DIR}" pull || git clone "${DOTFILES_REPO}" "${DOTFILES_DIR}" &&
-ln -s ${DOTFILES_DIR}/bombadil.toml ~/.config/bombadil.toml &&
+ln -sf ${DOTFILES_DIR}/bombadil.toml ~/.config/bombadil.toml &&
 cd ${DOTFILES_DIR} &&
 ./aider/install &&
 ./aur/yay-install &&
@@ -16,36 +18,15 @@ cd ${DOTFILES_DIR} &&
 bombadil link &&
 sheldeon lock &&
 
-yay -S nvm
+yay -S --needed --noconfirm nvm
 [ -s "/usr/share/nvm/init-nvm.sh" ] && source /usr/share/nvm/init-nvm.sh
-nvm alias default 24.4.0
+nvm alias default lts/jod
 
-# ansible
-npm install -g @ansible/ansible-language-server &&
-
-# bash
-npm install -g bash-language-server &&
-
-# claude code
-npm install -g @anthropic-ai/claude-code &&
-
-# docker compose
-npm install -g @microsoft/compose-language-service &&
-
- # docker
-npm install -g dockerfile-language-server-nodejs &&
-
-# gemini
-npm install -g @google/gemini-cli
-
-# eslint
-npm install -g vscode-langservers-extracted &&
+# Install/update npm packages
+"${DOTFILES_DIR}/bin/npm-packages" auto &&
 
 # overcommit
-gem install overcommit &&
-
-# sentry spotlight
-npm install -g @spotlightjs/spotlight &&
+gem list overcommit -i >/dev/null 2>&1 || gem install overcommit &&
 
 # terraform-ls
 ./terraform-ls/install &&
@@ -59,12 +40,8 @@ sudo usermod -aG video $USER &&
 
 # run acpi_listen after enabling this and press brightness keys on keyboard,
 # e.g. Fn+F5/F6
-systemctl start acpid &&
-systemctl enable acpid &&
-systemctl start bluetooth &&
-systemctl enable bluetooth &&
-systemctl start docker &&
-systemctl enable docker &&
-systemctl start qotd &&
-systemctl enable qotd &&
+sudo systemctl enable --now acpid &&
+sudo systemctl enable --now bluetooth &&
+sudo systemctl enable --now docker &&
+sudo systemctl enable --now qotd &&
 echo "Done."

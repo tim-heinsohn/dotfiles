@@ -1,7 +1,51 @@
 #!/bin/bash
 
-# Yay
+# Yay installer with idempotency
 # <https://github.com/Jguer/yay>
-mkdir -p ~/Downloads && cd ~/Downloads
-sudo pacman -Suy --needed --noconfirm git base-devel &&
-git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -si
+
+set -euo pipefail
+
+# Check if yay is already installed and functional
+if command -v yay &> /dev/null; then
+    echo "yay is already installed at $(which yay)"
+    echo "Version: $(yay --version | head -1)"
+    exit 0
+fi
+
+echo "Installing yay AUR helper..."
+
+# Create downloads directory
+DOWNLOADS_DIR="$HOME/Downloads"
+mkdir -p "$DOWNLOADS_DIR"
+cd "$DOWNLOADS_DIR"
+
+# Install dependencies
+echo "Installing dependencies..."
+sudo pacman -Suy --needed --noconfirm git base-devel
+
+# Handle existing yay directory
+YAY_DIR="$DOWNLOADS_DIR/yay"
+if [ -d "$YAY_DIR" ]; then
+    echo "Removing existing yay directory..."
+    rm -rf "$YAY_DIR"
+fi
+
+# Clone and build yay
+echo "Cloning yay repository..."
+git clone https://aur.archlinux.org/yay.git
+
+echo "Building and installing yay..."
+cd yay
+makepkg -si --noconfirm
+
+# Verify installation
+if command -v yay &> /dev/null; then
+    echo "yay successfully installed!"
+    echo "Version: $(yay --version | head -1)"
+    echo "Location: $(which yay)"
+else
+    echo "Error: yay installation failed - command not found" >&2
+    exit 1
+fi
+
+echo "yay installation complete."

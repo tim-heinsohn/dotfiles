@@ -4,5 +4,102 @@
 # (Ruby Version Manager)
 # <http://rvm.io/>
 
-# as recommended, setup via official install script, not via aur/rvm.
-curl -L get.rvm.io | bash -s stable
+# Set strict error handling for robustness
+set -euo pipefail
+
+# Function to log messages with timestamp
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to check if RVM is already installed and functional
+rvm_installed() {
+    # Check if rvm command exists and is functional
+    if command_exists rvm; then
+        # Verify RVM is properly loaded by checking version
+        if rvm --version >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    
+    # Also check for RVM installation directory
+    if [[ -d "$HOME/.rvm" ]] && [[ -s "$HOME/.rvm/scripts/rvm" ]]; then
+        # Source RVM to make it available in current shell
+        source "$HOME/.rvm/scripts/rvm"
+        if rvm --version >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Main installation logic
+main() {
+    log "Starting RVM setup..."
+    
+    # Check prerequisites
+    if ! command_exists curl; then
+        log "ERROR: curl is required but not installed. Please install curl first."
+        exit 1
+    fi
+    
+    # Check if RVM is already installed
+    if rvm_installed; then
+        local rvm_version
+        rvm_version=$(rvm --version 2>/dev/null | head -n1 || echo "unknown")
+        log "RVM is already installed and functional: $rvm_version"
+        log "Skipping installation. Run 'rvm get stable' to update if needed."
+        return 0
+    fi
+    
+    log "RVM not found or not functional. Proceeding with installation..."
+    
+    # Create temporary directory for safer downloads
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    trap "rm -rf '$temp_dir'" EXIT
+    
+    # Download and install RVM as recommended by official documentation
+    log "Downloading RVM installer..."
+    if ! curl -sSL https://get.rvm.io -o "$temp_dir/rvm-installer"; then
+        log "ERROR: Failed to download RVM installer"
+        exit 1
+    fi
+    
+    log "Installing RVM stable..."
+    if ! bash "$temp_dir/rvm-installer" stable; then
+        log "ERROR: RVM installation failed"
+        exit 1
+    fi
+    
+    # Verify installation
+    log "Verifying RVM installation..."
+    
+    # Source RVM to make it available
+    if [[ -s "$HOME/.rvm/scripts/rvm" ]]; then
+        source "$HOME/.rvm/scripts/rvm"
+    else
+        log "ERROR: RVM installation directory not found after installation"
+        exit 1
+    fi
+    
+    # Final verification
+    if rvm_installed; then
+        local rvm_version
+        rvm_version=$(rvm --version 2>/dev/null | head -n1 || echo "unknown")
+        log "SUCCESS: RVM installation completed successfully: $rvm_version"
+        log "Note: You may need to restart your shell or source ~/.bashrc to use RVM"
+    else
+        log "ERROR: RVM installation verification failed"
+        exit 1
+    fi
+}
+
+# Run main function
+main "$@"

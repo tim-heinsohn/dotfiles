@@ -1,0 +1,149 @@
+#!/bin/bash
+
+# npm-packages - Install and update global npm packages
+# Usage: ./npm-packages [install|update]
+
+set -euo pipefail
+
+# List of global npm packages to manage
+declare -a NPM_PACKAGES=(
+    "@ansible/ansible-language-server"
+    "bash-language-server" 
+    "@anthropic-ai/claude-code"
+    "@microsoft/compose-language-service"
+    "dockerfile-language-server-nodejs"
+    "@google/gemini-cli"
+    "vscode-langservers-extracted"
+    "@spotlightjs/spotlight"
+)
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+check_npm() {
+    if ! command -v npm >/dev/null 2>&1; then
+        log "ERROR: npm is not installed or not in PATH"
+        exit 1
+    fi
+}
+
+check_nvm_node() {
+    # Source nvm if available
+    if [ -s "/usr/share/nvm/init-nvm.sh" ]; then
+        source /usr/share/nvm/init-nvm.sh
+    fi
+    
+    # Check if node is available
+    if ! command -v node >/dev/null 2>&1; then
+        log "ERROR: Node.js is not installed or not in PATH"
+        log "Make sure to install nvm and set up Node.js first"
+        exit 1
+    fi
+}
+
+install_packages() {
+    log "Installing global npm packages..."
+    
+    for package in "${NPM_PACKAGES[@]}"; do
+        log "Installing $package..."
+        if npm install -g "$package"; then
+            log "✓ Successfully installed $package"
+        else
+            log "✗ Failed to install $package"
+        fi
+    done
+}
+
+update_packages() {
+    log "Updating global npm packages..."
+    
+    for package in "${NPM_PACKAGES[@]}"; do
+        log "Updating $package..."
+        if npm list -g "$package" >/dev/null 2>&1; then
+            if npm update -g "$package"; then
+                log "✓ Successfully updated $package"
+            else
+                log "✗ Failed to update $package"
+            fi
+        else
+            log "⚠ $package not installed, installing..."
+            if npm install -g "$package"; then
+                log "✓ Successfully installed $package"
+            else
+                log "✗ Failed to install $package"
+            fi
+        fi
+    done
+}
+
+install_or_update_packages() {
+    log "Installing/updating global npm packages..."
+    
+    for package in "${NPM_PACKAGES[@]}"; do
+        if npm list -g "$package" >/dev/null 2>&1; then
+            log "Updating $package..."
+            if npm update -g "$package"; then
+                log "✓ Successfully updated $package"
+            else
+                log "✗ Failed to update $package"
+            fi
+        else
+            log "Installing $package..."
+            if npm install -g "$package"; then
+                log "✓ Successfully installed $package"
+            else
+                log "✗ Failed to install $package"
+            fi
+        fi
+    done
+}
+
+show_usage() {
+    echo "Usage: $0 [install|update|auto]"
+    echo ""
+    echo "Commands:"
+    echo "  install  - Install all packages (skip if already installed)"
+    echo "  update   - Update existing packages (install if missing)"
+    echo "  auto     - Install missing packages, update existing ones (default)"
+    echo ""
+    echo "Managed packages:"
+    for package in "${NPM_PACKAGES[@]}"; do
+        echo "  - $package"
+    done
+}
+
+main() {
+    local command="${1:-auto}"
+    
+    case "$command" in
+        install)
+            check_npm
+            check_nvm_node
+            install_packages
+            ;;
+        update)
+            check_npm
+            check_nvm_node
+            update_packages
+            ;;
+        auto)
+            check_npm
+            check_nvm_node
+            install_or_update_packages
+            ;;
+        -h|--help|help)
+            show_usage
+            exit 0
+            ;;
+        *)
+            log "ERROR: Unknown command '$command'"
+            show_usage
+            exit 1
+            ;;
+    esac
+    
+    log "npm packages management completed"
+}
+
+main "$@"
