@@ -100,6 +100,8 @@ extra/fd
     Simple, fast and user-friendly alternative to find
 extra/ffmpeg4.4
     Complete solution to record, convert and stream audio and video
+extra/feh
+    Fast and light imlib2-based image viewer
 extra/firefox
     Fast, Private & Safe Web Browser
 extra/flameshot

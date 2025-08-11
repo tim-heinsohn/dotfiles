@@ -1,0 +1,1 @@
+Please commit the staged changes without Claude attribution and limit the commit message to a max of 700 chars (100 max. per line)

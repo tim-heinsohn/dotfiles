@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# This script documents the reproducible process for installing Playwright on Arch Linux.
-# It uses a virtual environment managed by direnv to avoid system conflicts.
+# This script documents the reproducible process for installing Playwright MCP
+# (Model Context Protocol) on Arch Linux for use with Claude Code.
 
 # --- Installation Process ---
 
@@ -13,29 +13,36 @@ sudo pacman -S --needed --noconfirm nss nspr at-spi2-core libcups libdrm dbus li
 yay -S --needed --noconfirm icu66 enchant libffi7 libwebp
 
 
-# 2. Set up direnv for Automatic Virtual Environment Management
-# This will create a .envrc file that tells direnv to manage a Python
-# virtual environment for this directory.
-echo "Step 2: Configuring direnv..."
-echo "layout python" > .envrc
-direnv allow .
+# 2. Install Playwright MCP (Model Context Protocol)
+# This is a server that uses Playwright to provide browser automation
+# capabilities to Claude Code and other AI assistants.
+echo "Step 2: Installing Playwright MCP..."
+npm install -g @playwright/mcp
 
 
-# 3. Install Playwright in the direnv Environment
-# This command must be run in a shell where direnv has activated the
-# virtual environment (i.e., in this directory).
-echo "Step 3: Installing Playwright..."
-echo "Please run the following command in your terminal:"
-echo "uv pip install playwright && python -m playwright install"
+# 3. Install Browser Dependencies
+# This pulls the required browser binaries (Chromium, Firefox, WebKit)
+echo "Step 3: Installing browser dependencies..."
+npx playwright install chromium
+npx playwright install firefox
+npx playwright install webkit
+
+# 3b. Install Google Chrome (optional, for Chrome-specific testing)
+# echo "Installing Google Chrome..."
+# yay -S --needed --noconfirm google-chrome
 
 
-# 4. Verify the installation
-# After running the command above, you can verify the installation.
-# NOTE: You will likely see a "Host validation warning" about missing
-# dependencies. This is a false positive on Arch Linux because Playwright's
-# check is designed for Ubuntu. As long as the dependencies in Step 1
-# were installed successfully, this warning can be safely ignored.
-echo "Step 4: Verifying installation..."
-echo "Run 'which playwright'. It should now return a path inside the .direnv directory."
+# 4. Configure Claude Code
+# Add the MCP server to Claude Code for browser automation
+echo "Step 4: Configuring Claude Code..."
+claude mcp list | grep -q playwright || claude mcp add --scope=user playwright npx '@playwright/mcp@latest' || echo "Claude not found - run manually: claude mcp add playwright npx '@playwright/mcp@latest'"
 
-echo "Playwright installation is complete."
+
+# 5. Verify the installation
+echo "Step 5: Verifying installation..."
+echo "1. Test MCP server: mcp-server-playwright"
+echo "2. Check global installation: npm ls -g @playwright/mcp"
+echo "3. Test in Claude: 'Use playwright to open https://google.com'"
+
+
+echo "Playwright MCP installation is complete!"

@@ -36,14 +36,14 @@ export GPG_TTY=$(tty)
 
 # Only load gopass secrets in GUI environments
 if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ]; then
-  GEMINI_API_KEY=$(gopass show t/ai/gemini/api-key)
+  GEMINI_API_KEY=$(gopass show -o t/ai/gemini/api-key)
   export GEMINI_API_KEY
-  MISTRAL_API_KEY=$(gopass show t/ai/mistral/api-key)
+  MISTRAL_API_KEY=$(gopass show -o t/ai/mistral/api-key)
   export MISTRAL_API_KEY
-  ANTHROPIC_API_KEY=$(gopass show t/ai/claude/api-key)
+  ANTHROPIC_API_KEY=$(gopass show -o t/ai/claude/api-key)
   export ANTHROPIC_API_KEY
   export PERSONAL_ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
-  DEEPSEEK_API_KEY=$(gopass show t/ai/deepseek/api-key)
+  DEEPSEEK_API_KEY=$(gopass show -o t/ai/deepseek/api-key)
   export DEEPSEEK_API_KEY
   OPENROUTER_API_KEY=$(gopass show -o t/ai/openrouter.ai)
   export OPENROUTER_API_KEY

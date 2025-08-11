@@ -21,13 +21,13 @@ yay -S nvm
 nvm alias default 24.4.0
 
 # ansible
-npm install -g @ansible/ansible-language-server
+npm install -g @ansible/ansible-language-server &&
 
 # bash
 npm install -g bash-language-server &&
 
 # claude code
-npm install -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code &&
 
 # docker compose
 npm install -g @microsoft/compose-language-service &&

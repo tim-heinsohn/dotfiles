@@ -1,38 +1,63 @@
-# Playwright Usage Example
+# Playwright MCP Usage Guide
 
-This file contains a simple example of how to use Playwright with Python to automate a browser task.
+This document explains how to use Playwright MCP (Model Context Protocol) with Claude Code for browser automation.
 
-## Prerequisites
+## What is Playwright MCP?
 
--   Playwright and its dependencies must be installed and configured as per the `playwright/install` script.
--   You must be in a shell session where the `direnv` virtual environment is active.
+Playwright MCP is a server that provides browser automation capabilities to AI assistants like Claude. It allows you to interact with web pages, take screenshots, fill forms, and perform other browser tasks through natural language commands.
 
-## Example: Take a Screenshot of Google
+## Installation (Already Done)
 
-The following Python script will:
-1.  Launch a headless Chromium browser.
-2.  Navigate to `https://www.google.com`.
-3.  Take a screenshot and save it as `google.png`.
-4.  Close the browser.
-
-### Code
-
-```python
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as p:
-    browser = p.chromium.launch()
-    page = browser.new_page()
-    page.goto("https://www.google.com/")
-    page.screenshot(path="google.png")
-    browser.close()
+Playwright MCP is installed globally via:
+```bash
+npm install -g @playwright/mcp
 ```
 
-### How to Run
+## Claude CLI Setup
 
-1.  Save the code above into a file named `test_playwright.py`.
-2.  Run the script from your terminal:
-    ```bash
-    python test_playwright.py
-    ```
-3.  A new file named `google.png` should appear in your directory.
+For Claude CLI, add the MCP server using:
+```bash
+claude mcp add playwright npx '@playwright/mcp@latest'
+```
+
+Then start Claude as usual:
+```bash
+claude
+```
+
+## Usage Examples
+
+Once configured, you can use commands like:
+- "Use playwright to open https://www.google.com"
+- "Take a screenshot of the current page"
+- "Fill out the form with my name and email"
+- "Click on the 'Sign In' button"
+
+## Verification
+
+Test the MCP server:
+```bash
+mcp-server-playwright  # Should start and show "Server listening..."
+```
+
+## Claude Desktop Setup
+
+For Claude Desktop, configure in `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or equivalent:
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    }
+  }
+}
+```
+
+## Browser Sessions & Persistence
+
+- **Sessions**: Browser state persists within a single Claude session
+- **Passwords**: Browser profiles/cache are isolated per session  
+- **Security**: Runs locally, no external dependencies
+- **Profiles**: Uses temporary browser profiles that are cleaned up after use

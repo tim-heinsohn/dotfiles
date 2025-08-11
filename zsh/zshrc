@@ -22,12 +22,6 @@ compinit
 # environment (to be read before aliases)
 source ~/.zsh/environment >/dev/null 2>&1
 
-if command -v npm >/dev/null 2>&1; then
-  mkdir -p "${HOME}/.npm-global"
-  # npm config set prefix "${HOME}/.npm-global"
-  export PATH="${HOME}/.npm-global/bin:$PATH"
-fi
-
 # aliases
 source ~/.zsh/aliases
 
