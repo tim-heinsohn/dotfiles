@@ -22,3 +22,8 @@ This is the user CLAUDE.md.
 
 ## Style Guidelines
 - See $DOTFILES_DIR/claude-code/docs/style/markdown.md for Markdown formatting standards
+
+## Commit Message Convention
+- Use **Conventional Commits** format: `type: description`
+- Common types: `feat:` (new feature), `fix:` (bug fix), `docs:` (documentation), `refactor:` (code restructuring), `chore:` (maintenance)
+- Keep first line ≤100 chars, subsequent lines ≤100 chars, total message ≤700 chars
