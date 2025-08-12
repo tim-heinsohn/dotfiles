@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# Gmail MCP Server Installation Script
+# Based on GongRzhe/Gmail-MCP-Server
+
+set -euo pipefail
+
+GMAIL_MCP_DIR="$HOME/.gmail-mcp"
+GMAIL_MCP_REPO="https://github.com/GongRzhe/Gmail-MCP-Server.git"
+
+echo "Installing Gmail MCP Server..."
+
+# Create directory if it doesn't exist
+mkdir -p "$GMAIL_MCP_DIR"
+
+# Clone or update the repository
+if [ -d "$GMAIL_MCP_DIR/.git" ]; then
+    echo "Updating existing Gmail MCP Server..."
+    cd "$GMAIL_MCP_DIR"
+    git pull
+else
+    echo "Cloning Gmail MCP Server..."
+    git clone "$GMAIL_MCP_REPO" "$GMAIL_MCP_DIR"
+    cd "$GMAIL_MCP_DIR"
+fi
+
+# Install dependencies
+echo "Installing dependencies..."
+npm install
+
+# Secure OAuth credentials file if it exists
+if [ -f "gcp-oauth.keys.json" ]; then
+    chmod 600 gcp-oauth.keys.json
+    echo "✓ Secured gcp-oauth.keys.json permissions (600)"
+fi
+
+
+echo "Gmail MCP Server installed successfully!"
+echo ""
+echo "Next steps:"
+echo "1. Set up Google Cloud Console and OAuth credentials"
+echo "2. Create OAuth 2.0 credentials as 'Desktop Application' (no redirect URI needed)"
+echo "3. Run the authentication script: cd ~/.gmail-mcp && npm run auth"
+echo "4. Add Gmail MCP to Claude Code configuration"
+echo ""
+echo "See: ~/dotfiles/gmail-mcp/doc/usage.md for detailed setup instructions"
