@@ -4,6 +4,9 @@
 ~/dotfiles/bin/projects-setup
 ~/dotfiles/bin/binaries-symlink
 
+# Setup gopass cascading config
+~/dotfiles/bin/gopass-config-include
+
 # Setup p10k.zsh symlink (bypassing bombadil validation)
 ln -sf ~/dotfiles/zsh/p10k.zsh ~/.p10k.zsh
 

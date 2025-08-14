@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Posthook to ensure gopass config includes shared configuration
+# This script adds the [include] section to local gopass config if not present
+
+GOPASS_CONFIG="${HOME}/.config/gopass/config"
+SHARED_CONFIG_PATH="${HOME}/.config/gopass/config.shared"
+
+# Exit gracefully if gopass is not installed
+if ! command -v gopass >/dev/null 2>&1; then
+    echo "gopass not installed, skipping config setup"
+    exit 0
+fi
+
+# Ensure gopass config directory exists
+mkdir -p "$(dirname "$GOPASS_CONFIG")"
+
+# Check if the include directive already exists
+if [[ -f "$GOPASS_CONFIG" ]] && grep -q "^\[include\]" "$GOPASS_CONFIG"; then
+    echo "gopass config already includes [include] section"
+    exit 0
+fi
+
+# Check if the include directive exists in any form
+if [[ -f "$GOPASS_CONFIG" ]] && grep -q "include\.path" "$GOPASS_CONFIG"; then
+    echo "gopass config already has include.path directive"
+    exit 0
+fi
+
+# Create or update the local config with include directive
+{
+    echo ""
+    echo "[include]"
+    echo -e "\tpath = $SHARED_CONFIG_PATH"
+} >> "$GOPASS_CONFIG"
+
+echo "Added [include] directive to gopass config"

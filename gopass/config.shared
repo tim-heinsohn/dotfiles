@@ -1,0 +1,10 @@
+[core]
+	editor = nvim -u /home/t/dotfiles/vim/vimrc.minimal
+	autopush = true
+	autosync = true
+	cliptimeout = 45
+	exportkeys = true
+	notifications = true
+
+[pwgen]
+	xkcd-lang = en
