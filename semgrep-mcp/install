@@ -14,15 +14,28 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
+# Install standalone Semgrep CLI (required by MCP server)
+echo "Installing standalone Semgrep CLI via uv..."
+uv tool install semgrep
+
 # Install Semgrep MCP using uv with version pinning for compatibility
 echo "Installing semgrep-mcp via uv..."
 uv tool install "semgrep-mcp==0.1.4" --with "mcp==1.3.0"
 
-# Verify installation
-if uv tool list | grep -q semgrep-mcp; then
+# Verify installations
+if uv tool list | grep -q "semgrep-mcp"; then
     echo "✓ Semgrep MCP installed successfully via uv"
 else
     echo "Error: Semgrep MCP installation failed"
+    exit 1
+fi
+
+if uv tool list | grep -q "semgrep" && ! uv tool list | grep -q "semgrep-mcp"; then
+    echo "✓ Standalone Semgrep CLI installed successfully via uv"
+elif command -v semgrep &> /dev/null; then
+    echo "✓ Semgrep CLI available in PATH"
+else
+    echo "Error: Standalone Semgrep CLI installation failed"
     exit 1
 fi
 
