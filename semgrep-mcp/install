@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Semgrep MCP Server Installation Script
+# Based on semgrep/mcp
+
+set -euo pipefail
+
+echo "Installing Semgrep MCP Server..."
+
+# Check if uv is installed
+if ! command -v uv &> /dev/null; then
+    echo "Error: uv is required but not installed."
+    echo "Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+fi
+
+# Install Semgrep MCP using uv with version pinning for compatibility
+echo "Installing semgrep-mcp via uv..."
+uv tool install "semgrep-mcp==0.1.4" --with "mcp==1.3.0"
+
+# Verify installation
+if uv tool list | grep -q semgrep-mcp; then
+    echo "✓ Semgrep MCP installed successfully via uv"
+else
+    echo "Error: Semgrep MCP installation failed"
+    exit 1
+fi
+
+echo "Semgrep MCP Server installed successfully!"
+echo ""
+echo "✓ Using version-pinned installation to avoid FastMCP compatibility issues"
+echo "  (semgrep-mcp==0.1.4 with mcp==1.3.0)"
+echo ""
+echo "Next steps:"
+echo "1. Add Semgrep MCP to Claude Code configuration: mcp-install integrate semgrep"
+echo "2. Optional: Set SEMGREP_APP_TOKEN environment variable for Semgrep Platform integration"
+echo "3. Test functionality with security scans and code analysis"
+echo ""
+echo "See: ~/dotfiles/semgrep-mcp/doc/usage.md for detailed usage instructions"

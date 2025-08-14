@@ -3,10 +3,19 @@
 This is the user CLAUDE.md.
 
 ## Tools
-- See $DOTFILES_DIR/claude-code/docs/tools/playwright-mcp.md for browser automation with Playwright MCP
+
+### Gmail MCP
 - See $DOTFILES_DIR/claude-code/docs/tools/gmail-mcp.md for Gmail integration with filter management
+- **Rate Limiting**: When processing large batches of emails (>100), implement exponential backoff delays (1s, 2s, 4s, 8s) between requests to avoid Google API rate limits and potential account restrictions
+
+### Playwright MCP
+- See $DOTFILES_DIR/claude-code/docs/tools/playwright-mcp.md for browser automation with Playwright MCP
 - Always close browser sessions when finished with browser automation tasks unless instructed otherwise
-- **Gmail Rate Limiting**: When processing large batches of emails (>100), implement exponential backoff delays (1s, 2s, 4s, 8s) between requests to avoid Google API rate limits and potential account restrictions
+
+### Semgrep MCP
+- See $DOTFILES_DIR/claude-code/docs/tools/semgrep-mcp.md for code security scanning and analysis
+
+### Third-party Repository Analysis
 - Third-party repository analysis: spawn gemini for help on understanding how tools actually work
   If you need to analyze a tool such as Kamal or AnythingLLM, please consider the option of ch
   their repository into /srv/lib/[repo] and request `gemini` to analyze it, place

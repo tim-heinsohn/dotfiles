@@ -20,6 +20,7 @@ usage() {
     echo "Available MCP servers:"
     echo "  gmail        Gmail integration with filter management"
     echo "  playwright   Browser automation (already configured)"
+    echo "  semgrep      Code security scanning and analysis"
     echo ""
     echo "Examples:"
     echo "  $0 install gmail"
@@ -57,7 +58,7 @@ integrate_mcp() {
                 echo "Adding Gmail MCP to Claude Code..."
                 # Add Gmail MCP server configuration
                 local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.gmail-mcp/dist/index.js\"]}"
-                claude mcp add-json gmail "$config_json"
+                claude mcp add-json gmail "$config_json" --scope user
                 echo "✓ Gmail MCP integrated with Claude Code"
             else
                 echo "Error: Gmail MCP not installed or configured. Run: $0 install gmail"
@@ -66,6 +67,18 @@ integrate_mcp() {
             ;;
         playwright)
             echo "ℹ Playwright MCP is already configured via system installation"
+            ;;
+        semgrep)
+            if command -v semgrep-mcp &> /dev/null; then
+                echo "Adding Semgrep MCP to Claude Code..."
+                # Add Semgrep MCP server configuration
+                local config_json="{\"command\":\"semgrep-mcp\"}"
+                claude mcp add-json semgrep "$config_json" --scope user
+                echo "✓ Semgrep MCP integrated with Claude Code"
+            else
+                echo "Error: Semgrep MCP not installed. Run: $0 install semgrep"
+                return 1
+            fi
             ;;
         *)
             echo "Error: Integration not implemented for MCP: $mcp_name"
@@ -100,6 +113,11 @@ update_all_mcps() {
     # Check for installed MCPs by their target directories
     if [ -d ~/.gmail-mcp ]; then
         update_mcp gmail
+        ((updated_count++))
+    fi
+    
+    if command -v semgrep-mcp &> /dev/null; then
+        update_mcp semgrep
         ((updated_count++))
     fi
     
