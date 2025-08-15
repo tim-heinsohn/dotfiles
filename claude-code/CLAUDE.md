@@ -25,6 +25,14 @@ This is the user CLAUDE.md.
   Gemini is useful for large repositories (huge context window) and cost-effectiveness 
   (Google offers free tier with OAuth login).
 
+### Git Service Integration
+For interacting with Git repositories, PRs/MRs, and issues, use:
+- **GitHub**: `gh` CLI for repositories, PRs, issues, releases
+- **GitLab**: `glab` CLI for repositories, MRs, issues, releases  
+- **Atlassian**: `acli` CLI for Bitbucket repos/PRs, Jira issues, Confluence
+
+Let the user run `${DOTFILES_DIR}/bin/git-cli-setup` to check authentication status when authentication fails.
+
 ## Practices
 - See $DOTFILES_DIR/claude-code/docs/tools/security-practices.md for secure coding
   guidelines and environment variable handling

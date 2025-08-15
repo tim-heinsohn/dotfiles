@@ -29,6 +29,9 @@ nvm alias default 24.4.0
 # Install MCP servers
 "${DOTFILES_DIR}/bin/mcp-install" install gmail playwright &&
 
+# Setup Git service CLIs
+"${DOTFILES_DIR}/bin/git-cli-setup" &&
+
 # overcommit
 gem list overcommit -i >/dev/null 2>&1 || gem install overcommit &&
 

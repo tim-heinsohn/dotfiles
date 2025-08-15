@@ -10,3 +10,5 @@ CLAUDE.md.
 ## Workflow Commands
 - See @claude-code/docs/workflow/dotfiles-management.md for dotfile operations
   and guidelines
+
+- Please use claude-code/CLAUDE.md for user level claude instructions within this repository.

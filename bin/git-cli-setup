@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Git Service CLI Setup Checker
+# Checks login status for GitHub CLI (gh), GitLab CLI (glab), and Atlassian CLI (acli)
+
+echo "🔍 Checking Git service CLI authentication status..."
+echo
+
+# GitHub CLI
+echo "📊 GitHub CLI (gh):"
+if command -v gh &> /dev/null; then
+    if gh auth status &> /dev/null; then
+        echo "✅ Already logged in"
+    else
+        echo "❌ Not logged in"
+        echo "🔑 API Token: Create at https://github.com/settings/tokens"
+        echo "🚀 Run: gh auth login"
+        read -p "Login now? [y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            gh auth login
+        fi
+    fi
+else
+    echo "⚠️  GitHub CLI not installed"
+fi
+echo
+
+# GitLab CLI
+echo "📊 GitLab CLI (glab):"
+if command -v glab &> /dev/null; then
+    if glab auth status &> /dev/null; then
+        echo "✅ Already logged in"
+    else
+        echo "❌ Not logged in"
+        echo "🔑 API Token: Create at https://gitlab.com/-/profile/personal_access_tokens"
+        echo "🚀 Run: glab auth login"
+        read -p "Login now? [y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            glab auth login
+        fi
+    fi
+else
+    echo "⚠️  GitLab CLI not installed"
+fi
+echo
+
+# Atlassian CLI
+echo "📊 Atlassian CLI (acli):"
+if command -v acli &> /dev/null; then
+    # Try to check login status - this may vary by Atlassian service
+    echo "⚠️  Manual login check required"
+    echo "🔑 API Token: Create at https://id.atlassian.com/manage-profile/security/api-tokens"
+    echo "🚀 Run: acli --server YOUR_INSTANCE --action login --token YOUR_TOKEN"
+    echo "   Example: acli --server https://bitbucket.org --action login"
+    echo "   Example: acli --server https://YOURCOMPANY.atlassian.net --action login"
+else
+    echo "⚠️  Atlassian CLI not installed"
+fi
+
+echo
+echo "📖 For Claude Code usage:"
+echo "- Use 'gh' for GitHub repositories, PRs, and issues"
+echo "- Use 'glab' for GitLab repositories, MRs, and issues"
+echo "- Use 'acli' for Bitbucket repositories, PRs, and Jira issues"

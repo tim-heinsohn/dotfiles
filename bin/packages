@@ -26,6 +26,9 @@ aur/yin-yang
     Light/dark theme switcher for Linux. Supports popular Desktops and editors.
 aur/zoom
     Video Conferencing and Web Conferencing Service.
+
+acli-bin
+    Software to interact with Atlassian Cloud from the terminal. Supports Bitbucket, Jira, Confluence, Bamboo, and other Atlassian services.
 aur/zsh-theme-powerlevel10k
     A theme for Zsh. It emphasizes speed, flexibility and out-of-the-box experience.
 core/base-devel
@@ -117,7 +120,7 @@ extra/gimagereader-qt
 extra/git
     The fast distributed version control system.
 extra/github-cli
-    GitHub’s official command line tool.
+    GitHub's official command line tool.
 extra/glab
     A GitLab command line tool.
 extra/glow
@@ -296,8 +299,8 @@ extra/xmlstarlet
     A set of tools to transform, query, validate, and edit XML documents.
 extra/xorg-server
     Xorg X server.
-extra/xorg-xbacklight
-    RandR-based backlight control application.
+extra/acpilight
+    A backward-compatible xbacklight replacement with ACPI kernel support.
 extra/xorg-xev
     Print contents of X events.
 extra/xorg-xinit
