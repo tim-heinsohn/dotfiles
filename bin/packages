@@ -1,3 +1,5 @@
+aur/acli-bin
+    Software to interact with Atlassian Cloud from the terminal. Supports Bitbucket, Jira, Confluence, Bamboo, and other Atlassian services.
 aur/acpilight
     A backward-compatible xbacklight replacement with ACPI kernel support.
 aur/exif
@@ -28,9 +30,6 @@ aur/yin-yang
     Light/dark theme switcher for Linux. Supports popular Desktops and editors.
 aur/zoom
     Video Conferencing and Web Conferencing Service.
-
-acli-bin
-    Software to interact with Atlassian Cloud from the terminal. Supports Bitbucket, Jira, Confluence, Bamboo, and other Atlassian services.
 aur/zsh-theme-powerlevel10k
     A theme for Zsh. It emphasizes speed, flexibility and out-of-the-box experience.
 core/base-devel
