@@ -33,6 +33,13 @@ For interacting with Git repositories, PRs/MRs, and issues, use:
 
 Let the user run `${DOTFILES_DIR}/bin/git-cli-setup` to check authentication status when authentication fails.
 
+### Git Commit Message Convention
+- Use **Conventional Commits** format: `type: description`
+- Common types: `feat:` (new feature), `fix:` (bug fix), `docs:`
+  (documentation), `refactor:` (code restructuring), `chore:` (maintenance)
+- Keep first line ≤100 chars, subsequent lines ≤100 chars, total message ≤700 chars
+- Without Claude attribution please
+
 ## Practices
 - See $DOTFILES_DIR/claude-code/docs/tools/security-practices.md for secure coding
   guidelines and environment variable handling
@@ -40,7 +47,3 @@ Let the user run `${DOTFILES_DIR}/bin/git-cli-setup` to check authentication sta
 ## Style Guidelines
 - See $DOTFILES_DIR/claude-code/docs/style/markdown.md for Markdown formatting standards
 
-## Commit Message Convention
-- Use **Conventional Commits** format: `type: description`
-- Common types: `feat:` (new feature), `fix:` (bug fix), `docs:` (documentation), `refactor:` (code restructuring), `chore:` (maintenance)
-- Keep first line ≤100 chars, subsequent lines ≤100 chars, total message ≤700 chars
