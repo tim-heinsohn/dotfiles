@@ -1,3 +1,5 @@
+aur/acpilight
+    A backward-compatible xbacklight replacement with ACPI kernel support.
 aur/exif
     A small command-line utility to show and change EXIF information in JPEG files.
 aur/google-chrome
@@ -37,6 +39,8 @@ core/gnupg
     A complete and free implementation of the OpenPGP standard (RFC4880).
 core/openssh
     SSH protocol implementation for remote login, command execution and file transfer.
+core/openssl
+    A robust, commercial-grade, and full-featured toolkit for TLS and SSL.
 core/sed
     GNU stream editor.
 core/sudo
@@ -183,8 +187,6 @@ extra/ntp
     Network Time Protocol reference implementation.
 extra/obs-studio
     Free and open source software for video recording and live streaming.
-extra/openssl
-    A robust, commercial-grade, and full-featured toolkit for TLS and SSL.
 extra/p7zip
     A file archiver with a high compression ratio.
 extra/parted
@@ -299,8 +301,6 @@ extra/xmlstarlet
     A set of tools to transform, query, validate, and edit XML documents.
 extra/xorg-server
     Xorg X server.
-extra/acpilight
-    A backward-compatible xbacklight replacement with ACPI kernel support.
 extra/xorg-xev
     Print contents of X events.
 extra/xorg-xinit
