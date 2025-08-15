@@ -3,7 +3,7 @@
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 
-sudo pacman -Suy --needed git &&
+sudo pacman -Suy --needed --noconfirm git &&
 # Restart gpg daemons to use updated versions after system update
 gpgconf --kill all 2>/dev/null || true &&
 git -C "${DOTFILES_DIR}" pull || git clone "${DOTFILES_REPO}" "${DOTFILES_DIR}" &&
