@@ -1,0 +1,94 @@
+#!/bin/bash
+# Verify Pandoc/LaTeX setup and test PDF generation
+# This script checks that the necessary TeX Live packages are installed
+# and tests pandoc PDF generation functionality
+
+set -e
+
+echo "🔍 Verifying Pandoc/LaTeX setup..."
+
+# Check if LaTeX packages are installed
+echo "📋 Checking TeX Live packages..."
+
+missing_packages=()
+
+# Check for required packages
+if ! pacman -Q texlive-latexextra &>/dev/null; then
+    missing_packages+=("texlive-latexextra")
+fi
+
+if ! pacman -Q texlive-xetex &>/dev/null; then
+    missing_packages+=("texlive-xetex")
+fi
+
+if ! pacman -Q texlive-fontsextra &>/dev/null; then
+    missing_packages+=("texlive-fontsextra")
+fi
+
+if ! pacman -Q texlive-fontsrecommended &>/dev/null; then
+    missing_packages+=("texlive-fontsrecommended")
+fi
+
+if [ ${#missing_packages[@]} -gt 0 ]; then
+    echo "❌ Missing required packages:"
+    for pkg in "${missing_packages[@]}"; do
+        echo "   - $pkg"
+    done
+    echo ""
+    echo "💡 Install with: sudo pacman -S ${missing_packages[*]}"
+    exit 1
+fi
+
+echo "✅ All required TeX Live packages are installed"
+
+echo "🧪 Testing pandoc PDF generation..."
+
+# Create a test markdown file
+cat > /tmp/test-pandoc.md << 'EOF'
+# Test Document
+
+This is a test document to verify that pandoc can generate PDF files properly.
+
+## Features Tested
+
+- Basic markdown formatting
+- Headers
+- Lists
+- Code blocks
+
+## Code Example
+
+```bash
+#!/bin/bash
+echo "Hello, World!"
+```
+
+## Conclusion
+
+If this document compiles to PDF successfully, your LaTeX setup is working correctly.
+EOF
+
+# Test PDF generation with different engines
+for engine in pdflatex xelatex lualatex; do
+    if command -v "$engine" &> /dev/null; then
+        echo "   Testing with $engine..."
+        if pandoc /tmp/test-pandoc.md -o "/tmp/test-$engine.pdf" --pdf-engine="$engine" 2>/dev/null; then
+            echo "   ✅ $engine: PDF generated successfully"
+            ls -lh "/tmp/test-$engine.pdf"
+        else
+            echo "   ❌ $engine: PDF generation failed"
+        fi
+    else
+        echo "   ⚠️  $engine: not installed"
+    fi
+done
+
+echo "🎉 Setup complete! You should now be able to use pandoc to generate PDF files."
+echo ""
+echo "💡 Usage examples:"
+echo "   pandoc input.md -o output.pdf"
+echo "   pandoc input.md --pdf-engine=xelatex -o output.pdf"
+echo "   pandoc input.md --pdf-engine=lualatex -o output.pdf"
+
+# Cleanup
+rm -f /tmp/test-pandoc.md /tmp/test-*.pdf

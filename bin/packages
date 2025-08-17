@@ -260,6 +260,14 @@ extra/tesseract-data-eng
     Tesseract OCR data for English.
 extra/texlive-binextra
     Extra binaries for TeX Live.
+extra/texlive-latexextra
+    TeX Live - Large collection of add-on packages for LaTeX.
+extra/texlive-xetex
+    TeX Live - XeTeX and packages.
+extra/texlive-fontsextra
+    TeX Live - Additional fonts.
+extra/texlive-fontsrecommended
+    TeX Live - Recommended fonts including Latin Modern and Times.
 extra/tflint
     A Pluggable Terraform Linter.
 extra/the_silver_searcher
