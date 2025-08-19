@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+
+/**
+ * markdown-to-adf.js
+ * Convert Markdown text to Atlassian Document Format (ADF) for Jira
+ * Usage: echo "# Title\n\nContent" | markdown-to-adf
+ *        markdown-to-adf "# Title\n\nContent"
+ *        markdown-to-adf < input.md > output.json
+ */
+
+const path = require('path');
+const { execSync } = require('child_process');
+
+// Find global node_modules path
+let globalModules;
+try {
+  globalModules = execSync('npm root -g', { encoding: 'utf8' }).trim();
+} catch (error) {
+  globalModules = '/usr/lib/node_modules';
+}
+
+const { MarkdownTransformer } = require(path.join(globalModules, '@atlaskit/editor-markdown-transformer'));
+const transformer = new MarkdownTransformer();
+const fs = require('fs');
+
+function convertMarkdownToADF(markdownText) {
+  return transformer.parse(markdownText);
+}
+
+function main() {
+  let input = '';
+  
+  // Read from stdin
+  process.stdin.on('data', (chunk) => {
+    input += chunk;
+  });
+  
+  process.stdin.on('end', () => {
+    try {
+      const adf = convertMarkdownToADF(input.trim() || '# Default Title\n\nContent');
+      console.log(JSON.stringify(adf, null, 2));
+    } catch (error) {
+      console.error('Error converting markdown to ADF:', error.message);
+      process.exit(1);
+    }
+  });
+}
+
+// If called with arguments, treat as markdown text
+if (process.argv.length > 2) {
+  const markdownText = process.argv.slice(2).join(' ');
+  try {
+    const adf = convertMarkdownToADF(markdownText);
+    console.log(JSON.stringify(adf, null, 2));
+  } catch (error) {
+    console.error('Error converting markdown to ADF:', error.message);
+    process.exit(1);
+  }
+} else {
+  // Read from stdin
+  main();
+}

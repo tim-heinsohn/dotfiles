@@ -1,0 +1,19 @@
+#!/bin/bash
+# Ruby wrapper that ensures we use the project's Ruby version with RVM
+# Falls back to system ruby if no project-specific version is found
+
+# Load RVM if available
+if [ -s "$HOME/.rvm/scripts/rvm" ]; then
+    source "$HOME/.rvm/scripts/rvm"
+fi
+
+# Check if we're in an RVM-managed project
+if [ -f .ruby-version ] || [ -f .rvmrc ]; then
+    rvm current >/dev/null 2>&1 || {
+        echo "⚠️  Ruby version not available. Install with: rvm install $(cat .ruby-version 2>/dev/null || echo 'default')"
+        exit 1
+    }
+fi
+
+# Execute ruby with all passed arguments
+exec ruby "$@"

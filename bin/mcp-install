@@ -18,9 +18,15 @@ usage() {
     echo "  list                  List available MCP servers"
     echo ""
     echo "Available MCP servers:"
-    echo "  gmail        Gmail integration with filter management"
-    echo "  playwright   Browser automation (already configured)"
-    echo "  semgrep      Code security scanning and analysis"
+    echo "  appsignal        AppSignal application monitoring and performance metrics"
+    echo "  elevenlabs       Text-to-speech using ElevenLabs API"
+    echo "  gmail            Gmail integration with filter management"
+    echo "  jira             Jira and Confluence integration"
+    echo "  miro             Miro whiteboard collaboration platform"
+    echo "  n8n              n8n workflow automation node documentation"
+    echo "  playwright       Browser automation (already configured)"
+    echo "  rails-active-mcp Rails application interaction and database querying"
+    echo "  semgrep          Code security scanning and analysis"
     echo ""
     echo "Examples:"
     echo "  $0 install gmail"
@@ -52,7 +58,11 @@ install_mcp() {
 integrate_mcp() {
     local mcp_name="$1"
     
+    # Normalize input to handle both patterns
     case "$mcp_name" in
+        rails-active|rails-active-mcp)
+            mcp_name="rails-active-mcp"
+            ;;
         gmail)
             if [ -f ~/.gmail-mcp/mcp-config.json ]; then
                 echo "Adding Gmail MCP to Claude Code..."
@@ -65,8 +75,46 @@ integrate_mcp() {
                 return 1
             fi
             ;;
+        miro)
+            if [ -d ~/.miro-mcp ]; then
+                echo "Adding Miro MCP to Claude Code..."
+                # Add Miro MCP server configuration with token
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.miro-mcp/build/index.js\"],\"env\":{\"MIRO_OAUTH_TOKEN\":\"${MIRO_ACCESS_TOKEN:-}\"}}"
+                claude mcp add-json miro "$config_json" --scope user
+                echo "✓ Miro MCP integrated with Claude Code"
+                echo "Note: Make sure MIRO_ACCESS_TOKEN environment variable is set (will be mapped to MIRO_OAUTH_TOKEN)"
+            else
+                echo "Error: Miro MCP not installed. Run: $0 install miro"
+                return 1
+            fi
+            ;;
         playwright)
             echo "ℹ Playwright MCP is already configured via system installation"
+            ;;
+        jira)
+            if [ -d ~/.jira-mcp ]; then
+                echo "Adding Jira MCP to Claude Code..."
+                # Add Jira MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.jira-mcp/build/index.js\"],\"env\":{}}"
+                claude mcp add-json jira "$config_json" --scope user
+                echo "✓ Jira MCP integrated with Claude Code"
+                echo "Note: Configure ~/.jira-mcp/.env with your Jira API credentials"
+            else
+                echo "Error: Jira MCP not installed. Run: $0 install jira"
+                return 1
+            fi
+            ;;
+        n8n)
+            if [ -d ~/.n8n-mcp ]; then
+                echo "Adding n8n MCP to Claude Code..."
+                # Add n8n MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.n8n-mcp/build/index.js\"]}"
+                claude mcp add-json n8n "$config_json" --scope user
+                echo "✓ n8n MCP integrated with Claude Code"
+            else
+                echo "Error: n8n MCP not installed. Run: $0 install n8n"
+                return 1
+            fi
             ;;
         semgrep)
             if command -v semgrep-mcp &> /dev/null; then
@@ -79,6 +127,44 @@ integrate_mcp() {
                 echo "Error: Semgrep MCP not installed. Run: $0 install semgrep"
                 return 1
             fi
+            ;;
+        elevenlabs)
+            if [ -d ~/.elevenlabs-mcp ]; then
+                echo "Adding ElevenLabs MCP to Claude Code..."
+                # Add ElevenLabs MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js\"],\"env\":{\"ELEVENLABS_API_KEY\":\"${ELEVENLABS_API_KEY:-}\"}}"
+                claude mcp add-json elevenlabs "$config_json" --scope user
+                echo "✓ ElevenLabs MCP integrated with Claude Code"
+            else
+                echo "Error: ElevenLabs MCP not installed. Run: $0 install elevenlabs"
+                return 1
+            fi
+            ;;
+        appsignal)
+            if [ -d ~/.appsignal-mcp ]; then
+                echo "Adding AppSignal MCP to Claude Code..."
+                # Add AppSignal MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.appsignal-mcp/dist/index.js\"],\"env\":{\"APPSIGNAL_PUSH_API_KEY\":\"${APPSIGNAL_PUSH_API_KEY:-}\"}}"
+                claude mcp add-json appsignal "$config_json" --scope user
+                echo "✓ AppSignal MCP integrated with Claude Code"
+                echo "Note: Make sure APPSIGNAL_PUSH_API_KEY environment variable is set"
+            else
+                echo "Error: AppSignal MCP not installed. Run: $0 install appsignal"
+                return 1
+            fi
+            ;;
+        rails-active-mcp|rails-active)
+            echo "Rails Active MCP requires integration with your Rails application, not Claude Code directly"
+            echo ""
+            echo "To use Rails Active MCP:"
+            echo "1. Run: $0 install rails-active-mcp"
+            echo "2. Add gem 'rails-active-mcp' to your Rails app's Gemfile"
+            echo "3. Run: bundle install"
+            echo "4. Run: rails generate rails_active_mcp:install"
+            echo "5. Configure security settings in config/initializers/rails_active_mcp.rb"
+            echo "6. Start your Rails server - MCP will be available at /mcp"
+            echo ""
+            echo "See: $DOTFILES_DIR/rails-active-mcp/doc/usage.md for security configuration"
             ;;
         *)
             echo "Error: Integration not implemented for MCP: $mcp_name"
@@ -111,13 +197,44 @@ update_all_mcps() {
     local updated_count=0
     
     # Check for installed MCPs by their target directories
+    if [ -d ~/.elevenlabs-mcp ]; then
+        update_mcp elevenlabs
+        ((updated_count++))
+    fi
+    
     if [ -d ~/.gmail-mcp ]; then
         update_mcp gmail
         ((updated_count++))
     fi
     
+    if [ -d ~/.jira-mcp ]; then
+        update_mcp jira
+        ((updated_count++))
+    fi
+    
+    if [ -d ~/.miro-mcp ]; then
+        update_mcp miro
+        ((updated_count++))
+    fi
+    
+    if [ -d ~/.n8n-mcp ]; then
+        update_mcp n8n
+        ((updated_count++))
+    fi
+    
     if command -v semgrep-mcp &> /dev/null; then
         update_mcp semgrep
+        ((updated_count++))
+    fi
+    
+    if [ -d ~/.rails-active-mcp ]; then
+        echo "Rails Active MCP is a gem - update with: gem update rails-active-mcp"
+        ((updated_count++))
+    fi
+    
+    
+    if [ -d ~/.appsignal-mcp ]; then
+        update_mcp appsignal
         ((updated_count++))
     fi
     
@@ -138,26 +255,37 @@ list_mcps() {
     echo "Available MCP servers:"
     echo ""
     
-    # Find all *-mcp directories
-    for mcp_dir in "${DOTFILES_DIR}"/*-mcp; do
-        if [ -d "$mcp_dir" ]; then
-            mcp_name=$(basename "$mcp_dir" | sed 's/-mcp$//')
-            install_script="$mcp_dir/install"
-            doc_file="$mcp_dir/doc/usage.md"
-            
-            status="❌ Not installed"
-            if [ -x "$install_script" ]; then
-                status="✅ Available"
-            fi
-            
-            description=""
-            if [ -f "$doc_file" ]; then
-                # Extract first line of description from usage.md
-                description=$(head -n 5 "$doc_file" | grep -v "^#" | head -n 1 | sed 's/^[[:space:]]*//')
-            fi
-            
-            printf "  %-12s %s %s\n" "$mcp_name" "$status" "$description"
+    # Check actual MCP installation status
+    declare -A mcp_checks=(
+        ["elevenlabs"]="[ -f ~/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js ]"
+        ["gmail"]="[ -f ~/.gmail-mcp/dist/index.js ]"
+        ["jira"]="[ -f ~/.jira-mcp/build/index.js ]"
+        ["miro"]="[ -f ~/.miro-mcp/build/index.js ]"
+        ["n8n"]="[ -f ~/.n8n-mcp/build/index.js ]"
+        ["semgrep"]="command -v semgrep-mcp > /dev/null 2>&1"
+        ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
+    )
+    
+    for mcp_name in "${!mcp_checks[@]}"; do
+        mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
+        install_script="$mcp_dir/install"
+        doc_file="$mcp_dir/doc/usage.md"
+        
+        # Check actual installation
+        if eval "${mcp_checks[$mcp_name]}"; then
+            status="✅ Ready"
+        elif [ -x "$install_script" ]; then
+            status="📦 Available"
+        else
+            status="❌ Not available"
         fi
+        
+        description=""
+        if [ -f "$doc_file" ]; then
+            description=$(head -n 5 "$doc_file" | grep -v "^#" | head -n 1 | sed 's/^[[:space:]]*//')
+        fi
+        
+        printf "  %-12s %s %s\n" "$mcp_name" "$status" "$description"
     done
     
     echo ""

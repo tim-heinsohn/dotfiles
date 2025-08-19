@@ -49,12 +49,16 @@ echo
 # Atlassian CLI
 echo "📊 Atlassian CLI (acli):"
 if command -v acli &> /dev/null; then
-    # Try to check login status - this may vary by Atlassian service
-    echo "⚠️  Manual login check required"
-    echo "🔑 API Token: Create at https://id.atlassian.com/manage-profile/security/api-tokens"
-    echo "🚀 Run: acli --server YOUR_INSTANCE --action login --token YOUR_TOKEN"
-    echo "   Example: acli --server https://bitbucket.org --action login"
-    echo "   Example: acli --server https://YOURCOMPANY.atlassian.net --action login"
+    # Check if already logged in
+    if acli jira auth status &> /dev/null; then
+        echo "✅ Already logged in to Jira"
+    else
+        echo "❌ Not logged in"
+        echo "🔑 API Token: Create at https://id.atlassian.com/manage-profile/security/api-tokens"
+        echo "🚀 Run: acli jira auth login --site YOUR_INSTANCE --email YOUR_EMAIL --token"
+        echo "   Example: echo \$(gopass show -o api-token-name) | acli jira auth login --site example.atlassian.net --email user@example.com --token"
+        echo "   Or use browser login: acli jira auth login --web"
+    fi
 else
     echo "⚠️  Atlassian CLI not installed"
 fi

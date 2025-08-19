@@ -12,3 +12,11 @@ CLAUDE.md.
   and guidelines
 
 - Please use claude-code/CLAUDE.md for user level claude instructions within this repository.
+
+## Rails Development Commands
+**ALWAYS use project-specific binstubs:**
+- `bin/rails` instead of `rails`
+- `bin/bundle` instead of `bundle`
+- `bin/ruby` (wrapper) instead of `ruby`
+
+These commands ensure proper Ruby version and gemset management via RVM.

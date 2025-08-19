@@ -276,6 +276,8 @@ extra/thunderbird
     A free email application that’s easy to set up and customize.
 extra/tidy
     A tool to tidy down your HTML code to a clean style.
+extra/typst
+    A markup-based typesetting system for the sciences.
 extra/tig
     Text-mode interface for Git.
 extra/toml-bombadil

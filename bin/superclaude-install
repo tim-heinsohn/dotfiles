@@ -1,0 +1,23 @@
+#!/bin/bash
+# SuperClaude installer - bombadil-safe
+set -e
+
+# Check if bombadil manages Claude configs
+if [[ -L "$HOME/.claude/settings.json" ]]; then
+    echo "Claude configs managed by bombadil - SuperClaude will use existing symlinked files"
+fi
+
+# Clone and install SuperClaude
+if [[ ! -d "/tmp/superclaude" ]]; then
+    git clone --depth 1 https://github.com/NomenAK/SuperClaude.git /tmp/superclaude
+fi
+
+# Only install files NOT managed by bombadil
+cd /tmp/superclaude
+for f in *; do
+    if [[ ! -L "$HOME/.claude/$f" ]]; then
+        cp -r "$f" "$HOME/.claude/"
+    fi
+done
+
+echo "SuperClaude installed (bombadil-safe)"
