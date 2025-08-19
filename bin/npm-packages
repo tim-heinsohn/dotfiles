@@ -10,6 +10,7 @@ declare -a NPM_PACKAGES=(
     "@ansible/ansible-language-server"
     "bash-language-server"
     "@anthropic-ai/claude-code"
+    "@atlaskit/editor-markdown-transformer"
     "@microsoft/compose-language-service"
     "dockerfile-language-server-nodejs"
     "@google/gemini-cli"

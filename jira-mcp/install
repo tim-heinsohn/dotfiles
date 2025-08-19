@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Jira MCP Server Installation Script
+# Based on the official Atlassian Jira MCP server
+
+set -e
+
+MCP_NAME="jira"
+MCP_DIR="$HOME/.jira-mcp"
+REPO_URL="https://github.com/sooperset/mcp-atlassian.git"
+
+echo "🔧 Installing Jira MCP server..."
+
+# Create MCP directory
+mkdir -p "$MCP_DIR"
+
+# Clone the repository
+if [ -d "$MCP_DIR" ]; then
+    echo "📁 MCP directory already exists, updating..."
+    cd "$MCP_DIR"
+    git pull origin main
+else
+    echo "📥 Cloning Jira MCP repository..."
+    git clone "$REPO_URL" "$MCP_DIR"
+    cd "$MCP_DIR"
+fi
+
+# Install dependencies
+echo "📦 Installing npm dependencies..."
+npm install
+
+# Create .env template if it doesn't exist
+if [ ! -f "$MCP_DIR/.env" ]; then
+    echo "⚙️  Creating .env template..."
+    cat > "$MCP_DIR/.env" << EOF
+# Jira MCP Configuration
+# Jira Cloud configuration
+JIRA_API_TOKEN=your_jira_api_token
+JIRA_EMAIL=your_email@company.com
+JIRA_URL=https://your-company.atlassian.net
+
+# Optional: Confluence configuration
+# CONFLUENCE_API_TOKEN=your_confluence_api_token
+# CONFLUENCE_EMAIL=your_email@company.com
+# CONFLUENCE_URL=https://your-company.atlassian.net/wiki
+EOF
+    chmod 600 "$MCP_DIR/.env"
+fi
+
+# Make the server executable
+chmod +x "$MCP_DIR/build/index.js"
+
+echo "✅ Jira MCP server installed successfully!"
+echo ""
+echo "📋 Next steps:"
+echo "1. Edit $MCP_DIR/.env with your Jira credentials"
+echo "2. Generate API token at: https://id.atlassian.com/manage-profile/security/api-tokens"
+echo "3. Run 'mcp-install integrate jira' to add to Claude Code"
+echo "4. Test with: claude mcp call jira get_projects"

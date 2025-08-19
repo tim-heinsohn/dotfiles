@@ -1,0 +1,71 @@
+#!/bin/bash
+set -e
+
+DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MCP_NAME="rails-active-mcp"
+MCP_DIR="$HOME/.$MCP_NAME"
+PATCHED_REPO="/srv/lib/rails-active-mcp"
+
+echo "🚂 Installing Rails Active MCP server (patched version)..."
+
+# Remove existing installation
+if [ -d "$MCP_DIR" ]; then
+    echo "Removing existing installation..."
+    rm -rf "$MCP_DIR"
+fi
+
+# Copy the patched repository
+echo "Installing patched Rails Active MCP from $PATCHED_REPO..."
+cp -r "$PATCHED_REPO" "$MCP_DIR"
+
+# Navigate to the directory
+cd "$MCP_DIR"
+
+# Install Ruby dependencies
+echo "Installing Ruby dependencies..."
+if command -v bundle &> /dev/null; then
+    bundle install
+else
+    echo "⚠️  Bundler not found. Please install bundler: gem install bundler"
+    exit 1
+fi
+
+# Build the gem
+echo "Building the patched Rails Active MCP gem..."
+gem build rails_active_mcp.gemspec
+
+# Install the gem locally
+echo "Installing the patched gem..."
+gem install rails-active-mcp-*.gem --user-install
+
+echo ""
+echo "✅ Rails Active MCP installed successfully!"
+echo ""
+echo "Next steps (Development-only installation):"
+echo "1. Add the gem to your Rails application's Gemfile in development group only:"
+echo "   group :development do"
+echo "     gem 'rails-active-mcp'"
+echo "   end"
+echo ""
+echo "2. Run bundle install in your Rails app"
+echo ""
+echo "3. Generate the initializer (development only):"
+echo "   rails generate rails_active_mcp:install"
+echo ""
+echo "4. Configure security settings in config/initializers/rails_active_mcp.rb:"
+echo "   RailsActiveMcp.configure do |config|"
+echo "     config.safe_mode = true"
+echo "     config.allowed_models = %w[]  # Add only models needed for debugging"
+echo "   end"
+echo ""
+echo "5. Start your Rails server in development - MCP available at /mcp"
+echo ""
+echo "⚠️  Production Safety: This gem is NOT loaded in production due to Gemfile group restriction"
+echo "📖 For detailed usage and security configuration, see:"
+echo "   $DOTFILES_DIR/rails-active-mcp/doc/usage.md"
+echo ""
+echo "⚠️  Security Warning: The ConsoleExecuteTool allows arbitrary Ruby code execution."
+echo "   Ensure safe_mode = true and restrict allowed_models in production!"
+echo ""
+echo "To integrate with Claude Code, run:"
+echo "   mcp-install integrate rails-active-mcp"

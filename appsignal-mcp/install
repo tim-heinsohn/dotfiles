@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+
+# AppSignal MCP Server Installation Script
+# Based on the Gmail MCP pattern for consistency
+
+DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+APPSIGNAL_MCP_DIR="$HOME/.appsignal-mcp"
+REPO_URL="https://github.com/appsignal/appsignal-mcp-server.git"
+
+echo "🔧 Installing AppSignal MCP Server..."
+
+# Check if already installed
+if [ -d "$APPSIGNAL_MCP_DIR" ]; then
+    echo "⚠️  AppSignal MCP already installed at $APPSIGNAL_MCP_DIR"
+    echo "   Run 'rm -rf $APPSIGNAL_MCP_DIR' to reinstall"
+    exit 1
+fi
+
+# Create installation directory
+mkdir -p "$APPSIGNAL_MCP_DIR"
+cd "$APPSIGNAL_MCP_DIR"
+
+# Clone the repository
+echo "📥 Cloning AppSignal MCP server..."
+git clone "$REPO_URL" .
+
+# Install dependencies
+echo "📦 Installing Node.js dependencies..."
+npm install
+
+# Secure sensitive configuration files (if any exist)
+if [ -f ".env" ]; then
+    chmod 600 .env
+    echo "🔒 Secured .env file permissions"
+fi
+
+# Make the server executable
+chmod +x dist/index.js
+
+echo "✅ AppSignal MCP Server installed successfully!"
+echo ""
+echo "🚀 Next steps:"
+echo "1. Get your AppSignal Push API key from: https://appsignal.com/accounts"
+echo "2. Configure the MCP server with your API key"
+echo "3. Run: mcp-install integrate appsignal"
+echo ""
+echo "📖 Documentation: $DOTFILES_DIR/appsignal-mcp/doc/usage.md"
