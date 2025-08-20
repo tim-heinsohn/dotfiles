@@ -18,15 +18,18 @@ usage() {
     echo "  list                  List available MCP servers"
     echo ""
     echo "Available MCP servers:"
-    echo "  appsignal        AppSignal application monitoring and performance metrics"
-    echo "  elevenlabs       Text-to-speech using ElevenLabs API"
-    echo "  gmail            Gmail integration with filter management"
-    echo "  jira             Jira and Confluence integration"
-    echo "  miro             Miro whiteboard collaboration platform"
-    echo "  n8n              n8n workflow automation node documentation"
-    echo "  playwright       Browser automation (already configured)"
-    echo "  rails-active-mcp Rails application interaction and database querying"
-    echo "  semgrep          Code security scanning and analysis"
+    echo "  appsignal          AppSignal application monitoring and performance metrics"
+    echo "  elevenlabs         Text-to-speech using ElevenLabs API"
+    echo "  gmail              Gmail integration with filter management"
+    echo "  jira               Jira and Confluence integration"
+    echo "  mail-server        IMAP/SMTP email server (project-based primary/secondary accounts)"
+    echo "  miro               Miro whiteboard collaboration platform"
+    echo "  n8n                n8n workflow automation node documentation"
+    echo "  playwright         Browser automation (already configured)"
+    echo "  rails-active-mcp   Rails application interaction and database querying"
+    echo "  semgrep            Code security scanning and analysis"
+    echo "  youtube            YouTube playlist management (watch later, user playlists)"
+    echo "  youtube-transcript YouTube video transcript retrieval"
     echo ""
     echo "Examples:"
     echo "  $0 install gmail"
@@ -75,6 +78,7 @@ integrate_mcp() {
                 return 1
             fi
             ;;
+<<<<<<< HEAD
         miro)
             if [ -d ~/.miro-mcp ]; then
                 echo "Adding Miro MCP to Claude Code..."
@@ -88,8 +92,78 @@ integrate_mcp() {
                 return 1
             fi
             ;;
+||||||| parent of 6ef2a56 (feat: add comprehensive MCP server ecosystem and system utilities)
+=======
+        mail-server)
+            if [ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]; then
+                echo "Adding Mail Server MCP to Claude Code..."
+                # Add primary mail MCP server configuration
+                local primary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-primary\"}"
+                claude mcp add-json mail-primary "$primary_config" --scope user
+                echo "✓ Mail Server Primary MCP integrated with Claude Code"
+                
+                # Add secondary mail MCP server configuration
+                local secondary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-secondary\"}"
+                claude mcp add-json mail-secondary "$secondary_config" --scope user
+                echo "✓ Mail Server Secondary MCP integrated with Claude Code"
+                
+                echo ""
+                echo "Next steps:"
+                echo "1. Copy ~/.mail-server-mcp/example-project.envrc to your project directories as .envrc"
+                echo "2. Edit each project's .envrc with PRIMARY_MAIL_* and SECONDARY_MAIL_* variables"
+                echo "3. Run 'direnv allow' in each project directory"
+                echo "4. Use 'mail-primary' and 'mail-secondary' MCP servers from any project"
+            else
+                echo "Error: Mail Server MCP not installed. Run: $0 install mail-server"
+                return 1
+            fi
+            ;;
+>>>>>>> 6ef2a56 (feat: add comprehensive MCP server ecosystem and system utilities)
         playwright)
             echo "ℹ Playwright MCP is already configured via system installation"
+            ;;
+        mail-server)
+            if [ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]; then
+                echo "Adding Mail Server MCP to Claude Code..."
+                # Add primary mail MCP server configuration
+                local primary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-primary\"}"
+                claude mcp add-json mail-primary "$primary_config" --scope user
+                echo "✓ Mail Server Primary MCP integrated with Claude Code"
+                
+                # Add secondary mail MCP server configuration
+                local secondary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-secondary\"}"
+                claude mcp add-json mail-secondary "$secondary_config" --scope user
+                echo "✓ Mail Server Secondary MCP integrated with Claude Code"
+                
+                echo ""
+                echo "Next steps:"
+                echo "1. Copy ~/.mail-server-mcp/example-project.envrc to your project directories as .envrc"
+                echo "2. Edit each project's .envrc with PRIMARY_MAIL_* and SECONDARY_MAIL_* variables"
+                echo "3. Run 'direnv allow' in each project directory"
+                echo "4. Use 'mail-primary' and 'mail-secondary' MCP servers from any project"
+            else
+                echo "Error: Mail Server MCP not installed. Run: $0 install mail-server"
+                return 1
+            fi
+            ;;
+        youtube-transcript)
+            echo "Adding YouTube Transcript MCP to Claude Code..."
+            # Add YouTube Transcript MCP server configuration
+            local config_json="{\"command\":\"npx\",\"args\":[\"-y\",\"@sinco-lab/mcp-youtube-transcript\"]}"
+            claude mcp add-json youtube-transcript "$config_json" --scope user
+            echo "✓ YouTube Transcript MCP integrated with Claude Code"
+            ;;
+        youtube)
+            if [ -d ~/.youtube-mcp ]; then
+                echo "Adding YouTube Playlist MCP to Claude Code..."
+                # Add YouTube MCP server configuration for playlist management
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.youtube-mcp/youtube-mcp-server/dist/index.js\"]}"
+                claude mcp add-json youtube "$config_json" --scope user
+                echo "✓ YouTube Playlist MCP integrated with Claude Code"
+            else
+                echo "Error: YouTube MCP not installed. Run: $0 install youtube"
+                return 1
+            fi
             ;;
         jira)
             if [ -d ~/.jira-mcp ]; then
@@ -212,6 +286,11 @@ update_all_mcps() {
         ((updated_count++))
     fi
     
+    if [ -d ~/.mail-server-mcp ]; then
+        update_mcp mail-server
+        ((updated_count++))
+    fi
+    
     if [ -d ~/.miro-mcp ]; then
         update_mcp miro
         ((updated_count++))
@@ -219,6 +298,11 @@ update_all_mcps() {
     
     if [ -d ~/.n8n-mcp ]; then
         update_mcp n8n
+        ((updated_count++))
+    fi
+    
+    if [ -d ~/.youtube-mcp ]; then
+        update_mcp youtube
         ((updated_count++))
     fi
     
