@@ -1,0 +1,133 @@
+#!/bin/bash
+# Claude Code session monitor script
+# Provides real-time session information for status line integration
+
+set -euo pipefail
+
+CLAUDE_DIR="${HOME}/.claude"
+SESSION_FILE="${CLAUDE_DIR}/current_session.json"
+
+# Ensure jq is available
+if ! command -v jq >/dev/null 2>&1; then
+    echo "jq not found" >&2
+    exit 1
+fi
+
+# Create session file if it doesn't exist
+mkdir -p "$CLAUDE_DIR"
+
+# Function to get context usage with color coding
+get_context_usage() {
+    if [[ -f "$SESSION_FILE" ]]; then
+        local context_pct=$(jq -r '.context_percentage // 0' "$SESSION_FILE" 2>/dev/null)
+        echo "$context_pct"
+    else
+        echo "0"
+    fi
+}
+
+# Function to get session health
+get_session_health() {
+    local active_sessions=$(pgrep -f "claude" | wc -l)
+    local api_key_indicator=""
+    
+    if [[ -n "$ANTHROPIC_API_KEY" ]]; then
+        # Use emoji to indicate key source
+        api_key_indicator="🔑"
+    fi
+    
+    if [[ $active_sessions -gt 0 ]]; then
+        echo "🤖${active_sessions}${api_key_indicator}"
+    fi
+}
+
+# Function to get model and tokens
+get_model_tokens() {
+    if [[ -f "$SESSION_FILE" ]]; then
+        local model=$(jq -r '.model // "unknown"' "$SESSION_FILE" 2>/dev/null)
+        local tokens=$(jq -r '.tokens_used // 0' "$SESSION_FILE" 2>/dev/null)
+        
+        # Shorten model names
+        case "$model" in
+            *"claude-3-5-sonnet"*) model="35s" ;;
+            *"claude-3-5-haiku"*) model="35h" ;;
+            *"claude-3-opus"*) model="3o" ;;
+            *"claude-3-sonnet"*) model="3s" ;;
+            *"claude-3-haiku"*) model="3h" ;;
+            *) model="?" ;;
+        esac
+        
+        echo "${model} ${tokens}t"
+    fi
+}
+
+# Function to get workspace context
+get_workspace_context() {
+    if [[ -n "$CLAUDE_WORKSPACE" ]]; then
+        local short_dir=$(basename "$CLAUDE_WORKSPACE")
+        echo "[🤖 $short_dir]"
+    elif [[ -f ".claude-session" ]]; then
+        local short_dir=$(basename "$PWD")
+        echo "[🤖 $short_dir]"
+    fi
+}
+
+# Main function to handle different output modes
+main() {
+    case "${1:-}" in
+        --context)
+            get_context_usage
+            ;;
+        --health)
+            get_session_health
+            ;;
+        --model-tokens)
+            get_model_tokens
+            ;;
+        --workspace)
+            get_workspace_context
+            ;;
+        --full)
+            # Combined status for full prompt
+            if [[ -f "$SESSION_FILE" ]]; then
+                local model=$(jq -r '.model // "unknown"' "$SESSION_FILE" 2>/dev/null)
+                local tokens=$(jq -r '.tokens_used // 0' "$SESSION_FILE" 2>/dev/null)
+                local context_pct=$(jq -r '.context_percentage // 0' "$SESSION_FILE" 2>/dev/null)
+                
+                # Color coding based on context usage
+                local context_display="${context_pct}%"
+                
+                # Short model name
+                case "$model" in
+                    *"claude-3-5-sonnet"*) model="35s" ;;
+                    *"claude-3-5-haiku"*) model="35h" ;;
+                    *"claude-3-opus"*) model="3o" ;;
+                    *"claude-3-sonnet"*) model="3s" ;;
+                    *"claude-3-haiku"*) model="3h" ;;
+                    *) model="?" ;;
+                esac
+                
+                echo "🤖 ${model} ${context_display} ${tokens}t"
+            fi
+            ;;
+        --update)
+            # Update session file with mock data for testing
+            cat > "$SESSION_FILE" <<EOF
+{
+    "model": "claude-3-5-sonnet-20241022",
+    "tokens_used": 1234,
+    "context_percentage": 45,
+    "start_time": "$(date -Iseconds)",
+    "workspace": "$(pwd)"
+}
+EOF
+            ;;
+        *)
+            # Default: show full status
+            main --full
+            ;;
+    esac
+}
+
+# Execute main function
+main "$@"

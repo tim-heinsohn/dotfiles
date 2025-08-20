@@ -46,5 +46,7 @@ zsh_environment = { source = "zsh/environment", target = ".zsh/environment" }
 zsh_functions = { source = "zsh/functions", target = ".zsh/functions" }
 # NOTE: copy manually: "zsh/p10k.zsh" to ".p10k.zsh"
 zsh_p10k_custom = { source = "zsh/p10k.custom.zsh", target = ".zsh/p10k.custom.zsh" }
+zsh_p10k_claude = { source = "zsh/p10k.claude.zsh", target = ".zsh/p10k.claude.zsh" }
 zsh_sheldon = { source = "zsh/plugins.toml", target = ".config/sheldon/plugins.toml" }
 zshrc = { source = "zsh/zshrc", target = ".zshrc" }
+claude_session_monitor = { source = "bin/claude-session-monitor", target = "~/bin/claude-session-monitor" }

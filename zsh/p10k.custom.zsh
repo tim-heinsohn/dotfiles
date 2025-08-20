@@ -64,9 +64,13 @@ function instant_prompt_kimi_mode() {
 }
 
 # Add custom segments to right prompt elements
+# Source Claude Code status line functions
+source ~/dotfiles/zsh/p10k.claude.zsh
+
 typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
   kimi_mode               # kimi mode indicator
   battery_level           # battery percentage
   api_key                 # anthropic api key indicator
+  claude_status           # claude code status
   ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[@]}
 )

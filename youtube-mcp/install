@@ -1,0 +1,56 @@
+#!/bin/bash
+set -euo pipefail
+
+# YouTube Transcript MCP Server Installation
+# Based on the dotfiles pattern established for Gmail MCP
+
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+MCP_DIR="$HOME/.youtube-mcp"
+
+echo "🔧 Setting up YouTube Transcript MCP server..."
+
+# Check if Node.js is available
+if ! command -v node &> /dev/null; then
+    echo "❌ Node.js is required but not installed. Please install Node.js 18+ first."
+    exit 1
+fi
+
+# Check Node.js version
+NODE_VERSION=$(node --version | sed 's/v//')
+REQUIRED_VERSION="18.0.0"
+
+if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$NODE_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]; then
+    echo "❌ Node.js version $NODE_VERSION is too old. Please upgrade to Node.js 18+."
+    exit 1
+fi
+
+# Create MCP directory
+mkdir -p "$MCP_DIR"
+cd "$MCP_DIR"
+
+# Install the YouTube transcript MCP server
+echo "📦 Installing @sinco-lab/mcp-youtube-transcript..."
+npm install --save @sinco-lab/mcp-youtube-transcript
+
+# Create package.json for tracking
+cat > package.json << EOF
+{
+  "name": "youtube-mcp-server",
+  "version": "1.0.0",
+  "description": "YouTube transcript MCP server setup",
+  "dependencies": {
+    "@sinco-lab/mcp-youtube-transcript": "^0.0.8"
+  }
+}
+EOF
+
+# Make the binary executable
+chmod +x node_modules/.bin/*
+
+echo "✅ YouTube Transcript MCP server installed successfully!"
+echo "📁 Location: $MCP_DIR"
+echo ""
+echo "Next steps:"
+echo "1. Run: mcp-install integrate youtube"
+echo "2. Restart Claude Desktop"
+echo "3. Test with: Get transcript for https://www.youtube.com/watch?v=dQw4w9WgXcQ"
