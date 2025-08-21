@@ -12,8 +12,8 @@ The Semgrep MCP server provides code security scanning and analysis capabilities
 ## Installation
 
 ```bash
-mcp-install install semgrep
-mcp-install integrate semgrep
+mcp install semgrep
+mcp integrate semgrep
 ```
 
 ## Configuration

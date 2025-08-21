@@ -21,9 +21,9 @@ The Jira MCP server provides comprehensive integration with Atlassian Jira and C
 
 ## Setup
 
-1. **Install Jira MCP**: `mcp-install install jira`
+1. **Install Jira MCP**: `mcp install jira`
 2. **Configure credentials**: Edit `~/.jira-mcp/.env`
-3. **Integrate**: `mcp-install integrate jira`
+3. **Integrate**: `mcp integrate jira`
 4. **Test**: `claude mcp call jira get_projects`
 
 ## Authentication

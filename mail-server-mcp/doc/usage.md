@@ -87,7 +87,7 @@ cd ~/projects/johndoe && direnv allow
 
 ### 5. Add MCP Servers to Claude Code
 
-The MCP servers will be integrated through the mcp-install script, creating two available servers:
+The MCP servers will be integrated through the mcp script, creating two available servers:
 - **mail-primary**: Uses PRIMARY_MAIL_* variables
 - **mail-secondary**: Uses SECONDARY_MAIL_* variables (if defined)
 

@@ -27,3 +27,7 @@ if [ -f "$WRAPPER_SOURCE" ] && [ -t 0 ]; then
 elif [ -f "$WRAPPER_SOURCE" ]; then
   echo "Skipping pinentry wrapper update (non-interactive session)"
 fi
+
+rm -rf ~/dotfiles/.dots/claude-code/agents/*
+rm -rf ~/dotfiles/.dots/claude-code/commands/*
+rm -rf ~/dotfiles/.dots/claude-code/docs/*

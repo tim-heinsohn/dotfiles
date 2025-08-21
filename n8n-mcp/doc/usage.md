@@ -9,7 +9,7 @@
 
 ### 2. Add to Claude Code
 ```bash
-~/dotfiles/bin/mcp-install integrate n8n
+~/dotfiles/bin/mcp integrate n8n
 ```
 
 ## Available Features
@@ -90,10 +90,10 @@
 
 ```bash
 # Update n8n MCP specifically  
-~/dotfiles/bin/mcp-install update n8n
+~/dotfiles/bin/mcp update n8n
 
 # Update all installed MCPs
-~/dotfiles/bin/mcp-install update
+~/dotfiles/bin/mcp update
 
 # Or update manually
 ~/dotfiles/n8n-mcp/install

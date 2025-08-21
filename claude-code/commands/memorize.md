@@ -1,64 +1,11 @@
-# /memorize
+Let's learn from this session and keep some notes.
+So please revise the current session for issues, insights, instructions,
+conventions, preferences and found solutions that may be worth memorizing.
 
-When the user types `/memorize [topic]`, scan this entire conversation thread for:
+Create a list of suggestions: list potential additions to the existing
+CLAUDE.md files and docs, covering the following four sections:
 
-1. **User guidance** - instructions, preferences, "always/never" statements
-2. **Claude discoveries** - insights, patterns, better approaches found during the session
-3. **Project conventions** - standards, naming, structure decisions made
-4. **Tool preferences** - specific ways to use tools, error handling patterns
-
-## Response format
-
-```
-🔍 Found [N] items to memorize:
-
-## 🏠 User-Level Guidance
-**Location:** ~/dotfiles/claude-code/CLAUDE.md
-
-### [Topic 1]
-- [Exact guidance statement]
-- [Another relevant point]
-
-### [Topic 2]
-- [Specific instruction]
-
-## 📁 Project-Level Guidance  
-**Location:** [current_project]/CLAUDE.md or .claude/doc/*.md
-
-### [Topic 1]
-- [Project-specific guidance]
-
-### [Topic 2]
-- [Another project-specific point]
-
-## 📝 Ready to add:
-
-### User-Level:
-```markdown
-## [Section]
-[Formatted guidance for ~/dotfiles/claude-code/CLAUDE.md]
-```
-
-### Project-Level:
-```markdown
-## [Section]  
-[Formatted guidance for current project]
-```
-```
-
-## Level determination rules
-- **User-level**: dotfiles, global tools, workflow patterns, editor configs
-- **Project-level**: repo structure, project-specific commands, domain conventions
-- **Ambiguous**: Default to user-level, mark as "review for project specificity"
-
-## Examples
-
-**User:** `/memorize`
-**Claude:** Analyzes all guidance, groups by level and topic
-
-**User:** `/memorize security`
-**Claude:** Focuses on security patterns, separates user vs project security practices
-
-**User:** `/memorize workflow`
-**Claude:** Captures workflow guidance, distinguishing global vs project-specific workflows
-```
+1. **Tools** - did you use any tools, got issues and found specific ways to use those tools? Or just used tools useful but nowhere mentioned?
+2. **Specialized Agents** – were parts of the session an interesting use case for an expert sub agent that yet could be defined?
+3. **Slash Commands** – any instructions with potential for frequent usage, worh a refined Claude slash command?
+2. **Rules & Conventions** – general preferences, assumptions, conventions, approaches, "always/never" statements worth noting for later reference?

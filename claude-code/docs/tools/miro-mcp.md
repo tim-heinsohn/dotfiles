@@ -6,7 +6,7 @@ Miro MCP server integration for Claude Code, providing access to Miro whiteboard
 
 ```bash
 # Install Miro MCP
-mcp-install install miro
+mcp install miro
 
 # Get your Miro access token
 # Go to: https://miro.com/app/settings/user-profile/apps

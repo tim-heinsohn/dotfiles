@@ -8,13 +8,13 @@ The YouTube Transcript MCP server enables Claude to retrieve transcripts from Yo
 ### 1. Install the MCP Server
 ```bash
 # From dotfiles directory
-mcp-install install youtube
+mcp install youtube
 ```
 
 ### 2. Integrate with Claude Code
 ```bash
 # Add to Claude Desktop configuration
-mcp-install integrate youtube
+mcp integrate youtube
 ```
 
 ### 3. Restart Claude Desktop
@@ -113,8 +113,8 @@ claude mcp list
 ## Integration with Workflow
 
 ### Quick Start
-1. Install: `mcp-install install youtube`
-2. Integrate: `mcp-install integrate youtube`
+1. Install: `mcp install youtube`
+2. Integrate: `mcp integrate youtube`
 3. Restart Claude Desktop
 4. Test: "Get transcript for https://youtu.be/dQw4w9WgXcQ"
 

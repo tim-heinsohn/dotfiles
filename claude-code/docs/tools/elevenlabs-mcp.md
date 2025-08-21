@@ -8,10 +8,10 @@ The ElevenLabs MCP server provides Claude with text-to-speech capabilities using
 ### 1. Installation
 ```bash
 # Install ElevenLabs MCP server
-mcp-install install elevenlabs
+mcp install elevenlabs
 
 # Integrate with Claude Code
-mcp-install integrate elevenlabs
+mcp integrate elevenlabs
 ```
 
 ### 2. Authentication Required
