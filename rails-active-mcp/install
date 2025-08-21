@@ -68,4 +68,4 @@ echo "⚠️  Security Warning: The ConsoleExecuteTool allows arbitrary Ruby cod
 echo "   Ensure safe_mode = true and restrict allowed_models in production!"
 echo ""
 echo "To integrate with Claude Code, run:"
-echo "   mcp-install integrate rails-active-mcp"
+echo "   mcp integrate rails-active-mcp"

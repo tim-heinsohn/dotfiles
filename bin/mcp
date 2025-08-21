@@ -78,7 +78,6 @@ integrate_mcp() {
                 return 1
             fi
             ;;
-<<<<<<< HEAD
         miro)
             if [ -d ~/.miro-mcp ]; then
                 echo "Adding Miro MCP to Claude Code..."
@@ -92,8 +91,6 @@ integrate_mcp() {
                 return 1
             fi
             ;;
-||||||| parent of 6ef2a56 (feat: add comprehensive MCP server ecosystem and system utilities)
-=======
         mail-server)
             if [ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]; then
                 echo "Adding Mail Server MCP to Claude Code..."
@@ -118,33 +115,8 @@ integrate_mcp() {
                 return 1
             fi
             ;;
->>>>>>> 6ef2a56 (feat: add comprehensive MCP server ecosystem and system utilities)
         playwright)
             echo "ℹ Playwright MCP is already configured via system installation"
-            ;;
-        mail-server)
-            if [ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]; then
-                echo "Adding Mail Server MCP to Claude Code..."
-                # Add primary mail MCP server configuration
-                local primary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-primary\"}"
-                claude mcp add-json mail-primary "$primary_config" --scope user
-                echo "✓ Mail Server Primary MCP integrated with Claude Code"
-                
-                # Add secondary mail MCP server configuration
-                local secondary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-secondary\"}"
-                claude mcp add-json mail-secondary "$secondary_config" --scope user
-                echo "✓ Mail Server Secondary MCP integrated with Claude Code"
-                
-                echo ""
-                echo "Next steps:"
-                echo "1. Copy ~/.mail-server-mcp/example-project.envrc to your project directories as .envrc"
-                echo "2. Edit each project's .envrc with PRIMARY_MAIL_* and SECONDARY_MAIL_* variables"
-                echo "3. Run 'direnv allow' in each project directory"
-                echo "4. Use 'mail-primary' and 'mail-secondary' MCP servers from any project"
-            else
-                echo "Error: Mail Server MCP not installed. Run: $0 install mail-server"
-                return 1
-            fi
             ;;
         youtube-transcript)
             echo "Adding YouTube Transcript MCP to Claude Code..."
@@ -315,7 +287,6 @@ update_all_mcps() {
         echo "Rails Active MCP is a gem - update with: gem update rails-active-mcp"
         ((updated_count++))
     fi
-    
     
     if [ -d ~/.appsignal-mcp ]; then
         update_mcp appsignal

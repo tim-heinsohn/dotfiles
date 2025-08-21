@@ -188,8 +188,8 @@ cd ~/projects/your-project
 
 ```bash
 # Install and integrate
-~/dotfiles/bin/mcp-install install mail-server
-~/dotfiles/bin/mcp-install integrate mail-server
+~/dotfiles/bin/mcp install mail-server
+~/dotfiles/bin/mcp integrate mail-server
 
 # Verify integration
 claude mcp list

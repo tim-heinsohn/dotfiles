@@ -57,4 +57,4 @@ echo "1. Get your ElevenLabs API key from: https://elevenlabs.io/app/settings/ap
 echo "2. Copy .env.example to .env and add your API key:"
 echo "   cp ~/.elevenlabs-mcp/elevenlabs-mcp/.env.example ~/.elevenlabs-mcp/elevenlabs-mcp/.env"
 echo "3. Edit the .env file and add your API key and voice ID"
-echo "4. Run: mcp-install integrate elevenlabs"
+echo "4. Run: mcp integrate elevenlabs"

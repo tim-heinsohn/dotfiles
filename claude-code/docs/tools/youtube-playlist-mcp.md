@@ -6,10 +6,10 @@ The YouTube Playlist MCP server enables Claude to manage your YouTube playlists,
 ## Installation
 ```bash
 # Install the YouTube Playlist MCP server
-~/dotfiles/bin/mcp-install install youtube
+~/dotfiles/bin/mcp install youtube
 
 # Integrate with Claude Code
-~/dotfiles/bin/mcp-install integrate youtube
+~/dotfiles/bin/mcp integrate youtube
 ```
 
 ## Available Tools
@@ -110,10 +110,10 @@ List playlists from channel "TechLead"
 For full YouTube functionality, install both MCPs:
 ```bash
 # Transcript retrieval
-~/dotfiles/bin/mcp-install install youtube-transcript
-~/dotfiles/bin/mcp-install integrate youtube-transcript
+~/dotfiles/bin/mcp install youtube-transcript
+~/dotfiles/bin/mcp integrate youtube-transcript
 
 # Playlist management
-~/dotfiles/bin/mcp-install install youtube
-~/dotfiles/bin/mcp-install integrate youtube
+~/dotfiles/bin/mcp install youtube
+~/dotfiles/bin/mcp integrate youtube
 ```

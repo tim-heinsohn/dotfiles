@@ -3,7 +3,7 @@
 ## Critical Workflow Steps
 Follow these steps to effectively use the n8n MCP server:
 
-1. **Install and integrate** - Use `~/dotfiles/bin/mcp-install install n8n` and `~/dotfiles/bin/mcp-install integrate n8n`
+1. **Install and integrate** - Use `~/dotfiles/bin/mcp install n8n` and `~/dotfiles/bin/mcp integrate n8n`
 2. **Query node documentation** - Ask about specific n8n nodes, their parameters, and configurations  
 3. **Get workflow guidance** - Request help designing automation workflows with appropriate node combinations
 4. **Leverage comprehensive coverage** - Use the 535+ documented nodes and 99% parameter coverage

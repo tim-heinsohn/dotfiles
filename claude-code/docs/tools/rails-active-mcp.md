@@ -5,7 +5,7 @@ Rails Active MCP provides a Model-Context-Protocol (MCP) server for Ruby on Rail
 
 ## Installation
 ```bash
-mcp-install install rails-active-mcp
+mcp install rails-active-mcp
 ```
 
 ## Usage Examples

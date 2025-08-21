@@ -12,11 +12,11 @@ The Jira MCP server connects to Atlassian Cloud instances, providing access to:
 
 ```bash
 # Install Jira MCP server
-mcp-install install jira
+mcp install jira
 
 # Configure credentials in ~/.jira-mcp/.env
 # Integrate with Claude Code
-mcp-install integrate jira
+mcp integrate jira
 ```
 
 ## Authentication Setup

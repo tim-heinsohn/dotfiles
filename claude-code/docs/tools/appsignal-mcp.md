@@ -6,10 +6,10 @@ The AppSignal MCP Server provides integration with AppSignal's application monit
 ## Installation
 ```bash
 # Install the MCP server
-~/dotfiles/bin/mcp-install install appsignal
+~/dotfiles/bin/mcp install appsignal
 
 # Add to Claude Code configuration
-~/dotfiles/bin/mcp-install integrate appsignal
+~/dotfiles/bin/mcp integrate appsignal
 ```
 
 ## Authentication
