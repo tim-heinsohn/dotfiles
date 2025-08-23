@@ -47,6 +47,17 @@ This is the user CLAUDE.md.
 - **Authentication**: Requires AppSignal Push API key from https://appsignal.com/accounts
 - **Rate Limiting**: 1000 requests/hour per API key, implement exponential backoff for 429 responses
 
+### GitLab MCP
+- See $DOTFILES_DIR/claude-code/docs/tools/gitlab-mcp.md for GitLab repository, merge request, and CI/CD pipeline management
+- **Authentication**: Requires GitLab personal access token from https://gitlab.com/-/profile/personal_access_tokens
+- **Rate Limiting**: 2000 requests/hour for authenticated users, implement exponential backoff for 429 responses
+- **Line Comments**: Supports line-specific diff comments via GitLab Discussions API
+
+### Slack MCP
+- See docs/tools/slack-mcp.md for Slack workspace integration (channels, messages, users)
+- **Authentication**: Requires Slack bot token from https://api.slack.com/apps with OAuth scopes: channels:read, channels:history, chat:write, users:read
+- **Rate Limiting**: 1 request/second for Web API, implement exponential backoff (1s, 2s, 4s, 8s) for 429 responses
+
 ### YouTube Transcript MCP
 - See $DOTFILES_DIR/claude-code/docs/tools/youtube-mcp.md for YouTube transcript retrieval
 - **Rate Limiting**: Add 1-2 second delays between bulk requests to avoid YouTube API rate limits

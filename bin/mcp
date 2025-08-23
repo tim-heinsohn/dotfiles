@@ -9,17 +9,21 @@ set -euo pipefail
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 
 usage() {
-    echo "Usage: $0 [install|update|integrate|list] [mcp-name...]"
+    echo "Usage: $0 [install|update|integrate|disintegrate|uninstall|list|info] [mcp-name...]"
     echo ""
     echo "Commands:"
-    echo "  install <mcp-name>    Install MCP server(s)"
-    echo "  update [mcp-name...]  Update MCP server(s) - if no names given, updates all installed"
-    echo "  integrate <mcp-name>  Add MCP server(s) to Claude Code"
-    echo "  list                  List available MCP servers"
+    echo "  install <mcp-name>     Install MCP server(s)"
+    echo "  update [mcp-name...]   Update MCP server(s) - if no names given, updates all installed"
+    echo "  integrate <mcp-name>   Add MCP server(s) to Claude Code"
+    echo "  disintegrate <mcp-name> Remove MCP server(s) from Claude Code"
+    echo "  uninstall <mcp-name>   Completely remove MCP server(s) and configuration"
+    echo "  list                   List available MCP servers"
+    echo "  info <mcp-name>        Display usage documentation for MCP server"
     echo ""
     echo "Available MCP servers:"
     echo "  appsignal          AppSignal application monitoring and performance metrics"
     echo "  elevenlabs         Text-to-speech using ElevenLabs API"
+    echo "  gitlab             GitLab repository, issues, and merge request management"
     echo "  gmail              Gmail integration with filter management"
     echo "  jira               Jira and Confluence integration"
     echo "  mail-server        IMAP/SMTP email server (project-based primary/secondary accounts)"
@@ -28,6 +32,7 @@ usage() {
     echo "  playwright         Browser automation (already configured)"
     echo "  rails-active-mcp   Rails application interaction and database querying"
     echo "  semgrep            Code security scanning and analysis"
+    echo "  slack              Slack workspace integration (channels, messages, users)"
     echo "  youtube            YouTube playlist management (watch later, user playlists)"
     echo "  youtube-transcript YouTube video transcript retrieval"
     echo ""
@@ -37,6 +42,7 @@ usage() {
     echo "  $0 update            # updates all installed MCPs"
     echo "  $0 integrate gmail"
     echo "  $0 install gmail playwright"
+    echo "  $0 info gmail"
 }
 
 install_mcp() {
@@ -138,13 +144,13 @@ integrate_mcp() {
             fi
             ;;
         jira)
-            if [ -d ~/.jira-mcp ]; then
+            if [ -f ~/.jira-mcp/bin/mcp-server ]; then
                 echo "Adding Jira MCP to Claude Code..."
-                # Add Jira MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.jira-mcp/build/index.js\"],\"env\":{}}"
+                # Add Jira MCP server configuration for Python-based server
+                local config_json="{\"command\":\"$HOME/.jira-mcp/bin/mcp-server\",\"env\":{}}"
                 claude mcp add-json jira "$config_json" --scope user
                 echo "✓ Jira MCP integrated with Claude Code"
-                echo "Note: Configure ~/.jira-mcp/.env with your Jira API credentials"
+                echo "Note: Set JIRA_API_TOKEN, JIRA_EMAIL, and JIRA_URL environment variables"
             else
                 echo "Error: Jira MCP not installed. Run: $0 install jira"
                 return 1
@@ -199,7 +205,20 @@ integrate_mcp() {
                 return 1
             fi
             ;;
-        rails-active-mcp|rails-active)
+        gitlab)
+            if [ -d ~/.gitlab-mcp ]; then
+                echo "Adding GitLab MCP to Claude Code..."
+                # Add GitLab MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.gitlab-mcp/dist/index.js\"],\"env\":{\"GITLAB_PERSONAL_ACCESS_TOKEN\":\"${GITLAB_PERSONAL_ACCESS_TOKEN:-}\",\"GITLAB_URL\":\"${GITLAB_URL:-https://gitlab.com}\"}}"
+                claude mcp add-json gitlab "$config_json" --scope user
+                echo "✓ GitLab MCP integrated with Claude Code"
+                echo "Note: Set GITLAB_PERSONAL_ACCESS_TOKEN and optionally GITLAB_URL environment variables"
+            else
+                echo "Error: GitLab MCP not installed. Run: $0 install gitlab"
+                return 1
+            fi
+            ;;
+        rails-active|rails-active-mcp)
             echo "Rails Active MCP requires integration with your Rails application, not Claude Code directly"
             echo ""
             echo "To use Rails Active MCP:"
@@ -211,6 +230,19 @@ integrate_mcp() {
             echo "6. Start your Rails server - MCP will be available at /mcp"
             echo ""
             echo "See: $DOTFILES_DIR/rails-active-mcp/doc/usage.md for security configuration"
+            ;;
+        slack)
+            if [ -d ~/.slack-mcp ]; then
+                echo "Adding Slack MCP to Claude Code..."
+                # Add Slack MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.slack-mcp/src/slack/dist/index.js\"],\"env\":{\"SLACK_BOT_TOKEN\":\"${SLACK_BOT_TOKEN:-}\",\"SLACK_SIGNING_SECRET\":\"${SLACK_SIGNING_SECRET:-}\"}}"
+                claude mcp add-json slack "$config_json" --scope user
+                echo "✓ Slack MCP integrated with Claude Code"
+                echo "Note: Set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET environment variables"
+            else
+                echo "Error: Slack MCP not installed. Run: $0 install slack"
+                return 1
+            fi
             ;;
         *)
             echo "Error: Integration not implemented for MCP: $mcp_name"
@@ -293,16 +325,26 @@ update_all_mcps() {
         ((updated_count++))
     fi
     
+    if [ -d ~/.gitlab-mcp ]; then
+        update_mcp gitlab
+        ((updated_count++))
+    fi
+    
+    if [ -d ~/.slack-mcp ]; then
+        update_mcp slack
+        ((updated_count++))
+    fi
+
     # Add other MCPs here as they are added
     # if [ -d ~/.some-other-mcp ]; then
     #     update_mcp some-other
-    #     ((updated_count++))
+    #     updated_count=$((updated_count + 1))
     # fi
     
     if [ $updated_count -eq 0 ]; then
         echo "No installed MCPs found to update"
     else
-        echo "✓ Updated $updated_count MCP(s)"
+        echo "Updated $updated_count MCPs"
     fi
 }
 
@@ -314,10 +356,12 @@ list_mcps() {
     declare -A mcp_checks=(
         ["elevenlabs"]="[ -f ~/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js ]"
         ["gmail"]="[ -f ~/.gmail-mcp/dist/index.js ]"
-        ["jira"]="[ -f ~/.jira-mcp/build/index.js ]"
+        ["gitlab"]="[ -f ~/.gitlab-mcp/dist/index.js ]"
+        ["jira"]="[ -f ~/.jira-mcp/bin/mcp-server ]"
         ["miro"]="[ -f ~/.miro-mcp/build/index.js ]"
         ["n8n"]="[ -f ~/.n8n-mcp/build/index.js ]"
         ["semgrep"]="command -v semgrep-mcp > /dev/null 2>&1"
+        ["slack"]="[ -f ~/.slack-mcp/src/slack/dist/index.js ]"
         ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
     )
     
@@ -346,6 +390,132 @@ list_mcps() {
     echo ""
     echo "Special cases:"
     echo "  playwright   ✅ System-installed (MCP tools available directly)"
+}
+
+disintegrate_mcp() {
+    local mcp_name="$1"
+    
+    # Normalize input to handle both patterns
+    case "$mcp_name" in
+        rails-active|rails-active-mcp)
+            echo "Rails Active MCP cannot be disintegrated from Claude Code - it's integrated with Rails apps directly"
+            return 0
+            ;;
+        mail-server)
+            echo "Removing Mail Server MCP from Claude Code..."
+            claude mcp remove mail-primary --scope user 2>/dev/null || echo "mail-primary not found in Claude"
+            claude mcp remove mail-secondary --scope user 2>/dev/null || echo "mail-secondary not found in Claude"
+            echo "✓ Mail Server MCP removed from Claude Code"
+            ;;
+        *)
+            echo "Removing $mcp_name MCP from Claude Code..."
+            claude mcp remove "$mcp_name" --scope user 2>/dev/null || echo "$mcp_name not found in Claude"
+            echo "✓ $mcp_name MCP removed from Claude Code"
+            ;;
+    esac
+}
+
+uninstall_mcp() {
+    local mcp_name="$1"
+    
+    echo "Completely uninstalling $mcp_name MCP..."
+    
+    # First remove from Claude
+    disintegrate_mcp "$mcp_name"
+    
+    # Then remove installation directories
+    case "$mcp_name" in
+        rails-active|rails-active-mcp)
+            echo "Rails Active MCP is a gem - uninstall with: gem uninstall rails-active-mcp"
+            return 0
+            ;;
+        semgrep)
+            if command -v semgrep-mcp &> /dev/null; then
+                echo "Removing semgrep-mcp command..."
+                pip3 uninstall -y semgrep-mcp 2>/dev/null || uv pip uninstall semgrep-mcp 2>/dev/null || npm uninstall -g @semgrep/mcp 2>/dev/null || true
+                echo "✓ semgrep-mcp command removed"
+            fi
+            ;;
+        gmail)
+            rm -rf ~/.gmail-mcp
+            echo "✓ Gmail MCP directory removed"
+            ;;
+        miro)
+            rm -rf ~/.miro-mcp
+            echo "✓ Miro MCP directory removed"
+            ;;
+        mail-server)
+            rm -rf ~/.mail-server-mcp
+            echo "✓ Mail Server MCP directory removed"
+            ;;
+        youtube-transcript)
+            # No persistent installation directory for npx-based
+            echo "✓ YouTube Transcript MCP (npx-based) - no persistent files to remove"
+            ;;
+        youtube)
+            rm -rf ~/.youtube-mcp
+            echo "✓ YouTube Playlist MCP directory removed"
+            ;;
+        jira)
+            rm -rf ~/.jira-mcp
+            echo "✓ Jira MCP directory removed"
+            ;;
+        n8n)
+            rm -rf ~/.n8n-mcp
+            echo "✓ n8n MCP directory removed"
+            ;;
+        elevenlabs)
+            rm -rf ~/.elevenlabs-mcp
+            echo "✓ ElevenLabs MCP directory removed"
+            ;;
+        appsignal)
+            rm -rf ~/.appsignal-mcp
+            echo "✓ AppSignal MCP directory removed"
+            ;;
+        gitlab)
+            rm -rf ~/.gitlab-mcp
+            echo "✓ GitLab MCP directory removed"
+            ;;
+        slack)
+            rm -rf ~/.slack-mcp
+            echo "✓ Slack MCP directory removed"
+            ;;
+        playwright)
+            echo "Playwright MCP is system-installed - use: npm uninstall -g @playwright/mcp"
+            return 0
+            ;;
+        *)
+            echo "Error: Uninstall not implemented for MCP: $mcp_name"
+            return 1
+            ;;
+    esac
+    
+    echo "✓ $mcp_name MCP completely uninstalled"
+}
+
+show_mcp_info() {
+    local mcp_name="$1"
+    local mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
+    local doc_file="$mcp_dir/doc/usage.md"
+    
+    if [ ! -d "$mcp_dir" ]; then
+        echo "Error: MCP '$mcp_name' not found in $mcp_dir"
+        return 1
+    fi
+    
+    if [ ! -f "$doc_file" ]; then
+        echo "Error: Usage documentation not found: $doc_file"
+        return 1
+    fi
+    
+    # Use glow with pager if available, otherwise bat with pager, otherwise less
+    if command -v glow >/dev/null 2>&1; then
+        glow -p "$doc_file"
+    elif command -v bat >/dev/null 2>&1; then
+        bat --paging=always "$doc_file"
+    else
+        less "$doc_file"
+    fi
 }
 
 main() {
@@ -391,6 +561,39 @@ main() {
             ;;
         list)
             list_mcps
+            ;;
+        disintegrate)
+            if [ $# -eq 0 ]; then
+                echo "Error: No MCP names specified for disintegration"
+                usage
+                exit 1
+            fi
+            
+            for mcp_name in "$@"; do
+                disintegrate_mcp "$mcp_name"
+            done
+            ;;
+        uninstall)
+            if [ $# -eq 0 ]; then
+                echo "Error: No MCP names specified for uninstallation"
+                usage
+                exit 1
+            fi
+            
+            for mcp_name in "$@"; do
+                uninstall_mcp "$mcp_name"
+            done
+            ;;
+        info)
+            if [ $# -eq 0 ]; then
+                echo "Error: No MCP names specified for info"
+                usage
+                exit 1
+            fi
+            
+            for mcp_name in "$@"; do
+                show_mcp_info "$mcp_name"
+            done
             ;;
         *)
             echo "Error: Unknown command '$command'"

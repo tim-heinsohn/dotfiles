@@ -56,6 +56,10 @@ extra/arandr
     Provide a simple visual front end for XRandR 1.2.
 extra/asciinema
     Record and share terminal sessions.
+extra/alsa-utils
+    Advanced Linux Sound Architecture - Utilities.
+extra/audacity
+    A program that lets you manipulate digital audio waveforms.
 extra/aws-cli
     Universal Command Line Interface for Amazon Web Services.
 extra/bat
@@ -188,6 +192,10 @@ extra/obs-studio
     Free and open source software for video recording and live streaming.
 extra/p7zip
     A file archiver with a high compression ratio.
+extra/pamixer
+    Pulseaudio command-line mixer like amixer.
+extra/pipewire-jack
+    Low-latency audio/video router and processor - JACK replacement.
 extra/parted
     A program for creating, destroying, resizing, checking and copying partitions.
 extra/pavucontrol

@@ -50,7 +50,7 @@ if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ]; then
   MOONSHOT_AI_API_KEY=$(gopass show -o t/ai/moonshot.ai)
   export MOONSHOT_AI_API_KEY
   export PERSONAL_MOONSHOT_AI_API_KEY=$MOONSHOT_AI_API_KEY
-  
+
   # Semgrep MCP Platform integration
   if command -v semgrep-mcp &> /dev/null; then
     SEMGREP_APP_TOKEN=$(gopass show -o t/dev/semgrep cli_token)

@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Slack MCP Server Installation Script
+# Based on the Gmail MCP pattern for consistency
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}Installing Slack MCP Server...${NC}"
+
+# Set installation directory
+MCP_DIR="$HOME/.slack-mcp"
+REPO_URL="https://github.com/modelcontextprotocol/servers"
+
+# Clean up existing installation if it exists
+if [ -d "$MCP_DIR" ]; then
+    echo -e "${YELLOW}Removing existing Slack MCP installation...${NC}"
+    rm -rf "$MCP_DIR"
+fi
+
+# Create directory and clone repository
+echo -e "${GREEN}Cloning Slack MCP server...${NC}"
+git clone --depth 1 "$REPO_URL" "$MCP_DIR"
+
+# Navigate to Slack MCP directory
+cd "$MCP_DIR/src/slack"
+
+# Install dependencies
+echo -e "${GREEN}Installing npm dependencies...${NC}"
+npm install
+
+# Build the server
+echo -e "${GREEN}Building Slack MCP server...${NC}"
+npm run build
+
+# Set secure permissions for configuration files
+if [ -f "$MCP_DIR/src/slack/.env" ]; then
+    chmod 600 "$MCP_DIR/src/slack/.env"
+fi
+
+echo -e "${GREEN}Slack MCP server installed successfully!${NC}"
+echo ""
+echo -e "${YELLOW}Next steps:${NC}"
+echo "1. Create a Slack App at https://api.slack.com/apps"
+echo "2. Generate a Bot User OAuth Token with the following scopes:"
+echo "   - channels:read"
+echo "   - channels:history"
+echo "   - chat:write"
+echo "   - users:read"
+echo "   - groups:read"
+echo "   - im:read"
+echo "   - mpim:read"
+echo "3. Create .env file in $MCP_DIR/src/slack/ with:"
+echo "   SLACK_BOT_TOKEN=xoxb-your-bot-token"
+echo "   SLACK_SIGNING_SECRET=your-signing-secret"
+echo "4. Run: mcp integrate slack"
