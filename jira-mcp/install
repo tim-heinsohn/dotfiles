@@ -15,45 +15,67 @@ echo "🔧 Installing Jira MCP server..."
 mkdir -p "$MCP_DIR"
 
 # Clone the repository
-if [ -d "$MCP_DIR" ]; then
+if [ -d "$MCP_DIR/.git" ]; then
     echo "📁 MCP directory already exists, updating..."
     cd "$MCP_DIR"
     git pull origin main
 else
     echo "📥 Cloning Jira MCP repository..."
+    rm -rf "$MCP_DIR"  # Remove non-git directory if it exists
     git clone "$REPO_URL" "$MCP_DIR"
     cd "$MCP_DIR"
 fi
 
 # Install dependencies
-echo "📦 Installing npm dependencies..."
-npm install
+echo "📦 Installing Python dependencies with uv..."
+if [ ! -d "$MCP_DIR/.venv" ]; then
+    uv venv "$MCP_DIR/.venv"
+fi
+source "$MCP_DIR/.venv/bin/activate"
+uv pip install -e .
 
-# Create .env template if it doesn't exist
+# Create .env template that uses existing environment variables
 if [ ! -f "$MCP_DIR/.env" ]; then
-    echo "⚙️  Creating .env template..."
-    cat > "$MCP_DIR/.env" << EOF
+    echo "⚙️  Creating .env template that uses existing environment variables..."
+    cat > "$MCP_DIR/.env" << 'EOF'
 # Jira MCP Configuration
-# Jira Cloud configuration
-JIRA_API_TOKEN=your_jira_api_token
-JIRA_EMAIL=your_email@company.com
-JIRA_URL=https://your-company.atlassian.net
+# Uses environment variables from your shell/project
+# Define these in your project .envrc or environment:
+# JIRA_API_TOKEN, JIRA_EMAIL, JIRA_URL
+# CONFLUENCE_API_TOKEN, CONFLUENCE_EMAIL, CONFLUENCE_URL
 
-# Optional: Confluence configuration
-# CONFLUENCE_API_TOKEN=your_confluence_api_token
-# CONFLUENCE_EMAIL=your_email@company.com
-# CONFLUENCE_URL=https://your-company.atlassian.net/wiki
+# Jira Cloud configuration (uses existing env vars)
+JIRA_API_TOKEN=${JIRA_API_TOKEN:-}
+JIRA_EMAIL=${JIRA_EMAIL:-}
+JIRA_URL=${JIRA_URL:-}
+
+# Optional: Confluence configuration (uses existing env vars)
+CONFLUENCE_API_TOKEN=${CONFLUENCE_API_TOKEN:-}
+CONFLUENCE_EMAIL=${CONFLUENCE_EMAIL:-}
+CONFLUENCE_URL=${CONFLUENCE_URL:-}
+
+# For Jira Server/Data Center, use personal tokens instead:
+# JIRA_PERSONAL_TOKEN=${JIRA_PERSONAL_TOKEN:-}
+# CONFLUENCE_PERSONAL_TOKEN=${CONFLUENCE_PERSONAL_TOKEN:-}
 EOF
     chmod 600 "$MCP_DIR/.env"
 fi
 
-# Make the server executable
-chmod +x "$MCP_DIR/build/index.js"
+# For Python-based MCP server, the executable is typically in .venv/bin
+# Create a wrapper script to run the MCP server
+mkdir -p "$MCP_DIR/bin"
+cat > "$MCP_DIR/bin/mcp-server" << 'EOF'
+#!/bin/bash
+source "$(dirname "$0")/../.venv/bin/activate"
+exec mcp-atlassian "$@"
+EOF
+chmod +x "$MCP_DIR/bin/mcp-server"
 
 echo "✅ Jira MCP server installed successfully!"
 echo ""
 echo "📋 Next steps:"
-echo "1. Edit $MCP_DIR/.env with your Jira credentials"
+echo "1. Set environment variables: JIRA_API_TOKEN, JIRA_EMAIL, JIRA_URL"
 echo "2. Generate API token at: https://id.atlassian.com/manage-profile/security/api-tokens"
 echo "3. Run 'mcp integrate jira' to add to Claude Code"
-echo "4. Test with: claude mcp call jira get_projects"
+echo "4. Test with: Start Claude Code and run '/mcp' to check server status"
+echo "5. Use Claude Code normally - MCP tools will be available automatically"

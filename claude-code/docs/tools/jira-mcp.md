@@ -34,64 +34,45 @@ mcp integrate jira
 ### Daily Issue Management
 
 **Get active issues**:
-```bash
-claude mcp call jira search_issues --jql "assignee = currentUser() AND status != Done"
-```
+Use Claude Code with natural language:
+- "Show me all my active Jira issues"
+- "List issues assigned to me that aren't done yet"
+- "What tickets are currently in progress?"
 
 **Create and update issues**:
-```bash
-# Create new issue
-claude mcp call jira create_issue --project KI --summary "New feature" --issuetype Task
-
-# Update existing issue
-claude mcp call jira update_issue --key KI-73 --description "Updated details"
-
-# Add progress comment
-claude mcp call jira add_comment --key KI-73 --comment "Progress update: completed implementation"
-```
+Use Claude Code with natural language:
+- "Create a new task in project KI titled 'New feature'"
+- "Update issue KI-73 description with latest requirements"
+- "Add a comment to KI-73: Progress update - completed implementation"
 
 **Transition workflow**:
-```bash
-# Get available transitions
-claude mcp call jira get_transitions --key KI-73
-
-# Transition issue
-claude mcp call jira transition_issue --key KI-73 --transition "In Review"
-```
+Use Claude Code with natural language:
+- "Show me the available transitions for issue KI-73"
+- "Move issue KI-73 to In Review status"
 
 ### Sprint Planning
 
 **Backlog grooming**:
-```bash
-# Get backlog issues
-claude mcp call jira search_issues --jql "project = KI AND status = Backlog ORDER BY priority DESC"
-
-# Estimate and prioritize
-claude mcp call jira update_issue --key KI-30 --fields '{"customfield_10016": 5, "priority": "High"}'
-```
+Use Claude Code with natural language:
+- "Show me the backlog for project KI ordered by priority"
+- "What issues are in the backlog for our team?"
+- "Update issue KI-30 story points to 5 and priority to High"
 
 **Sprint creation**:
-```bash
-# Create sprint issues
-claude mcp call jira create_issue --project KI --summary "Sprint planning task" --issuetype Story --parent KI-25
-```
+Use Claude Code with natural language:
+- "Create a new story in project KI titled 'Sprint planning task' with parent KI-25"
 
 ### Confluence Documentation
 
 **Create meeting notes**:
-```bash
-# Create new page
-claude mcp call jira create_page --space TEAM --title "Sprint 15 Retrospective" --content "Meeting notes..." --parent_id 12345
-
-# Update existing page
-claude mcp call jira update_page --page_id 12345 --content "Updated with latest decisions..."
-```
+Use Claude Code with natural language:
+- "Create a new Confluence page in space TEAM titled 'Sprint 15 Retrospective' with these notes..."
+- "Update Confluence page 12345 with the latest meeting decisions"
 
 **Search documentation**:
-```bash
-# Find relevant pages
-claude mcp call jira search_pages --query "deployment process"
-```
+Use Claude Code with natural language:
+- "Search for pages about deployment process"
+- "Find all documentation related to our project"
 
 ## Advanced Features
 
@@ -140,16 +121,10 @@ claude mcp call jira create_issue --project KI --summary "Test" --customfield_10
 
 The Jira MCP integrates seamlessly with Claude Code workflows:
 
-```bash
-# Check available tools
-claude mcp tools jira
-
-# Use in conversations
-"Check the status of KI-73 using the Jira MCP"
-
-# List all Jira MCP tools
-claude mcp list jira
-```
+- **Check integration**: `claude mcp get jira`
+- **List configured servers**: `claude mcp list`
+- **Use in conversations**: Start Claude Code and use natural language like "Check the status of KI-73"
+- **Interactive testing**: Run `/mcp` within Claude Code to check server status
 
 ## Troubleshooting
 
@@ -172,15 +147,19 @@ claude mcp list jira
 
 ### Debug Commands
 
+Use Claude Code commands to test integration:
+
 ```bash
-# Test connection
-claude mcp call jira get_projects
+# Check server status
+claude mcp get jira
 
-# Get user info
-claude mcp call jira get_current_user
+# List all configured MCP servers
+claude mcp list
 
-# List available issue types
-claude mcp call jira get_issue_types --project KI
+# Test within Claude Code
+claude
+# Then type: /mcp
+# Or use: "Show me my Jira projects to test connection"
 ```
 
 ## Environment Variables

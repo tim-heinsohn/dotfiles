@@ -48,74 +48,63 @@ CONFLUENCE_URL=https://your-company.atlassian.net/wiki
 
 ## Usage Examples
 
-### Jira Operations
+### Using Claude Code with Jira MCP
+
+Once integrated, use natural language with Claude Code to interact with Jira:
 
 **List all projects**:
-```bash
-claude mcp call jira get_projects
-```
+- "Show me my Jira projects"
+- "List all projects I have access to"
 
 **Search for issues**:
-```bash
-claude mcp call jira search_issues --jql "project = KI AND status = 'In Progress'"
-```
+- "Search for issues in project KI with status In Progress"
+- "Find all high priority bugs assigned to me"
 
 **Get issue details**:
-```bash
-claude mcp call jira get_issue --key KI-73
-```
+- "Show me details for issue KI-73"
+- "What's the current status of ticket PROJ-123?"
 
 **Create issue**:
-```bash
-claude mcp call jira create_issue --project KI --summary "New feature" --description "Feature details" --issuetype Task
-```
+- "Create a new task in project KI with title 'New feature' and description 'Feature details'"
+- "Add a bug report to project PROJ"
 
 **Update issue**:
-```bash
-claude mcp call jira update_issue --key KI-73 --description "Updated description"
-```
+- "Update issue KI-73 description to include latest requirements"
+- "Change the priority of PROJ-456 to high"
 
 **Transition issue**:
-```bash
-claude mcp call jira transition_issue --key KI-73 --transition "In Progress"
-```
+- "Move issue KI-73 to In Progress"
+- "Transition ticket PROJ-789 to Done"
 
 **Add comment**:
-```bash
-claude mcp call jira add_comment --key KI-73 --comment "Progress update"
-```
+- "Add a comment to issue KI-73: Progress update - implementation complete"
+- "Comment on PROJ-123 with the testing results"
 
 **Upload attachment**:
-```bash
-claude mcp call jira add_attachment --key KI-73 --filepath /path/to/file.txt
-```
+- "Upload the file screenshot.png to issue KI-73"
+- "Attach the requirements document to ticket PROJ-456"
 
 ### Confluence Operations
 
 **List spaces**:
-```bash
-claude mcp call jira get_spaces
-```
+- "Show me all Confluence spaces"
+- "List spaces I can access"
 
 **Get page content**:
-```bash
-claude mcp call jira get_page --page_id 12345
-```
+- "Get the content of Confluence page 12345"
+- "Show me the documentation for our deployment process"
 
 **Create page**:
-```bash
-claude mcp call jira create_page --space KEY --title "New Page" --content "Page content" --parent_id 12345
-```
+- "Create a new page in space KEY titled 'Sprint Retrospective'"
+- "Add a documentation page under the parent page 12345"
 
 **Update page**:
-```bash
-claude mcp call jira update_page --page_id 12345 --content "Updated content"
-```
+- "Update Confluence page 12345 with the latest meeting notes"
+- "Add the new requirements to the project documentation"
 
 **Search pages**:
-```bash
-claude mcp call jira search_pages --query "project documentation"
-```
+- "Search for pages about project documentation"
+- "Find all pages mentioning deployment process"
 
 ## Rate Limiting
 
@@ -135,28 +124,22 @@ claude mcp call jira search_pages --query "project documentation"
 ## Common Workflows
 
 ### Daily Standup Notes
-```bash
-# Get team issues
-claude mcp call jira search_issues --jql "project = KI AND assignee = currentUser() AND status != Done"
-
-# Add progress comments
-claude mcp call jira add_comment --key KI-73 --comment "Completed implementation, ready for review"
-```
+Use Claude Code with prompts like:
+- "Show me all my open issues for project KI"
+- "List my Jira issues that aren't done yet"
+- "Add a comment to KI-73: Completed implementation, ready for review"
 
 ### Sprint Planning
-```bash
-# Get backlog issues
-claude mcp call jira search_issues --jql "project = KI AND status = Backlog ORDER BY priority DESC"
-
-# Create sprint issues
-claude mcp call jira create_issue --project KI --summary "Sprint planning" --issuetype Story
-```
+Use Claude Code with prompts like:
+- "Show me the backlog for project KI ordered by priority"
+- "Create a new story in project KI titled 'Sprint planning'"
+- "What issues are in the backlog for our team?"
 
 ### Documentation Updates
-```bash
-# Update Confluence page with meeting notes
-claude mcp call jira update_page --page_id 12345 --content "Updated with latest decisions..."
-```
+Use Claude Code with prompts like:
+- "Update Confluence page 12345 with these meeting notes: [paste notes]"
+- "Create a new page in space TEAM titled 'Sprint 15 Retrospective'"
+- "Find and update the deployment documentation with latest changes"
 
 ## Troubleshooting
 
