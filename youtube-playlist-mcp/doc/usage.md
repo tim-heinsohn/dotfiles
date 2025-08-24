@@ -1,25 +1,16 @@
-# YouTube Playlist MCP
+# YouTube Playlist MCP Server Usage
 
 ## Overview
 The official YouTube Playlist MCP server enables Claude to access and manage your YouTube playlists, including Watch Later, personal playlists, liked videos, and subscriptions. This provides comprehensive YouTube integration for playlist management and content organization.
 
-## Installation
-```bash
-# Install the MCP server
-mcp install youtube-playlist
-
-# Integrate with Claude Code
-mcp integrate youtube-playlist
-
-# Set up OAuth credentials (required)
-# 1. Go to https://console.cloud.google.com/
-# 2. Create project & enable YouTube Data API v3
-# 3. Create OAuth 2.0 credentials (Desktop app)
-# 4. Save credentials.json to ~/.youtube-playlist-mcp/
-# 5. Run: cd ~/.youtube-playlist-mcp && npm start (for initial auth)
-
-# Restart Claude Desktop after integration
-```
+## Features
+- **Watch Later management**: Add/remove videos, list contents
+- **Playlist operations**: Create, edit, delete, and reorder playlists
+- **Video management**: Add videos to playlists, remove videos
+- **Subscription access**: List subscribed channels and recent uploads
+- **Liked videos**: Access your liked videos playlist
+- **Search integration**: Search videos and add to playlists
+- **OAuth authentication**: Secure Google account integration
 
 ## Authentication Setup
 
@@ -161,10 +152,10 @@ Add all liked videos from this week to a new playlist
 - Custom playlists - Use the ID from playlist URL
 
 ## Rate Limiting
-- **YouTube API quotas**: 10,000 units per day for authenticated requests
+- **YouTube API quotas**: Respect YouTube's daily quotas
 - **Recommended delays**: Add 1-2 second delays between bulk operations
 - **Error handling**: Implement exponential backoff for 429 errors
-- **Daily limits**: Monitor usage in Google Cloud Console
+- **Daily limits**: 10,000 units per day for authenticated requests
 
 ## Best Practices
 1. **Batch operations**: Group operations when possible to reduce API calls
@@ -197,6 +188,13 @@ Add all liked videos from this week to a new playlist
 4. Check Google Cloud Console for quota usage
 5. Review server logs in `~/.youtube-playlist-mcp/` for detailed errors
 
+### Testing
+Use these test scenarios:
+- List your playlists to verify authentication
+- Search for a popular video and add to Watch Later
+- Create a test playlist and add/remove videos
+- Check subscription list for recent uploads
+
 ## Security Notes
 - **OAuth security**: Never share your OAuth credentials
 - **Token storage**: Tokens are stored securely in the MCP directory
@@ -228,3 +226,5 @@ Monitor subscription uploads and add trending videos to Watch Later
 - [YouTube Data API v3 Documentation](https://developers.google.com/youtube/v3)
 - [OAuth 2.0 for Desktop Apps](https://developers.google.com/youtube/v3/guides/auth/installed-apps)
 - [API Quota Calculator](https://developers.google.com/youtube/v3/determine_quota_cost)
+
+For setup instructions, see: `~/.youtube-playlist-mcp/oauth-setup.md`
