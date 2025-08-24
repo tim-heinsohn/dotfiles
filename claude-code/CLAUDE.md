@@ -59,12 +59,13 @@ This is the user CLAUDE.md.
 - **Rate Limiting**: 1 request/second for Web API, implement exponential backoff (1s, 2s, 4s, 8s) for 429 responses
 
 ### YouTube Transcript MCP
-- See $DOTFILES_DIR/claude-code/docs/tools/youtube-mcp.md for YouTube transcript retrieval
+- See $DOTFILES_DIR/claude-code/docs/tools/youtube-transcript-mcp.md for YouTube transcript retrieval
 - **Rate Limiting**: Add 1-2 second delays between bulk requests to avoid YouTube API rate limits
 
 ### YouTube Playlist MCP
 - See $DOTFILES_DIR/claude-code/docs/tools/youtube-playlist-mcp.md for YouTube playlist management and watch later functionality
 - **OAuth Required**: Requires Google Cloud Console setup and OAuth authentication
+- **Rate Limiting**: 10,000 units/day quota, implement 1-2s delays between bulk requests
 
 ### Third-party Repository Analysis
 For deep investigation of tools, libraries, and frameworks, git clone their source into `/srv/lib/[repo]` to examine features, configuration, and usage patterns.

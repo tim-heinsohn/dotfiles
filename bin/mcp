@@ -23,8 +23,8 @@ usage() {
     echo "Available MCP servers:"
     echo "  appsignal          AppSignal application monitoring and performance metrics"
     echo "  elevenlabs         Text-to-speech using ElevenLabs API"
-    echo "  gitlab             GitLab repository, issues, and merge request management"
     echo "  gmail              Gmail integration with filter management"
+    echo "  gitlab             GitLab repository, issues, and merge request management"
     echo "  jira               Jira and Confluence integration"
     echo "  mail-server        IMAP/SMTP email server (project-based primary/secondary accounts)"
     echo "  miro               Miro whiteboard collaboration platform"
@@ -33,7 +33,7 @@ usage() {
     echo "  rails-active-mcp   Rails application interaction and database querying"
     echo "  semgrep            Code security scanning and analysis"
     echo "  slack              Slack workspace integration (channels, messages, users)"
-    echo "  youtube            YouTube playlist management (watch later, user playlists)"
+    echo "  youtube-playlist   YouTube playlist management (watch later, user playlists)"
     echo "  youtube-transcript YouTube video transcript retrieval"
     echo ""
     echo "Examples:"
@@ -131,15 +131,16 @@ integrate_mcp() {
             claude mcp add-json youtube-transcript "$config_json" --scope user
             echo "✓ YouTube Transcript MCP integrated with Claude Code"
             ;;
-        youtube)
-            if [ -d ~/.youtube-mcp ]; then
+        youtube-playlist)
+            if [ -d ~/.youtube-playlist-mcp ] && [ -f ~/.youtube-playlist-mcp/dist/index.js ]; then
                 echo "Adding YouTube Playlist MCP to Claude Code..."
-                # Add YouTube MCP server configuration for playlist management
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.youtube-mcp/youtube-mcp-server/dist/index.js\"]}"
-                claude mcp add-json youtube "$config_json" --scope user
+                # Add YouTube Playlist MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.youtube-playlist-mcp/dist/index.js\"],\"env\":{\"GOOGLE_APPLICATION_CREDENTIALS\":\"$HOME/.youtube-playlist-mcp/credentials.json\"}}"
+                claude mcp add-json youtube-playlist "$config_json" --scope user
                 echo "✓ YouTube Playlist MCP integrated with Claude Code"
+                echo "Note: Make sure to set up OAuth credentials (see ~/.youtube-playlist-mcp/oauth-setup.md)"
             else
-                echo "Error: YouTube MCP not installed. Run: $0 install youtube"
+                echo "Error: YouTube Playlist MCP not installed. Run: $0 install youtube-playlist"
                 return 1
             fi
             ;;
@@ -305,8 +306,8 @@ update_all_mcps() {
         ((updated_count++))
     fi
     
-    if [ -d ~/.youtube-mcp ]; then
-        update_mcp youtube
+    if [ -d ~/.youtube-playlist-mcp ] && [ -f ~/.youtube-playlist-mcp/dist/index.js ]; then
+        update_mcp youtube-playlist
         ((updated_count++))
     fi
     
@@ -363,6 +364,8 @@ list_mcps() {
         ["semgrep"]="command -v semgrep-mcp > /dev/null 2>&1"
         ["slack"]="[ -f ~/.slack-mcp/src/slack/dist/index.js ]"
         ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
+        ["youtube-playlist"]="[ -f ~/.youtube-playlist-mcp/dist/index.js ]"
+        ["youtube-transcript"]="command -v npx > /dev/null 2>&1"
     )
     
     for mcp_name in "${!mcp_checks[@]}"; do
@@ -384,7 +387,7 @@ list_mcps() {
             description=$(head -n 5 "$doc_file" | grep -v "^#" | head -n 1 | sed 's/^[[:space:]]*//')
         fi
         
-        printf "  %-12s %s %s\n" "$mcp_name" "$status" "$description"
+        printf "  %-18s %s %s\n" "$mcp_name" "$status" "$description"
     done
     
     echo ""
@@ -452,8 +455,8 @@ uninstall_mcp() {
             # No persistent installation directory for npx-based
             echo "✓ YouTube Transcript MCP (npx-based) - no persistent files to remove"
             ;;
-        youtube)
-            rm -rf ~/.youtube-mcp
+        youtube-playlist)
+            rm -rf ~/.youtube-playlist-mcp
             echo "✓ YouTube Playlist MCP directory removed"
             ;;
         jira)
