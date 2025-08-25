@@ -21,11 +21,6 @@ This is the user CLAUDE.md.
 - See docs/tools/playwright-mcp.md for browser automation with Playwright MCP
 - Always close browser sessions when finished with browser automation tasks unless instructed otherwise
 
-### Miro MCP
-- See docs/tools/miro-mcp.md for Miro whiteboard collaboration platform integration
-- **Authentication**: Requires Miro API access token from https://miro.com/app/settings/user-profile/apps
-- **Rate Limiting**: 100 requests/minute, implement exponential backoff (1s, 2s, 4s, 8s) for 429 errors
-
 ### n8n MCP
 - See docs/tools/n8n-mcp.md for n8n workflow automation node documentation
 - **Coverage**: 535+ nodes with 99% parameter coverage and 90% official documentation
@@ -46,6 +41,11 @@ This is the user CLAUDE.md.
 - See docs/tools/appsignal-mcp.md for AppSignal application monitoring and performance metrics
 - **Authentication**: Requires AppSignal Push API key from https://appsignal.com/accounts
 - **Rate Limiting**: 1000 requests/hour per API key, implement exponential backoff for 429 responses
+
+### Context7 MCP
+- See $DOTFILES_DIR/claude-code/docs/tools/context7-mcp.md for intelligent context management and documentation retrieval
+- **Features**: Documentation lookup, code examples, version-specific information
+- **Rate Limiting**: 1 hour cache for docs, 30 min for examples, exponential backoff for 429 errors
 
 ### GitLab MCP
 - See $DOTFILES_DIR/claude-code/docs/tools/gitlab-mcp.md for GitLab repository, merge request, and CI/CD pipeline management
