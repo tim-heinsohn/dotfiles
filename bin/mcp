@@ -22,12 +22,12 @@ usage() {
     echo ""
     echo "Available MCP servers:"
     echo "  appsignal          AppSignal application monitoring and performance metrics"
+    echo "  context7           Intelligent context management for documentation and code examples"
     echo "  elevenlabs         Text-to-speech using ElevenLabs API"
     echo "  gmail              Gmail integration with filter management"
     echo "  gitlab             GitLab repository, issues, and merge request management"
     echo "  jira               Jira and Confluence integration"
     echo "  mail-server        IMAP/SMTP email server (project-based primary/secondary accounts)"
-    echo "  miro               Miro whiteboard collaboration platform"
     echo "  n8n                n8n workflow automation node documentation"
     echo "  playwright         Browser automation (already configured)"
     echo "  rails-active-mcp   Rails application interaction and database querying"
@@ -81,19 +81,6 @@ integrate_mcp() {
                 echo "✓ Gmail MCP integrated with Claude Code"
             else
                 echo "Error: Gmail MCP not installed or configured. Run: $0 install gmail"
-                return 1
-            fi
-            ;;
-        miro)
-            if [ -d ~/.miro-mcp ]; then
-                echo "Adding Miro MCP to Claude Code..."
-                # Add Miro MCP server configuration with token
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.miro-mcp/build/index.js\"],\"env\":{\"MIRO_OAUTH_TOKEN\":\"${MIRO_ACCESS_TOKEN:-}\"}}"
-                claude mcp add-json miro "$config_json" --scope user
-                echo "✓ Miro MCP integrated with Claude Code"
-                echo "Note: Make sure MIRO_ACCESS_TOKEN environment variable is set (will be mapped to MIRO_OAUTH_TOKEN)"
-            else
-                echo "Error: Miro MCP not installed. Run: $0 install miro"
                 return 1
             fi
             ;;
@@ -245,6 +232,18 @@ integrate_mcp() {
                 return 1
             fi
             ;;
+        context7)
+            if [ -f ~/.context7-mcp/mcp-config.json ]; then
+                echo "Adding Context7 MCP to Claude Code..."
+                # Add Context7 MCP server configuration
+                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.context7-mcp/dist/index.js\"],\"env\":{}}"
+                claude mcp add-json context7 "$config_json" --scope user
+                echo "✓ Context7 MCP integrated with Claude Code"
+            else
+                echo "Error: Context7 MCP not installed or configured. Run: $0 install context7"
+                return 1
+            fi
+            ;;
         *)
             echo "Error: Integration not implemented for MCP: $mcp_name"
             return 1
@@ -336,10 +335,15 @@ update_all_mcps() {
         ((updated_count++))
     fi
 
-    # Add other MCPs here as they are added
+    if [ -d ~/.context7-mcp ]; then
+        update_mcp context7
+        ((updated_count++))
+    fi
+    
+    # Add other MCPs here as they are added (alphabetical order)
     # if [ -d ~/.some-other-mcp ]; then
     #     update_mcp some-other
-    #     updated_count=$((updated_count + 1))
+    #     ((updated_count++))
     # fi
     
     if [ $updated_count -eq 0 ]; then
@@ -353,22 +357,27 @@ list_mcps() {
     echo "Available MCP servers:"
     echo ""
     
+    # Define MCPs in alphabetical order
+    mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "slack" "youtube-playlist" "youtube-transcript")
+    
     # Check actual MCP installation status
     declare -A mcp_checks=(
+        ["appsignal"]="[ -d ~/.appsignal-mcp ] && [ -f ~/.appsignal-mcp/dist/index.js ]"
+        ["context7"]="[ -f ~/.context7-mcp/dist/index.js ]"
         ["elevenlabs"]="[ -f ~/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js ]"
         ["gmail"]="[ -f ~/.gmail-mcp/dist/index.js ]"
         ["gitlab"]="[ -f ~/.gitlab-mcp/dist/index.js ]"
         ["jira"]="[ -f ~/.jira-mcp/bin/mcp-server ]"
-        ["miro"]="[ -f ~/.miro-mcp/build/index.js ]"
+        ["mail-server"]="[ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]"
         ["n8n"]="[ -f ~/.n8n-mcp/build/index.js ]"
+        ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
         ["semgrep"]="command -v semgrep-mcp > /dev/null 2>&1"
         ["slack"]="[ -f ~/.slack-mcp/src/slack/dist/index.js ]"
-        ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
         ["youtube-playlist"]="[ -f ~/.youtube-playlist-mcp/dist/index.js ]"
         ["youtube-transcript"]="command -v npx > /dev/null 2>&1"
     )
     
-    for mcp_name in "${!mcp_checks[@]}"; do
+    for mcp_name in "${mcps[@]}"; do
         mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
         install_script="$mcp_dir/install"
         doc_file="$mcp_dir/doc/usage.md"
@@ -474,6 +483,10 @@ uninstall_mcp() {
         appsignal)
             rm -rf ~/.appsignal-mcp
             echo "✓ AppSignal MCP directory removed"
+            ;;
+        context7)
+            rm -rf ~/.context7-mcp
+            echo "✓ Context7 MCP directory removed"
             ;;
         gitlab)
             rm -rf ~/.gitlab-mcp
