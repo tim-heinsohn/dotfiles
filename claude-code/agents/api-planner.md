@@ -15,7 +15,6 @@ API documentation and develop a comprehensive implementation strategy.'
 <commentary>The user is working with the GitHub API, so the api-docs-fetcher
 agent should be used to get current documentation and plan the
 implementation.</commentary></example>
-model: sonnet
 color: green
 ---
 

@@ -1,23 +1,30 @@
 #!/bin/bash
-# SuperClaude installer - bombadil-safe
+# SuperClaude installer - official Python package method with uv
 set -e
 
-# Check if bombadil manages Claude configs
-if [[ -L "$HOME/.claude/settings.json" ]]; then
-    echo "Claude configs managed by bombadil - SuperClaude will use existing symlinked files"
+echo "Installing SuperClaude via official Python package..."
+
+# Check if uv is available, fallback to pipx, then pip
+if command -v uv &> /dev/null; then
+    echo "Using uv (fastest)..."
+    uv tool install SuperClaude --force
+    echo "SuperClaude installed via uv"
+elif command -v pipx &> /dev/null; then
+    echo "Using pipx (recommended)..."
+    pipx install SuperClaude --force
+    echo "SuperClaude installed via pipx"
+elif command -v pip &> /dev/null; then
+    echo "Using pip..."
+    pip install --user --force-reinstall SuperClaude
+    echo "SuperClaude installed via pip"
+else
+    echo "Error: No Python package manager found. Please install uv, pipx, or pip first."
+    exit 1
 fi
 
-# Clone and install SuperClaude
-if [[ ! -d "/tmp/superclaude" ]]; then
-    git clone --depth 1 https://github.com/NomenAK/SuperClaude.git /tmp/superclaude
-fi
+# Run the official SuperClaude installer
+echo "Running SuperClaude setup..."
+SuperClaude install
 
-# Only install files NOT managed by bombadil
-cd /tmp/superclaude
-for f in *; do
-    if [[ ! -L "$HOME/.claude/$f" ]]; then
-        cp -r "$f" "$HOME/.claude/"
-    fi
-done
-
-echo "SuperClaude installed (bombadil-safe)"
+echo "SuperClaude installation complete!"
+echo "Available via: SuperClaude or superclaude commands"

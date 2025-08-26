@@ -106,3 +106,9 @@ See `$DOTFILES_DIR/bin/packages` for the complete list of locally available pack
 ## Style Guidelines
 - See docs/style/markdown.md for Markdown formatting standards
 
+## SuperClaude Framework
+- **Never edit files managed by SuperClaude Framework** (installed via `SuperClaude install`)
+- SuperClaude files are located in `$HOME/.claude/superclaude/` and managed by the framework
+- Use SuperClaude commands (`SuperClaude update`, `SuperClaude uninstall`) for framework management
+- All SuperClaude files are automatically protected and updated by the framework
+
