@@ -11,8 +11,8 @@ This is the user CLAUDE.md.
   API rate limits and potential account restrictions
 
 ### Jira MCP
-- See docs/tools/jira-mcp.md for Jira and Confluence integration with Atlassian products
-- **Caching**: See jira-mcp/cache/ for local ticket caching strategies and scheduled sync implementations
+- @docs/tools/jira-mcp.md for mapping custom fields.
+- Use Atlassian Document Format (ADF) for writing.
 
 ### Mail Server MCP
 - See $DOTFILES_DIR/claude-code/docs/tools/mail-server-mcp.md for IMAP/SMTP email integration with project-based primary/secondary account configuration
@@ -73,16 +73,8 @@ For deep investigation of tools, libraries, and frameworks, git clone their sour
 ### Git Service Integration
 For interacting with Git repositories, PRs/MRs, and issues, use:
 - **GitHub**: `gh` CLI for repositories, PRs, issues, releases
-- **GitLab**: `glab` CLI for repositories, MRs, issues, releases  
-- **Atlassian**: `acli` CLI for Bitbucket repos/PRs, Jira issues, Confluence
-  - See docs/tools/acli.md for comprehensive Jira ticket creation and management, e.g.
-  ```bash
-  acli jira workitem create --summary "New feature" --project "KI" --type "Task" \
-  description "Detailed description of the feature"
-  ```
-  - View comments and details: `acli jira workitem view KI-30 --fields "summary,comment,description" --json`
-  - **Markdown Support**: Use `markdown-to-adf` to convert Markdown to Jira ADF format
-  - Supports work items, projects, filters, and dashboard management
+- **GitLab**: `glab` CLI for repositories, MRs, issues, releases
+- **Atlassian**: `acli` CLI for Bitbucket repos/PRs (yet for Jira please use Jira MCP instead)
 
 Let the user run `bin/git-cli-setup` to check authentication status when authentication fails.
 

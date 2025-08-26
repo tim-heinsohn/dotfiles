@@ -21,7 +21,7 @@ if [ ! -d "$MCP_DIR/.git" ]; then
 else
     echo "🔄 Updating existing Context7 repository..."
     cd "$MCP_DIR"
-    git pull origin main
+    git pull origin master
 fi
 
 cd "$MCP_DIR"
@@ -30,6 +30,8 @@ cd "$MCP_DIR"
 echo "📋 Installing dependencies..."
 if [ -f "package.json" ]; then
     npm install
+    echo "🔨 Building TypeScript..."
+    npm run build
 elif [ -f "requirements.txt" ]; then
     uv pip install -r requirements.txt
 elif [ -f "pyproject.toml" ]; then

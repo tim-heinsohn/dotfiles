@@ -9,7 +9,7 @@ set -euo pipefail
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 
 usage() {
-    echo "Usage: $0 [install|update|integrate|disintegrate|uninstall|list|info] [mcp-name...]"
+    echo "Usage: $0 [install|update|integrate|disintegrate|uninstall|list|info|prompt] [mcp-name...]"
     echo ""
     echo "Commands:"
     echo "  install <mcp-name>     Install MCP server(s)"
@@ -19,6 +19,7 @@ usage() {
     echo "  uninstall <mcp-name>   Completely remove MCP server(s) and configuration"
     echo "  list                   List available MCP servers"
     echo "  info <mcp-name>        Display usage documentation for MCP server"
+    echo "  prompt <mcp-name>      Show Claude prompt documentation for MCP server"
     echo ""
     echo "Available MCP servers:"
     echo "  appsignal          AppSignal application monitoring and performance metrics"
@@ -181,13 +182,9 @@ integrate_mcp() {
             fi
             ;;
         appsignal)
-            if [ -d ~/.appsignal-mcp ]; then
+            if [ -d ${DOTFILES_DIR}/appsignal-mcp ]; then
                 echo "Adding AppSignal MCP to Claude Code..."
-                # Add AppSignal MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.appsignal-mcp/dist/index.js\"],\"env\":{\"APPSIGNAL_PUSH_API_KEY\":\"${APPSIGNAL_PUSH_API_KEY:-}\"}}"
-                claude mcp add-json appsignal "$config_json" --scope user
-                echo "✓ AppSignal MCP integrated with Claude Code"
-                echo "Note: Make sure APPSIGNAL_PUSH_API_KEY environment variable is set"
+                ${DOTFILES_DIR}/appsignal-mcp/integrate
             else
                 echo "Error: AppSignal MCP not installed. Run: $0 install appsignal"
                 return 1
@@ -534,6 +531,25 @@ show_mcp_info() {
     fi
 }
 
+show_mcp_prompt() {
+    local mcp_name="$1"
+    local prompt_file="$HOME/.claude/docs/tools/${mcp_name}-mcp.md"
+    
+    if [ ! -f "$prompt_file" ]; then
+        echo "Error: Claude prompt documentation not found: $prompt_file"
+        return 1
+    fi
+    
+    # Use glow with pager if available, otherwise bat with pager, otherwise less
+    if command -v glow >/dev/null 2>&1; then
+        glow -p "$prompt_file"
+    elif command -v bat >/dev/null 2>&1; then
+        bat --paging=always "$prompt_file"
+    else
+        less "$prompt_file"
+    fi
+}
+
 main() {
     if [ $# -eq 0 ]; then
         usage
@@ -609,6 +625,17 @@ main() {
             
             for mcp_name in "$@"; do
                 show_mcp_info "$mcp_name"
+            done
+            ;;
+        prompt)
+            if [ $# -eq 0 ]; then
+                echo "Error: No MCP names specified for prompt"
+                usage
+                exit 1
+            fi
+            
+            for mcp_name in "$@"; do
+                show_mcp_prompt "$mcp_name"
             done
             ;;
         *)

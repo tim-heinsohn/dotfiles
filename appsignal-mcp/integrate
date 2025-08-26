@@ -1,0 +1,44 @@
+#!/bin/bash
+set -e
+
+echo "🔧 Integrating AppSignal MCP Server..."
+
+# Check if Docker is available
+if ! command -v docker &> /dev/null; then
+    echo "❌ Error: Docker is required but not installed"
+    echo "Please install Docker first: https://docs.docker.com/get-docker/"
+    exit 1
+fi
+
+# Check if APPSIGNAL_API_KEY is set
+if [ -z "${APPSIGNAL_API_KEY:-}" ]; then
+    echo "⚠️  Warning: APPSIGNAL_API_KEY environment variable is not set"
+    echo ""
+    echo "To get your AppSignal MCP token:"
+    echo "1. Visit: https://appsignal.com/users/mcp_tokens (requires login)"
+    echo "2. Set your token as an environment variable:"
+    echo "   export APPSIGNAL_API_KEY='your-token-here'"
+    echo ""
+    echo "Would you like to continue integration and set the key later? (y/N)"
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
+# Add to Claude Code
+echo "Adding AppSignal MCP to Claude Code..."
+claude mcp add appsignal -e APPSIGNAL_API_KEY=your_api_key_here -- docker run -i --rm -e APPSIGNAL_API_KEY appsignal/mcp
+
+
+echo "✅ AppSignal MCP integrated with Claude Code!"
+echo ""
+echo "🚀 Next steps:"
+if [ -z "${APPSIGNAL_API_KEY:-}" ]; then
+    echo "1. Set your APPSIGNAL_API_KEY environment variable"
+    echo "2. Restart Claude Code"
+else
+    echo "1. Restart Claude Code to use the AppSignal MCP"
+fi
+echo ""
+echo "📖 Documentation: $( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )/doc/usage.md"

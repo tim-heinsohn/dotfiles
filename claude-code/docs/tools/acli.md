@@ -1,6 +1,11 @@
 # ACLI - Atlassian CLI Tool
 
-The Atlassian CLI (`acli`) provides command-line access to Jira, Confluence, and other Atlassian products.
+The Atlassian CLI (`acli`) provides command-line access to Bitbucket and other Atlassian products.
+
+
+-----------------------------------------------------------------------------------------------------------------------
+PLEASE NOTE: we currently are testing the Jira MCP. Thereby, please DO NOT USE acli FOR JIRA, but use Jira MCP instead!
+-----------------------------------------------------------------------------------------------------------------------
 
 ## Installation
 

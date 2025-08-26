@@ -13,7 +13,7 @@ The Jira MCP server provides comprehensive integration with Atlassian Jira and C
 - **Comments**: Add and manage issue comments
 - **Attachments**: Upload and manage issue attachments
 
-### Confluence Integration  
+### Confluence Integration
 - **Pages**: Create, read, update, and delete pages
 - **Spaces**: List and get space details
 - **Search**: Search for pages and content
@@ -37,6 +37,7 @@ The Jira MCP server provides comprehensive integration with Atlassian Jira and C
    JIRA_EMAIL=your_email@company.com
    JIRA_URL=https://your-company.atlassian.net
    ```
+NOTE: the entries in .env must be hard-coded!
 
 ### Confluence (Optional)
 Same API token can be used for Confluence:

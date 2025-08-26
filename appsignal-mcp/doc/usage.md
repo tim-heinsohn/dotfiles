@@ -4,9 +4,9 @@
 The AppSignal MCP Server provides integration with AppSignal's application monitoring platform, allowing Claude Code to access performance metrics, error tracking, and alerting data directly from your AppSignal account.
 
 ## Authentication
-- **Required**: AppSignal Push API key
-- **Get your key**: Visit https://appsignal.com/accounts → Select your app → Settings → Push API key
-- **Configuration**: Store your API key in environment variable `APPSIGNAL_PUSH_API_KEY` or in the MCP server configuration
+- **Required**: AppSignal API key (also called Personal MCP Token)
+- **Get your key**: Visit https://appsignal.com/users/mcp_tokens (requires login)
+- **Configuration**: Store your API key in environment variable `APPSIGNAL_API_KEY` or in the MCP server configuration
 
 ## Available Tools
 
@@ -90,7 +90,7 @@ claude appsignal get_samples --app-id "12345" --timeframe "1h"
 
 ## Security Considerations
 - **API Key Storage**: Never commit API keys to version control
-- **Environment Variables**: Use `APPSIGNAL_PUSH_API_KEY` environment variable
+- **Environment Variables**: Use `APPSIGNAL_API_KEY` environment variable
 - **Access Control**: Ensure API keys have minimal required permissions
 - **Rotation**: Regularly rotate API keys using AppSignal dashboard
 
@@ -104,7 +104,7 @@ Add to your Claude Code MCP configuration:
       "command": "node",
       "args": ["/Users/your-username/.appsignal-mcp/dist/index.js"],
       "env": {
-        "APPSIGNAL_PUSH_API_KEY": "your-api-key-here"
+        "APPSIGNAL_API_KEY": "your-api-key-here"
       }
     }
   }
