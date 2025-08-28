@@ -1,0 +1,72 @@
+# MCP servers for Codex CLI
+# This file is managed in dotfiles and symlinked to ~/.codex/mcp.toml via Bombadil.
+# Paths use $HOME to be user-agnostic.
+
+[mcp.servers.gmail]
+command = "node"
+args = ["$HOME/.gmail-mcp/dist/index.js"]
+
+[mcp.servers.mail-primary]
+command = "$HOME/.mail-server-mcp/wrapper-primary"
+
+[mcp.servers.mail-secondary]
+command = "$HOME/.mail-server-mcp/wrapper-secondary"
+
+[mcp.servers.jira]
+command = "$HOME/.jira-mcp/bin/mcp-server"
+
+[mcp.servers.n8n]
+command = "node"
+args = ["$HOME/.n8n-mcp/build/index.js"]
+
+[mcp.servers.semgrep]
+command = "semgrep-mcp"
+
+[mcp.servers.elevenlabs]
+command = "node"
+args = ["$HOME/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js"]
+# [mcp.servers.elevenlabs.env]
+# ELEVENLABS_API_KEY = ""
+
+[mcp.servers.gitlab]
+command = "node"
+args = ["$HOME/.gitlab-mcp/dist/index.js"]
+# [mcp.servers.gitlab.env]
+# GITLAB_PERSONAL_ACCESS_TOKEN = ""
+# GITLAB_URL = "https://gitlab.com"
+
+[mcp.servers.slack]
+command = "node"
+args = ["$HOME/.slack-mcp/src/slack/dist/index.js"]
+# [mcp.servers.slack.env]
+# SLACK_BOT_TOKEN = ""
+# SLACK_SIGNING_SECRET = ""
+
+[mcp.servers.context7]
+command = "node"
+args = ["$HOME/.context7-mcp/dist/index.js"]
+
+[mcp.servers.youtube-transcript]
+command = "npx"
+args = ["-y", "@sinco-lab/mcp-youtube-transcript"]
+
+[mcp.servers.youtube-playlist]
+command = "node"
+args = ["$HOME/.youtube-playlist-mcp/dist/index.js"]
+# [mcp.servers.youtube-playlist.env]
+# GOOGLE_APPLICATION_CREDENTIALS = "$HOME/.youtube-playlist-mcp/credentials.json"
+
+[mcp.servers.appsignal]
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "APPSIGNAL_API_KEY", "appsignal/mcp"]
+# [mcp.servers.appsignal.env]
+# APPSIGNAL_API_KEY = ""
+
+[mcp.servers.rails-active-mcp]
+transport = "http"
+url = "http://localhost:3000/mcp"
+
+[mcp.servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest"]
+

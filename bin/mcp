@@ -67,185 +67,26 @@ install_mcp() {
 
 integrate_mcp() {
     local mcp_name="$1"
-    
-    # Normalize input to handle both patterns
+    # Normalize common aliases
     case "$mcp_name" in
-        rails-active|rails-active-mcp)
-            mcp_name="rails-active-mcp"
-            ;;
-        gmail)
-            if [ -f ~/.gmail-mcp/mcp-config.json ]; then
-                echo "Adding Gmail MCP to Claude Code..."
-                # Add Gmail MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.gmail-mcp/dist/index.js\"]}"
-                claude mcp add-json gmail "$config_json" --scope user
-                echo "✓ Gmail MCP integrated with Claude Code"
-            else
-                echo "Error: Gmail MCP not installed or configured. Run: $0 install gmail"
-                return 1
-            fi
-            ;;
-        mail-server)
-            if [ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]; then
-                echo "Adding Mail Server MCP to Claude Code..."
-                # Add primary mail MCP server configuration
-                local primary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-primary\"}"
-                claude mcp add-json mail-primary "$primary_config" --scope user
-                echo "✓ Mail Server Primary MCP integrated with Claude Code"
-                
-                # Add secondary mail MCP server configuration
-                local secondary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-secondary\"}"
-                claude mcp add-json mail-secondary "$secondary_config" --scope user
-                echo "✓ Mail Server Secondary MCP integrated with Claude Code"
-                
-                echo ""
-                echo "Next steps:"
-                echo "1. Copy ~/.mail-server-mcp/example-project.envrc to your project directories as .envrc"
-                echo "2. Edit each project's .envrc with PRIMARY_MAIL_* and SECONDARY_MAIL_* variables"
-                echo "3. Run 'direnv allow' in each project directory"
-                echo "4. Use 'mail-primary' and 'mail-secondary' MCP servers from any project"
-            else
-                echo "Error: Mail Server MCP not installed. Run: $0 install mail-server"
-                return 1
-            fi
-            ;;
-        playwright)
-            echo "ℹ Playwright MCP is already configured via system installation"
-            ;;
-        youtube-transcript)
-            echo "Adding YouTube Transcript MCP to Claude Code..."
-            # Add YouTube Transcript MCP server configuration
-            local config_json="{\"command\":\"npx\",\"args\":[\"-y\",\"@sinco-lab/mcp-youtube-transcript\"]}"
-            claude mcp add-json youtube-transcript "$config_json" --scope user
-            echo "✓ YouTube Transcript MCP integrated with Claude Code"
-            ;;
-        youtube-playlist)
-            if [ -d ~/.youtube-playlist-mcp ] && [ -f ~/.youtube-playlist-mcp/dist/index.js ]; then
-                echo "Adding YouTube Playlist MCP to Claude Code..."
-                # Add YouTube Playlist MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.youtube-playlist-mcp/dist/index.js\"],\"env\":{\"GOOGLE_APPLICATION_CREDENTIALS\":\"$HOME/.youtube-playlist-mcp/credentials.json\"}}"
-                claude mcp add-json youtube-playlist "$config_json" --scope user
-                echo "✓ YouTube Playlist MCP integrated with Claude Code"
-                echo "Note: Make sure to set up OAuth credentials (see ~/.youtube-playlist-mcp/oauth-setup.md)"
-            else
-                echo "Error: YouTube Playlist MCP not installed. Run: $0 install youtube-playlist"
-                return 1
-            fi
-            ;;
-        jira)
-            if [ -f ~/.jira-mcp/bin/mcp-server ]; then
-                echo "Adding Jira MCP to Claude Code..."
-                # Add Jira MCP server configuration for Python-based server
-                local config_json="{\"command\":\"$HOME/.jira-mcp/bin/mcp-server\",\"env\":{}}"
-                claude mcp add-json jira "$config_json" --scope user
-                echo "✓ Jira MCP integrated with Claude Code"
-                echo "Note: Set JIRA_API_TOKEN, JIRA_EMAIL, and JIRA_URL environment variables"
-            else
-                echo "Error: Jira MCP not installed. Run: $0 install jira"
-                return 1
-            fi
-            ;;
-        n8n)
-            if [ -d ~/.n8n-mcp ]; then
-                echo "Adding n8n MCP to Claude Code..."
-                # Add n8n MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.n8n-mcp/build/index.js\"]}"
-                claude mcp add-json n8n "$config_json" --scope user
-                echo "✓ n8n MCP integrated with Claude Code"
-            else
-                echo "Error: n8n MCP not installed. Run: $0 install n8n"
-                return 1
-            fi
-            ;;
-        semgrep)
-            if command -v semgrep-mcp &> /dev/null; then
-                echo "Adding Semgrep MCP to Claude Code..."
-                # Add Semgrep MCP server configuration
-                local config_json="{\"command\":\"semgrep-mcp\"}"
-                claude mcp add-json semgrep "$config_json" --scope user
-                echo "✓ Semgrep MCP integrated with Claude Code"
-            else
-                echo "Error: Semgrep MCP not installed. Run: $0 install semgrep"
-                return 1
-            fi
-            ;;
-        elevenlabs)
-            if [ -d ~/.elevenlabs-mcp ]; then
-                echo "Adding ElevenLabs MCP to Claude Code..."
-                # Add ElevenLabs MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js\"],\"env\":{\"ELEVENLABS_API_KEY\":\"${ELEVENLABS_API_KEY:-}\"}}"
-                claude mcp add-json elevenlabs "$config_json" --scope user
-                echo "✓ ElevenLabs MCP integrated with Claude Code"
-            else
-                echo "Error: ElevenLabs MCP not installed. Run: $0 install elevenlabs"
-                return 1
-            fi
-            ;;
-        appsignal)
-            if [ -d ${DOTFILES_DIR}/appsignal-mcp ]; then
-                echo "Adding AppSignal MCP to Claude Code..."
-                ${DOTFILES_DIR}/appsignal-mcp/integrate
-            else
-                echo "Error: AppSignal MCP not installed. Run: $0 install appsignal"
-                return 1
-            fi
-            ;;
-        gitlab)
-            if [ -d ~/.gitlab-mcp ]; then
-                echo "Adding GitLab MCP to Claude Code..."
-                # Add GitLab MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.gitlab-mcp/dist/index.js\"],\"env\":{\"GITLAB_PERSONAL_ACCESS_TOKEN\":\"${GITLAB_PERSONAL_ACCESS_TOKEN:-}\",\"GITLAB_URL\":\"${GITLAB_URL:-https://gitlab.com}\"}}"
-                claude mcp add-json gitlab "$config_json" --scope user
-                echo "✓ GitLab MCP integrated with Claude Code"
-                echo "Note: Set GITLAB_PERSONAL_ACCESS_TOKEN and optionally GITLAB_URL environment variables"
-            else
-                echo "Error: GitLab MCP not installed. Run: $0 install gitlab"
-                return 1
-            fi
-            ;;
-        rails-active|rails-active-mcp)
-            echo "Rails Active MCP requires integration with your Rails application, not Claude Code directly"
-            echo ""
-            echo "To use Rails Active MCP:"
-            echo "1. Run: $0 install rails-active-mcp"
-            echo "2. Add gem 'rails-active-mcp' to your Rails app's Gemfile"
-            echo "3. Run: bundle install"
-            echo "4. Run: rails generate rails_active_mcp:install"
-            echo "5. Configure security settings in config/initializers/rails_active_mcp.rb"
-            echo "6. Start your Rails server - MCP will be available at /mcp"
-            echo ""
-            echo "See: $DOTFILES_DIR/rails-active-mcp/doc/usage.md for security configuration"
-            ;;
-        slack)
-            if [ -d ~/.slack-mcp ]; then
-                echo "Adding Slack MCP to Claude Code..."
-                # Add Slack MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.slack-mcp/src/slack/dist/index.js\"],\"env\":{\"SLACK_BOT_TOKEN\":\"${SLACK_BOT_TOKEN:-}\",\"SLACK_SIGNING_SECRET\":\"${SLACK_SIGNING_SECRET:-}\"}}"
-                claude mcp add-json slack "$config_json" --scope user
-                echo "✓ Slack MCP integrated with Claude Code"
-                echo "Note: Set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET environment variables"
-            else
-                echo "Error: Slack MCP not installed. Run: $0 install slack"
-                return 1
-            fi
-            ;;
-        context7)
-            if [ -f ~/.context7-mcp/mcp-config.json ]; then
-                echo "Adding Context7 MCP to Claude Code..."
-                # Add Context7 MCP server configuration
-                local config_json="{\"command\":\"node\",\"args\":[\"$HOME/.context7-mcp/dist/index.js\"],\"env\":{}}"
-                claude mcp add-json context7 "$config_json" --scope user
-                echo "✓ Context7 MCP integrated with Claude Code"
-            else
-                echo "Error: Context7 MCP not installed or configured. Run: $0 install context7"
-                return 1
-            fi
-            ;;
-        *)
-            echo "Error: Integration not implemented for MCP: $mcp_name"
-            return 1
-            ;;
+      rails-active|rails-active-mcp) mcp_name="rails-active-mcp" ;;
+      *) : ;;
     esac
+
+    # Special case: playwright is system-installed and already configured
+    if [ "$mcp_name" = "playwright" ]; then
+      echo "ℹ Playwright MCP is already configured via system installation"
+      return 0
+    fi
+
+    local script="${DOTFILES_DIR}/${mcp_name}-mcp/integrate"
+    if [ -x "$script" ]; then
+      "$script"
+    else
+      echo "Error: Integration script not found for '$mcp_name' at $script" >&2
+      echo "Make sure the MCP exists and provides an 'integrate' script." >&2
+      return 1
+    fi
 }
 
 update_mcp() {
@@ -383,7 +224,7 @@ list_mcps() {
         if eval "${mcp_checks[$mcp_name]}"; then
             status="✅ Ready"
         elif [ -x "$install_script" ]; then
-            status="📦 Available"
+            status="ℹ Available"
         else
             status="❌ Not available"
         fi
@@ -398,7 +239,7 @@ list_mcps() {
     
     echo ""
     echo "Special cases:"
-    echo "  playwright   ✅ System-installed (MCP tools available directly)"
+    printf "  %-18s %s\n" "playwright" "✅ System-installed (MCP tools available directly)"
 }
 
 disintegrate_mcp() {
@@ -415,11 +256,16 @@ disintegrate_mcp() {
             claude mcp remove mail-primary --scope user 2>/dev/null || echo "mail-primary not found in Claude"
             claude mcp remove mail-secondary --scope user 2>/dev/null || echo "mail-secondary not found in Claude"
             echo "✓ Mail Server MCP removed from Claude Code"
+            # Remove from Codex
+            "$DOTFILES_DIR/bin/codex-mcp" remove mail-primary || true
+            "$DOTFILES_DIR/bin/codex-mcp" remove mail-secondary || true
             ;;
         *)
             echo "Removing $mcp_name MCP from Claude Code..."
             claude mcp remove "$mcp_name" --scope user 2>/dev/null || echo "$mcp_name not found in Claude"
             echo "✓ $mcp_name MCP removed from Claude Code"
+            # Remove from Codex
+            "$DOTFILES_DIR/bin/codex-mcp" remove "$mcp_name" || true
             ;;
     esac
 }

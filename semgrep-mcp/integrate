@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+echo "Integrating Semgrep MCP..."
+
+if command -v semgrep-mcp &>/dev/null; then
+  config_json="{\"command\":\"semgrep-mcp\"}"
+  echo "Adding Semgrep MCP to Claude Code..."
+  claude mcp add-json semgrep "$config_json" --scope user
+  echo "✓ Semgrep MCP integrated"
+  "$DOTFILES_DIR/bin/codex-mcp" upsert semgrep <<EOF
+[mcp.servers.semgrep]
+command = "semgrep-mcp"
+EOF
+else
+  echo "Error: Semgrep MCP not installed. See semgrep-mcp/install" >&2
+  exit 1
+fi

@@ -8,14 +8,15 @@ set -euo pipefail
 # List of global npm packages to manage
 declare -a NPM_PACKAGES=(
     "@ansible/ansible-language-server"
-    "bash-language-server"
     "@anthropic-ai/claude-code"
     "@atlaskit/editor-markdown-transformer"
-    "@microsoft/compose-language-service"
-    "dockerfile-language-server-nodejs"
     "@google/gemini-cli"
-    "vscode-langservers-extracted"
+    "@microsoft/compose-language-service"
+    "@openai/codex"
     "@spotlightjs/spotlight"
+    "bash-language-server"
+    "dockerfile-language-server-nodejs"
+    "vscode-langservers-extracted"
 )
 
 log() {

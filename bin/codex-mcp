@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# codex-mcp: Manage MCP server entries in Codex TOML config
+# - Adds (upsert) or removes a single [mcp.servers.<name>] block (including nested subtables)
+# - Keeps ~/.codex/config.toml as the single source of truth (no symlinks)
+
+set -euo pipefail
+
+CONFIG_DIR="$HOME/.codex"
+CONFIG_FILE="$CONFIG_DIR/config.toml"
+
+usage() {
+  cat <<USAGE
+Usage: $(basename "$0") <upsert|remove> <name>
+
+Commands:
+  upsert <name>   Read TOML block from stdin and upsert [mcp.servers.<name>] section
+  remove <name>   Remove [mcp.servers.<name>] section (and its nested subtables)
+
+Notes:
+  - Upsert expects a complete TOML block starting with [mcp.servers.<name>]
+  - Tool preserves other content and formatting where possible
+USAGE
+}
+
+ensure_config() {
+  mkdir -p "$CONFIG_DIR"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    printf "# Codex config (managed dynamically)\n" > "$CONFIG_FILE"
+  fi
+}
+
+remove_block() {
+  local name="$1"
+  ensure_config
+
+  # Remove [mcp.servers.<name>] and any nested tables [mcp.servers.<name>.*]
+  awk -v name="$name" '
+    function is_header(line) { return match(line, /^\[[^]]+\]$/) }
+    function is_target(line) { return match(line, "^\\[mcp\\.servers\\." name "(\\.[^]]*)?\\]$") }
+    {
+      if (is_target($0)) { deleting=1; next }
+      if (deleting && is_header($0) && !is_target($0)) { deleting=0 }
+      if (!deleting) print $0
+    }
+  ' "$CONFIG_FILE" > "$CONFIG_FILE.tmp"
+  mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+}
+
+upsert_block() {
+  local name="$1"
+  ensure_config
+
+  # Read stdin to a temporary file
+  local tmp
+  tmp=$(mktemp)
+  cat > "$tmp"
+
+  # Sanity check: block must start with [mcp.servers.<name>]
+  if ! grep -qE "^\[mcp\.servers\.${name}(\.[^]]*)?\]" "$tmp"; then
+    echo "Error: input does not start with [mcp.servers.${name}]" >&2
+    rm -f "$tmp"
+    exit 1
+  fi
+
+  # Remove existing block, then append new one with a separating newline
+  remove_block "$name"
+  # Ensure trailing newline in config
+  sed -i -e '$a\' "$CONFIG_FILE"
+  {
+    echo ""
+    cat "$tmp"
+    echo ""
+  } >> "$CONFIG_FILE"
+
+  rm -f "$tmp"
+}
+
+main() {
+  if [ $# -lt 2 ]; then
+    usage
+    exit 1
+  fi
+
+  local cmd="$1" name="$2"
+  shift 2 || true
+
+  case "$cmd" in
+    remove)
+      remove_block "$name"
+      ;;
+    upsert)
+      upsert_block "$name"
+      ;;
+    -h|--help|help)
+      usage
+      ;;
+    *)
+      echo "Error: unknown command: $cmd" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
+

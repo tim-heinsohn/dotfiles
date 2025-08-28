@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 echo "🔧 Integrating AppSignal MCP Server..."
 
 # Check if Docker is available
@@ -42,3 +43,10 @@ else
 fi
 echo ""
 echo "📖 Documentation: $( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )/doc/usage.md"
+
+# Codex: upsert into ~/.codex/config.toml
+"$DOTFILES_DIR/bin/codex-mcp" upsert appsignal <<EOF
+[mcp.servers.appsignal]
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "APPSIGNAL_API_KEY", "appsignal/mcp"]
+EOF

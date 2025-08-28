@@ -1,0 +1,17 @@
+#!/bin/bash
+set -euo pipefail
+
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+echo "Integrating YouTube Transcript MCP..."
+
+# npx-based server
+config_json="{\"command\":\"npx\",\"args\":[\"-y\",\"@sinco-lab/mcp-youtube-transcript\"]}"
+echo "Adding YouTube Transcript MCP to Claude Code..."
+claude mcp add-json youtube-transcript "$config_json" --scope user
+echo "✓ YouTube Transcript MCP integrated"
+
+"$DOTFILES_DIR/bin/codex-mcp" upsert youtube-transcript <<EOF
+[mcp.servers.youtube-transcript]
+command = "npx"
+args = ["-y", "@sinco-lab/mcp-youtube-transcript"]
+EOF
