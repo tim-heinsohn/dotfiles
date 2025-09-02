@@ -285,7 +285,7 @@ list_mcps() {
     echo ""
     
     # Define MCPs in alphabetical order
-    mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "sequential" "slack" "youtube-playlist" "youtube-transcript")
+    mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "serena" "sequential" "slack" "youtube-playlist" "youtube-transcript")
     
     # Check actual MCP installation status
     declare -A mcp_checks=(
@@ -300,6 +300,7 @@ list_mcps() {
         ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
         ["sequential"]="[ -f ~/.sequential-mcp/dist/index.js ]"
         ["semgrep"]="command -v semgrep-mcp > /dev/null 2>&1"
+        ["serena"]="[ -f ~/.serena-mcp/dist/index.js ]"
         ["slack"]="[ -f ~/.slack-mcp/src/slack/dist/index.js ]"
         ["youtube-playlist"]="[ -f ~/.youtube-playlist-mcp/dist/index.js ]"
         ["youtube-transcript"]="command -v npx > /dev/null 2>&1"
@@ -424,6 +425,10 @@ uninstall_mcp() {
         sequential)
             rm -rf ~/.sequential-mcp
             echo "✓ Sequential MCP directory removed"
+            ;;
+        serena)
+            rm -rf ~/.serena-mcp
+            echo "✓ Serena MCP directory removed"
             ;;
         gitlab)
             rm -rf ~/.gitlab-mcp

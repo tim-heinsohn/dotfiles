@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+echo "Integrating Serena MCP..."
+
+if [ -d "$HOME/.serena-mcp" ] && [ -f "$HOME/.serena-mcp/dist/index.js" ]; then
+  config_json="{\"command\":\"node\",\"args\":[\"$HOME/.serena-mcp/dist/index.js\"]}"
+  echo "Adding Serena MCP to Claude Code..."
+  claude mcp add-json serena "$config_json" --scope user
+  echo "✓ Serena MCP integrated with Claude Code"
+
+  "$DOTFILES_DIR/bin/codex-mcp" upsert serena <<EOF2
+[mcp.servers.serena]
+command = "node"
+args = ["$HOME/.serena-mcp/dist/index.js"]
+EOF2
+else
+  echo "Error: Serena MCP not installed. Run: mcp install serena" >&2
+  exit 1
+fi
+
