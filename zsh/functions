@@ -150,6 +150,35 @@ function _set_anthropic_env_for_selection() {
     export ANTHROPIC_API_KEY="${(P)key_var}"
     echo "Switched to Anthropic mode for ${project_code} (${project_label} project)."
   fi
+  _update_claude_settings_provider
+}
+
+# Keep Claude Code settings.json in sync with provider mode
+function _update_claude_settings_provider() {
+  local settings_dir="$HOME/.claude"
+  local settings_file="$settings_dir/settings.json"
+  local helper_path='~/dotfiles/claude-code/bin/anthropic-api-key'
+  mkdir -p "$settings_dir"
+
+  if kimi_enabled; then
+    if [[ -f "$settings_file" ]]; then
+      if command -v jq >/dev/null 2>&1; then
+        local tmp
+        tmp=$(mktemp)
+        jq 'del(.apiKeyHelper)' "$settings_file" > "$tmp" && mv "$tmp" "$settings_file"
+      else
+        sed -i.bak '/"apiKeyHelper"[[:space:]]*:/d' "$settings_file" || true
+      fi
+    fi
+  else
+    if command -v jq >/dev/null 2>&1 && [[ -f "$settings_file" ]]; then
+      local tmp
+      tmp=$(mktemp)
+      jq --arg v "$helper_path" '.apiKeyHelper = $v' "$settings_file" > "$tmp" && mv "$tmp" "$settings_file"
+    else
+      printf '{\n  "apiKeyHelper": "%s"\n}\n' "$helper_path" > "$settings_file"
+    fi
+  fi
 }
 
 function kimi_set() {
