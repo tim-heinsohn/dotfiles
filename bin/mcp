@@ -33,6 +33,8 @@ usage() {
     echo "  playwright         Browser automation (already configured)"
     echo "  rails-active-mcp   Rails application interaction and database querying"
     echo "  semgrep            Code security scanning and analysis"
+    echo "  sequential         Multi-step problem solving and systematic analysis"
+    echo "  serena             Semantic code analysis and intelligent editing"
     echo "  slack              Slack workspace integration (channels, messages, users)"
     echo "  youtube-playlist   YouTube playlist management (watch later, user playlists)"
     echo "  youtube-transcript YouTube video transcript retrieval"
@@ -72,7 +74,6 @@ integrate_mcp() {
       rails-active|rails-active-mcp) mcp_name="rails-active-mcp" ;;
       *) : ;;
     esac
-
     # Special case: playwright is system-installed and already configured
     if [ "$mcp_name" = "playwright" ]; then
       echo "ℹ Playwright MCP is already configured via system installation"
@@ -178,6 +179,16 @@ update_all_mcps() {
         ((updated_count++))
     fi
     
+    if [ -d ~/.sequential-mcp ]; then
+        update_mcp sequential
+        ((updated_count++))
+    fi
+    
+    if [ -d ~/.serena-mcp ]; then
+        update_mcp serena
+        ((updated_count++))
+    fi
+    
     # Add other MCPs here as they are added (alphabetical order)
     # if [ -d ~/.some-other-mcp ]; then
     #     update_mcp some-other
@@ -196,7 +207,7 @@ list_mcps() {
     echo ""
     
     # Define MCPs in alphabetical order
-    mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "slack" "youtube-playlist" "youtube-transcript")
+    mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "sequential" "slack" "youtube-playlist" "youtube-transcript")
     
     # Check actual MCP installation status
     declare -A mcp_checks=(
@@ -209,6 +220,7 @@ list_mcps() {
         ["mail-server"]="[ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]"
         ["n8n"]="[ -f ~/.n8n-mcp/build/index.js ]"
         ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
+        ["sequential"]="[ -f ~/.sequential-mcp/dist/index.js ]"
         ["semgrep"]="command -v semgrep-mcp > /dev/null 2>&1"
         ["slack"]="[ -f ~/.slack-mcp/src/slack/dist/index.js ]"
         ["youtube-playlist"]="[ -f ~/.youtube-playlist-mcp/dist/index.js ]"
@@ -330,6 +342,10 @@ uninstall_mcp() {
         context7)
             rm -rf ~/.context7-mcp
             echo "✓ Context7 MCP directory removed"
+            ;;
+        sequential)
+            rm -rf ~/.sequential-mcp
+            echo "✓ Sequential MCP directory removed"
             ;;
         gitlab)
             rm -rf ~/.gitlab-mcp
