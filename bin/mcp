@@ -8,8 +8,65 @@ set -euo pipefail
 
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 
+# Detect mcp-get in PATH
+HAS_MCP_GET=0
+if command -v mcp-get >/dev/null 2>&1; then
+    HAS_MCP_GET=1
+fi
+
+run_mcp_get() {
+    # Invoke mcp-get from PATH with optional timeout to avoid hangs
+    local _timeout="${MCP_GET_TIMEOUT:-15}"
+    local cmd=(mcp-get "$@")
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "${_timeout}" "${cmd[@]}"
+    else
+        "${cmd[@]}"
+    fi
+}
+
+# Resolve the local registry directory from an installed mcp-get
+resolve_mcpget_packages_dir() {
+    local bin_path
+    bin_path=$(command -v mcp-get 2>/dev/null) || return 1
+    bin_path=$(readlink -f "$bin_path" 2>/dev/null || echo "$bin_path")
+    local dist_dir=$(dirname "$bin_path")
+    local root_dir=$(dirname "$dist_dir")
+    local candidate="$root_dir/packages"
+    if [ -d "$candidate" ]; then
+        echo "$candidate"
+        return 0
+    fi
+    return 1
+}
+
+# Offline search by scanning registry JSON files
+search_offline_registry() {
+    local query="$*"
+    local dir
+    if ! dir=$(resolve_mcpget_packages_dir); then
+        return 1
+    fi
+    # Grep matching files (case-insensitive)
+    local files
+    files=$(grep -ril -- "$query" "$dir"/*.json 2>/dev/null || true)
+    if [ -z "$files" ]; then
+        return 1
+    fi
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        local name desc
+        name=$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1)
+        desc=$(sed -n 's/.*"description"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1)
+        if [ -n "$name" ]; then
+            printf "  %-24s %s\n" "$name" "$desc"
+        fi
+    done <<< "$files"
+    return 0
+}
+
 usage() {
-    echo "Usage: $0 [install|update|integrate|disintegrate|uninstall|list|info|prompt] [mcp-name...]"
+    echo "Usage: $0 [install|update|integrate|disintegrate|uninstall|list|info|prompt|search] [mcp-name...]"
     echo ""
     echo "Commands:"
     echo "  install <mcp-name>     Install MCP server(s)"
@@ -20,6 +77,7 @@ usage() {
     echo "  list                   List available MCP servers"
     echo "  info <mcp-name>        Display usage documentation for MCP server"
     echo "  prompt <mcp-name>      Show Claude prompt documentation for MCP server"
+    echo "  search <query>         Search registry via mcp-get"
     echo ""
     echo "Available MCP servers:"
     echo "  appsignal          AppSignal application monitoring and performance metrics"
@@ -51,20 +109,29 @@ usage() {
 install_mcp() {
     local mcp_name="$1"
     local mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
-    
-    if [ ! -d "$mcp_dir" ]; then
-        echo "Error: MCP '$mcp_name' not found in $mcp_dir"
-        return 1
+
+    # Curated-first: use repo install script when present
+    if [ -d "$mcp_dir" ] && [ -x "$mcp_dir/install" ]; then
+        echo "Installing MCP: $mcp_name"
+        "$mcp_dir/install"
+        echo "✓ $mcp_name MCP installed"
+        return 0
     fi
-    
-    if [ ! -x "$mcp_dir/install" ]; then
-        echo "Error: Install script not found or not executable: $mcp_dir/install"
-        return 1
+
+    # Fallback: try mcp-get if available
+    if [ "$HAS_MCP_GET" -eq 1 ]; then
+        echo "Installing MCP via mcp-get: $mcp_name"
+        if run_mcp_get install "$mcp_name"; then
+            echo "✓ $mcp_name MCP installed via mcp-get"
+            return 0
+        else
+            echo "Error: mcp-get failed to install '$mcp_name'" >&2
+            return 1
+        fi
     fi
-    
-    echo "Installing MCP: $mcp_name"
-    "$mcp_dir/install"
-    echo "✓ $mcp_name MCP installed"
+
+    echo "Error: MCP '$mcp_name' not found in $mcp_dir and mcp-get not available" >&2
+    return 1
 }
 
 integrate_mcp() {
@@ -83,11 +150,22 @@ integrate_mcp() {
     local script="${DOTFILES_DIR}/${mcp_name}-mcp/integrate"
     if [ -x "$script" ]; then
       "$script"
-    else
-      echo "Error: Integration script not found for '$mcp_name' at $script" >&2
-      echo "Make sure the MCP exists and provides an 'integrate' script." >&2
+      return 0
+    fi
+
+    # Fallback: guide integration using mcp-get
+    if [ "$HAS_MCP_GET" -eq 1 ]; then
+      echo "ℹ No curated integrate script for '$mcp_name'." >&2
+      echo "If not installed yet, run: mcp-get install $mcp_name" >&2
+      echo "Then add to Claude once you know its start command:" >&2
+      echo "  claude mcp add $mcp_name -- <command> [args...]" >&2
+      echo "Optionally mirror to Codex via: $DOTFILES_DIR/bin/codex-mcp upsert $mcp_name <<EOF ... EOF" >&2
       return 1
     fi
+
+    echo "Error: Integration script not found for '$mcp_name' at $script" >&2
+    echo "Make sure the MCP exists and provides an 'integrate' script." >&2
+    return 1
 }
 
 update_mcp() {
@@ -500,6 +578,21 @@ main() {
                 show_mcp_prompt "$mcp_name"
             done
             ;;
+        search)
+            if [ $# -eq 0 ]; then
+                echo "Error: No search query provided"
+                usage
+                exit 1
+            fi
+            query="$*"
+            # Offline registry scan first; then curated fallback
+            if search_offline_registry "$query"; then
+                :
+            else
+                list_mcps | grep -i -- "$query" || true
+            fi
+            ;;
+
         *)
             echo "Error: Unknown command '$command'"
             usage

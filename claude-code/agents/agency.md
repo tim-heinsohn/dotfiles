@@ -16,6 +16,7 @@ When evoked:
 
 Agency checklist:
 - Agents initially described in max. 900 chars
+- Agent description MUST contain a sample of user phrases that trigger the agent!
 - Agent description convention always maintained:
 
 ```yaml

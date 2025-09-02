@@ -101,6 +101,59 @@ install_or_update_packages() {
     done
 }
 
+install_mcp_get_local() {
+    local repo="/srv/lib/mcp-get"
+    if [ ! -d "$repo" ]; then
+        log "mcp-get repo not found at $repo; skipping local setup"
+        return 0
+    fi
+    log "Setting up local mcp-get from $repo"
+    pushd "$repo" >/dev/null || { log "Unable to enter $repo"; return 0; }
+
+    # Try to update repository to latest (optional if offline)
+    if command -v git >/dev/null 2>&1; then
+        if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            if git fetch --quiet; then
+                if git merge-base --is-ancestor @ @{u} 2>/dev/null; then
+                    log "mcp-get repo is up to date"
+                else
+                    if git pull --ff-only; then
+                        log "Pulled latest changes for mcp-get"
+                    else
+                        log "⚠ git pull failed; continuing with current checkout"
+                    fi
+                fi
+            else
+                log "⚠ git fetch failed (likely no network); continuing"
+            fi
+        fi
+    fi
+
+    # Install dependencies (requires network access)
+    if npm ci; then
+        log "Dependencies installed"
+    else
+        log "⚠ npm ci failed (likely no network); skipping build"
+        popd >/dev/null
+        return 0
+    fi
+
+    # Build CLI and ensure it is executable
+    if npm run -s build; then
+        log "mcp-get built successfully"
+    else
+        log "⚠ mcp-get build failed; skipping link"
+        popd >/dev/null
+        return 0
+    fi
+
+    mkdir -p "$HOME/bin"
+    ln -sf "$repo/dist/index.js" "$HOME/bin/mcp-get"
+    chmod +x "$repo/dist/index.js" || true
+    popd >/dev/null
+    log "Linked $HOME/bin/mcp-get -> $repo/dist/index.js"
+}
+
 show_usage() {
     echo "Usage: $0 [install|update|auto]"
     echo ""
@@ -123,16 +176,19 @@ main() {
             check_npm
             check_nvm_node
             install_packages
+            install_mcp_get_local
             ;;
         update)
             check_npm
             check_nvm_node
             update_packages
+            install_mcp_get_local
             ;;
         auto)
             check_npm
             check_nvm_node
             install_or_update_packages
+            install_mcp_get_local
             ;;
         -h|--help|help)
             show_usage
