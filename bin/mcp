@@ -322,7 +322,7 @@ list_mcps() {
     
     # Start table with header
     local table_lines
-    table_lines="MCP|Status|Claude|Codex|Goose|Description\n"
+    table_lines="MCP|Installed|Claude|Codex|Goose|Description\n"
 
     for mcp_name in "${mcps[@]}"; do
         mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
@@ -332,12 +332,11 @@ list_mcps() {
         # Check actual installation
         installed_flag=0
         if eval "${mcp_checks[$mcp_name]}"; then
-            status="✅ Ready"
             installed_flag=1
         elif [ -x "$install_script" ]; then
-            status="ℹ Available"
+            : # available but not installed
         else
-            status="❌ Not available"
+            : # not available
         fi
         
         description=""
@@ -345,10 +344,12 @@ list_mcps() {
             description=$(head -n 5 "$doc_file" | grep -v "^#" | head -n 1 | sed 's/^[[:space:]]*//')
         fi
         # Default integrations to not enabled
-        local claude_icon codex_icon goose_icon
-        claude_icon="—"; codex_icon="—"; goose_icon="-"
+        local claude_icon codex_icon goose_icon installed_icon
+        claude_icon="—"; codex_icon="—"; goose_icon="—"
+        installed_icon="—"
 
         if [ "$installed_flag" -eq 1 ]; then
+            installed_icon="✅"
             # Claude: mark enabled if appears in claude mcp list output
             if echo "$claude_mcps" | grep -qw "$mcp_name"; then
                 claude_icon="✅"
@@ -371,7 +372,7 @@ list_mcps() {
             fi
         fi
 
-        table_lines+="${mcp_name}|${status}|${claude_icon}|${codex_icon}|${goose_icon}|${description}\n"
+        table_lines+="${mcp_name}|${installed_icon}|${claude_icon}|${codex_icon}|${goose_icon}|${description}\n"
     done
     
     if command -v column >/dev/null 2>&1; then
@@ -379,7 +380,7 @@ list_mcps() {
     else
         # Fallback alignment if column is unavailable
         printf "  %-18s %-13s %-8s %-8s %-8s %s\n" \
-            "MCP" "Status" "Claude" "Codex" "Goose" "Description"
+            "MCP" "Installed" "Claude" "Codex" "Goose" "Description"
         while IFS='|' read -r c1 c2 c3 c4 c5 c6; do
             [ "$c1" = "MCP" ] && continue
             printf "  %-18s %-13s %-8s %-8s %-8s %s\n" "$c1" "$c2" "$c3" "$c4" "$c5" "$c6"
