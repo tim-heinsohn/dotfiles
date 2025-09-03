@@ -281,11 +281,25 @@ update_all_mcps() {
 }
 
 list_mcps() {
-    echo "Available MCP servers:"
+    echo "MCPs:"
     echo ""
+    # Will render a borderless table; uses 'column' when available
     
     # Define MCPs in alphabetical order
     mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "serena" "sequential" "slack" "youtube-playlist" "youtube-transcript")
+
+    # Gather current integrations
+    local claude_mcps codex_mcps
+    claude_mcps=$(claude mcp list 2>/dev/null || true)
+    if command -v yq >/dev/null 2>&1; then
+        if yq -e -p toml '.mcp.servers' "$HOME/.codex/mcp.toml" >/dev/null 2>&1; then
+            codex_mcps=$(yq -p toml '.mcp.servers | keys | .[]' "$HOME/.codex/mcp.toml" | tr '\n' ' ')
+        else
+            codex_mcps=""
+        fi
+    else
+        codex_mcps=""
+    fi
     
     # Check actual MCP installation status
     declare -A mcp_checks=(
@@ -306,14 +320,20 @@ list_mcps() {
         ["youtube-transcript"]="command -v npx > /dev/null 2>&1"
     )
     
+    # Start table with header
+    local table_lines
+    table_lines="MCP|Status|Claude|Codex|Goose|Description\n"
+
     for mcp_name in "${mcps[@]}"; do
         mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
         install_script="$mcp_dir/install"
         doc_file="$mcp_dir/doc/usage.md"
         
         # Check actual installation
+        installed_flag=0
         if eval "${mcp_checks[$mcp_name]}"; then
             status="✅ Ready"
+            installed_flag=1
         elif [ -x "$install_script" ]; then
             status="ℹ Available"
         else
@@ -324,9 +344,47 @@ list_mcps() {
         if [ -f "$doc_file" ]; then
             description=$(head -n 5 "$doc_file" | grep -v "^#" | head -n 1 | sed 's/^[[:space:]]*//')
         fi
-        
-        printf "  %-18s %s %s\n" "$mcp_name" "$status" "$description"
+        # Default integrations to not enabled
+        local claude_icon codex_icon goose_icon
+        claude_icon="—"; codex_icon="—"; goose_icon="-"
+
+        if [ "$installed_flag" -eq 1 ]; then
+            # Claude: mark enabled if appears in claude mcp list output
+            if echo "$claude_mcps" | grep -qw "$mcp_name"; then
+                claude_icon="✅"
+            else
+                # Special case: mail-server aggregates two entries
+                if [ "$mcp_name" = "mail-server" ] && (echo "$claude_mcps" | grep -qw "mail-primary" || echo "$claude_mcps" | grep -qw "mail-secondary"); then
+                    claude_icon="✅"
+                fi
+            fi
+
+            # Codex: mark enabled if key exists in ~/.codex/mcp.toml
+            if [ -n "$codex_mcps" ]; then
+                if echo " $codex_mcps " | grep -q " $mcp_name "; then
+                    codex_icon="✅"
+                else
+                    if [ "$mcp_name" = "mail-server" ] && (echo " $codex_mcps " | grep -q " mail-primary \| mail-secondary "); then
+                        codex_icon="✅"
+                    fi
+                fi
+            fi
+        fi
+
+        table_lines+="${mcp_name}|${status}|${claude_icon}|${codex_icon}|${goose_icon}|${description}\n"
     done
+    
+    if command -v column >/dev/null 2>&1; then
+        printf "%b" "$table_lines" | column -t -s '|' | sed 's/^/  /'
+    else
+        # Fallback alignment if column is unavailable
+        printf "  %-18s %-13s %-8s %-8s %-8s %s\n" \
+            "MCP" "Status" "Claude" "Codex" "Goose" "Description"
+        while IFS='|' read -r c1 c2 c3 c4 c5 c6; do
+            [ "$c1" = "MCP" ] && continue
+            printf "  %-18s %-13s %-8s %-8s %-8s %s\n" "$c1" "$c2" "$c3" "$c4" "$c5" "$c6"
+        done <<< "$table_lines"
+    fi
     
     echo ""
     echo "Special cases:"
