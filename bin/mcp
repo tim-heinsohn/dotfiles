@@ -288,6 +288,25 @@ list_mcps() {
     # Define MCPs in alphabetical order
     mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "serena" "sequential" "slack" "youtube-playlist" "youtube-transcript")
 
+    # Concise tags per MCP (used for Description column)
+    declare -A mcp_tags=(
+        ["appsignal"]="apm, metrics"
+        ["context7"]="context, docs, code"
+        ["elevenlabs"]="tts"
+        ["gmail"]="gmail, filters"
+        ["gitlab"]="repos, issues, mrs"
+        ["jira"]="jira, confluence"
+        ["mail-server"]="imap, smtp"
+        ["n8n"]="workflows"
+        ["rails-active-mcp"]="rails, db"
+        ["semgrep"]="security, scan"
+        ["serena"]="code, edit"
+        ["sequential"]="planning"
+        ["slack"]="slack, chat"
+        ["youtube-playlist"]="playlists"
+        ["youtube-transcript"]="transcripts"
+    )
+
     # Gather current integrations
     local claude_mcps codex_mcps
     claude_mcps=$(claude mcp list 2>/dev/null || true)
@@ -339,8 +358,9 @@ list_mcps() {
             : # not available
         fi
         
-        description=""
-        if [ -f "$doc_file" ]; then
+        # Prefer concise tags; fallback to doc summary
+        description="${mcp_tags[$mcp_name]:-}"
+        if [ -z "$description" ] && [ -f "$doc_file" ]; then
             description=$(head -n 5 "$doc_file" | grep -v "^#" | head -n 1 | sed 's/^[[:space:]]*//')
         fi
         # Default integrations to not enabled
