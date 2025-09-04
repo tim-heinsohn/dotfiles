@@ -33,6 +33,12 @@ resolve_mcpget_packages_dir() {
     local dist_dir=$(dirname "$bin_path")
     local root_dir=$(dirname "$dist_dir")
     local candidate="$root_dir/packages"
+# Detect Goose installations
+HAS_GOOSE_DESKTOP=0
+HAS_GOOSE_CLI=0
+command -v goose-desktop >/dev/null 2>&1 && HAS_GOOSE_DESKTOP=1
+command -v goose >/dev/null 2>&1 && HAS_GOOSE_CLI=1
+
     if [ -d "$candidate" ]; then
         echo "$candidate"
         return 0
@@ -110,6 +116,7 @@ install_mcp() {
     local mcp_name="$1"
     local mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
 
+
     # Curated-first: use repo install script when present
     if [ -d "$mcp_dir" ] && [ -x "$mcp_dir/install" ]; then
         echo "Installing MCP: $mcp_name"
@@ -171,17 +178,17 @@ integrate_mcp() {
 update_mcp() {
     local mcp_name="$1"
     local mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
-    
+
     if [ ! -d "$mcp_dir" ]; then
         echo "Error: MCP '$mcp_name' not found in $mcp_dir"
         return 1
     fi
-    
+
     if [ ! -x "$mcp_dir/install" ]; then
         echo "Error: Install script not found or not executable: $mcp_dir/install"
         return 1
     fi
-    
+
     echo "Updating MCP: $mcp_name"
     "$mcp_dir/install"
     echo "✓ $mcp_name MCP updated"
@@ -190,63 +197,63 @@ update_mcp() {
 update_all_mcps() {
     echo "Updating all installed MCPs..."
     local updated_count=0
-    
+
     # Check for installed MCPs by their target directories
     if [ -d ~/.elevenlabs-mcp ]; then
         update_mcp elevenlabs
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.gmail-mcp ]; then
         update_mcp gmail
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.jira-mcp ]; then
         update_mcp jira
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.mail-server-mcp ]; then
         update_mcp mail-server
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.miro-mcp ]; then
         update_mcp miro
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.n8n-mcp ]; then
         update_mcp n8n
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.youtube-playlist-mcp ] && [ -f ~/.youtube-playlist-mcp/dist/index.js ]; then
         update_mcp youtube-playlist
         ((updated_count++))
     fi
-    
+
     if command -v semgrep-mcp &> /dev/null; then
         update_mcp semgrep
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.rails-active-mcp ]; then
         echo "Rails Active MCP is a gem - update with: gem update rails-active-mcp"
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.appsignal-mcp ]; then
         update_mcp appsignal
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.gitlab-mcp ]; then
         update_mcp gitlab
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.slack-mcp ]; then
         update_mcp slack
         ((updated_count++))
@@ -256,23 +263,23 @@ update_all_mcps() {
         update_mcp context7
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.sequential-mcp ]; then
         update_mcp sequential
         ((updated_count++))
     fi
-    
+
     if [ -d ~/.serena-mcp ]; then
         update_mcp serena
         ((updated_count++))
     fi
-    
+
     # Add other MCPs here as they are added (alphabetical order)
     # if [ -d ~/.some-other-mcp ]; then
     #     update_mcp some-other
     #     ((updated_count++))
     # fi
-    
+
     if [ $updated_count -eq 0 ]; then
         echo "No installed MCPs found to update"
     else
@@ -284,12 +291,13 @@ list_mcps() {
     echo "MCPs:"
     echo ""
     # Will render a borderless table; uses 'column' when available
-    
+
     # Define MCPs in alphabetical order
-    mcps=("appsignal" "context7" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "serena" "sequential" "slack" "youtube-playlist" "youtube-transcript")
+    mcps_raw=("appsignal" "context7" "memory" "elevenlabs" "gmail" "gitlab" "jira" "mail-server" "n8n" "rails-active-mcp" "semgrep" "serena" "sequential" "slack" "youtube-playlist" "youtube-transcript")
 
     # Concise tags per MCP (used for Description column)
     declare -A mcp_tags=(
+        ["memory"]="memory"
         ["appsignal"]="apm, metrics"
         ["context7"]="context, docs, code"
         ["elevenlabs"]="tts"
@@ -308,27 +316,38 @@ list_mcps() {
     )
 
     # Gather current integrations
-    local claude_mcps codex_mcps
+    # Gather current integrations
+    local claude_mcps codex_mcps codex_file
     claude_mcps=$(claude mcp list 2>/dev/null || true)
-    if command -v yq >/dev/null 2>&1; then
-        if yq -e -p toml '.mcp.servers' "$HOME/.codex/mcp.toml" >/dev/null 2>&1; then
-            codex_mcps=$(yq -p toml '.mcp.servers | keys | .[]' "$HOME/.codex/mcp.toml" | tr '\n' ' ')
+    codex_mcps=""
+    # Prefer ~/.codex/config.toml (managed by codex-mcp), fall back to ~/.codex/mcp.toml
+    for f in "$HOME/.codex/config.toml" "$HOME/.codex/mcp.toml"; do
+
+        if [ -f "$f" ]; then codex_file="$f"; break; fi
+    done
+    if [ -n "${codex_file:-}" ]; then
+        if command -v yq >/dev/null 2>&1; then
+            if yq -e -p toml '.mcp.servers' "$codex_file" >/dev/null 2>&1; then
+                codex_mcps=$(yq -p toml '.mcp.servers | keys | .[]' "$codex_file" | tr '\n' ' ')
+            fi
         else
-            codex_mcps=""
+            # Fallback parser: extract names from [mcp.servers.<name>(.subtable)?]
+            codex_mcps=$(grep -E '^\[mcp\.servers\.[^]]+\]' "$codex_file" \
+              | sed -E 's/^\[mcp\.servers\.([^.\]]*).*$/\1/' \
+              | sort -u | tr '\n' ' ')
         fi
-    else
-        codex_mcps=""
     fi
-    
+
     # Check actual MCP installation status
     declare -A mcp_checks=(
-        ["appsignal"]="[ -d ~/.appsignal-mcp ] && [ -f ~/.appsignal-mcp/dist/index.js ]"
+        ["appsignal"]="command -v docker > /dev/null 2>&1"
         ["context7"]="[ -f ~/.context7-mcp/dist/index.js ]"
         ["elevenlabs"]="[ -f ~/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js ]"
         ["gmail"]="[ -f ~/.gmail-mcp/dist/index.js ]"
         ["gitlab"]="[ -f ~/.gitlab-mcp/dist/index.js ]"
         ["jira"]="[ -f ~/.jira-mcp/bin/mcp-server ]"
         ["mail-server"]="[ -f ~/.mail-server-mcp/wrapper-primary ] && [ -f ~/.mail-server-mcp/wrapper-secondary ]"
+        ["memory"]="( command -v goose-desktop >/dev/null 2>&1 || command -v goose >/dev/null 2>&1 || [ -x ~/.local/bin/goose-mcp-memory ] )"
         ["n8n"]="[ -f ~/.n8n-mcp/build/index.js ]"
         ["rails-active-mcp"]="[ -f ~/.rails-active-mcp/rails-active-mcp-*.gem ]"
         ["sequential"]="[ -f ~/.sequential-mcp/dist/index.js ]"
@@ -338,8 +357,11 @@ list_mcps() {
         ["youtube-playlist"]="[ -f ~/.youtube-playlist-mcp/dist/index.js ]"
         ["youtube-transcript"]="command -v npx > /dev/null 2>&1"
     )
-    
+
     # Start table with header
+    # Sort alphabetically
+    IFS=$'\n' mcps=($(printf "%s\n" "${mcps_raw[@]}" | sort))
+    unset IFS
     local table_lines
     table_lines="MCP|Installed|Claude|Codex|Goose|Description\n"
 
@@ -347,17 +369,18 @@ list_mcps() {
         mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
         install_script="$mcp_dir/install"
         doc_file="$mcp_dir/doc/usage.md"
-        
+
         # Check actual installation
         installed_flag=0
-        if eval "${mcp_checks[$mcp_name]}"; then
+        check_cmd="${mcp_checks[$mcp_name]:-false}"
+        if eval "$check_cmd"; then
             installed_flag=1
         elif [ -x "$install_script" ]; then
             : # available but not installed
         else
             : # not available
         fi
-        
+
         # Prefer concise tags; fallback to doc summary
         description="${mcp_tags[$mcp_name]:-}"
         if [ -z "$description" ] && [ -f "$doc_file" ]; then
@@ -369,32 +392,64 @@ list_mcps() {
         installed_icon="—"
 
         if [ "$installed_flag" -eq 1 ]; then
-            installed_icon="✅"
-            # Claude: mark enabled if appears in claude mcp list output
-            if echo "$claude_mcps" | grep -qw "$mcp_name"; then
-                claude_icon="✅"
-            else
-                # Special case: mail-server aggregates two entries
-                if [ "$mcp_name" = "mail-server" ] && (echo "$claude_mcps" | grep -qw "mail-primary" || echo "$claude_mcps" | grep -qw "mail-secondary"); then
-                    claude_icon="✅"
-                fi
-            fi
+            installed_icon="x"
 
-            # Codex: mark enabled if key exists in ~/.codex/mcp.toml
-            if [ -n "$codex_mcps" ]; then
-                if echo " $codex_mcps " | grep -q " $mcp_name "; then
-                    codex_icon="✅"
-                else
-                    if [ "$mcp_name" = "mail-server" ] && (echo " $codex_mcps " | grep -q " mail-primary \| mail-secondary "); then
-                        codex_icon="✅"
-                    fi
-                fi
+        # Claude: mark enabled if appears in claude mcp list output
+        if echo "$claude_mcps" | grep -qw "$mcp_name"; then
+            claude_icon="x"
+        else
+            # Special case: mail-server aggregates two entries
+            if [ "$mcp_name" = "mail-server" ] && (echo "$claude_mcps" | grep -qw "mail-primary" || echo "$claude_mcps" | grep -qw "mail-secondary"); then
+                claude_icon="x"
             fi
         fi
 
-        table_lines+="${mcp_name}|${installed_icon}|${claude_icon}|${codex_icon}|${goose_icon}|${description}\n"
+        # Codex: mark enabled if key exists in ~/.codex/mcp.toml
+
+        # Goose: mark enabled if extension config references this MCP
+        # Goose: mark enabled if any Goose extensions dir references this MCP
+        goose_icon_tmp="—"
+        for d in "${XDG_CONFIG_HOME:-$HOME/.config}"/goose*/extensions "${XDG_CONFIG_HOME:-$HOME/.config}"/*Goose*/extensions; do
+            [ -d "$d" ] || continue
+            if grep -Riq "\"$mcp_name\"" "$d" 2>/dev/null; then
+                goose_icon_tmp="x"; break
+            fi
+            if [ "$mcp_name" = "mail-server" ] && grep -Riq "\"mail-\(primary\|secondary\)\"" "$d" 2>/dev/null; then
+                goose_icon_tmp="x"; break
+            fi
+        done
+
+        # Special-case: built-in Memory extension is always present when Goose exists
+        if [[ $mcp_name == memory ]] && \
+           ( command -v goose-desktop >/dev/null 2>&1 || command -v goose >/dev/null 2>&1 ); then
+            goose_icon_tmp="x"
+        fi
+
+        if [ "$goose_icon_tmp" = "x" ]; then goose_icon="x"; fi
+        goose_dir="${XDG_CONFIG_HOME:-$HOME/.config}/goose/extensions"
+        if [ -d "$goose_dir" ]; then
+            if grep -Riq "\"$mcp_name\"" "$goose_dir" 2>/dev/null; then
+                goose_icon="x"
+            else
+                if [ "$mcp_name" = "mail-server" ] && grep -Riq "\"mail-primary\"\|\"mail-secondary\"" "$goose_dir" 2>/dev/null; then
+                    goose_icon="x"
+                fi
+            fi
+        fi
+        if [ -n "$codex_mcps" ]; then
+            if echo " $codex_mcps " | grep -q " $mcp_name "; then
+                codex_icon="x"
+            else
+                if [ "$mcp_name" = "mail-server" ] && (echo " $codex_mcps " | grep -q " mail-primary \| mail-secondary "); then
+                    codex_icon="x"
+                fi
+            fi
+        fi
+    fi
+
+    table_lines+="${mcp_name}|${installed_icon}|${claude_icon}|${codex_icon}|${goose_icon}|${description}\n"
     done
-    
+
     if command -v column >/dev/null 2>&1; then
         printf "%b" "$table_lines" | column -t -s '|' | sed 's/^/  /'
     else
@@ -406,15 +461,16 @@ list_mcps() {
             printf "  %-18s %-13s %-8s %-8s %-8s %s\n" "$c1" "$c2" "$c3" "$c4" "$c5" "$c6"
         done <<< "$table_lines"
     fi
-    
+
     echo ""
     echo "Special cases:"
-    printf "  %-18s %s\n" "playwright" "✅ System-installed (MCP tools available directly)"
+    printf "  %-18s %s\n" "playwright" "x System-installed (MCP tools available directly)"
+    printf "  %-18s %s\n" "appsignal" "Docker-based; treated installed if Docker present"
 }
 
 disintegrate_mcp() {
     local mcp_name="$1"
-    
+
     # Normalize input to handle both patterns
     case "$mcp_name" in
         rails-active|rails-active-mcp)
@@ -442,12 +498,12 @@ disintegrate_mcp() {
 
 uninstall_mcp() {
     local mcp_name="$1"
-    
+
     echo "Completely uninstalling $mcp_name MCP..."
-    
+
     # First remove from Claude
     disintegrate_mcp "$mcp_name"
-    
+
     # Then remove installation directories
     case "$mcp_name" in
         rails-active|rails-active-mcp)
@@ -526,7 +582,7 @@ uninstall_mcp() {
             return 1
             ;;
     esac
-    
+
     echo "✓ $mcp_name MCP completely uninstalled"
 }
 
@@ -534,17 +590,17 @@ show_mcp_info() {
     local mcp_name="$1"
     local mcp_dir="${DOTFILES_DIR}/${mcp_name}-mcp"
     local doc_file="$mcp_dir/doc/usage.md"
-    
+
     if [ ! -d "$mcp_dir" ]; then
         echo "Error: MCP '$mcp_name' not found in $mcp_dir"
         return 1
     fi
-    
+
     if [ ! -f "$doc_file" ]; then
         echo "Error: Usage documentation not found: $doc_file"
         return 1
     fi
-    
+
     # Use glow with pager if available, otherwise bat with pager, otherwise less
     if command -v glow >/dev/null 2>&1; then
         glow -p "$doc_file"
@@ -558,12 +614,12 @@ show_mcp_info() {
 show_mcp_prompt() {
     local mcp_name="$1"
     local prompt_file="$HOME/.claude/docs/tools/${mcp_name}-mcp.md"
-    
+
     if [ ! -f "$prompt_file" ]; then
         echo "Error: Claude prompt documentation not found: $prompt_file"
         return 1
     fi
-    
+
     # Use glow with pager if available, otherwise bat with pager, otherwise less
     if command -v glow >/dev/null 2>&1; then
         glow -p "$prompt_file"
@@ -579,10 +635,10 @@ main() {
         usage
         exit 1
     fi
-    
+
     command="$1"
     shift
-    
+
     case "$command" in
         install)
             if [ $# -eq 0 ]; then
@@ -590,7 +646,7 @@ main() {
                 usage
                 exit 1
             fi
-            
+
             for mcp_name in "$@"; do
                 install_mcp "$mcp_name"
             done
@@ -610,7 +666,7 @@ main() {
                 usage
                 exit 1
             fi
-            
+
             for mcp_name in "$@"; do
                 integrate_mcp "$mcp_name"
             done
@@ -624,7 +680,7 @@ main() {
                 usage
                 exit 1
             fi
-            
+
             for mcp_name in "$@"; do
                 disintegrate_mcp "$mcp_name"
             done
@@ -635,7 +691,7 @@ main() {
                 usage
                 exit 1
             fi
-            
+
             for mcp_name in "$@"; do
                 uninstall_mcp "$mcp_name"
             done
@@ -646,7 +702,7 @@ main() {
                 usage
                 exit 1
             fi
-            
+
             for mcp_name in "$@"; do
                 show_mcp_info "$mcp_name"
             done
@@ -657,7 +713,7 @@ main() {
                 usage
                 exit 1
             fi
-            
+
             for mcp_name in "$@"; do
                 show_mcp_prompt "$mcp_name"
             done

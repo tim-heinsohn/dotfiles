@@ -1,0 +1,50 @@
+#!/bin/bash
+set -euo pipefail
+
+# Integrate Gmail MCP with Goose by adding an MCP extension config.
+# Tries to locate Goose Desktop's actual extensions directory, with sensible fallbacks.
+
+MCP_JS="$HOME/.gmail-mcp/dist/index.js"
+if [ ! -f "$MCP_JS" ]; then
+  echo "Error: Gmail MCP not installed at $MCP_JS" >&2
+  echo "Install it first: ~/dotfiles/bin/mcp install gmail" >&2
+  exit 1
+fi
+
+# Candidate config dirs. Prefer capitalized Goose if present.
+XDG_CONF_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}"
+PREFERRED_DIR="$XDG_CONF_ROOT/Goose/extensions"
+LOWER_DIR="$XDG_CONF_ROOT/goose/extensions"
+
+if [ -d "$XDG_CONF_ROOT/Goose" ]; then
+  CONF_DIR="$PREFERRED_DIR"
+else
+  # Probe other likely locations
+  for d in \
+    "$XDG_CONF_ROOT/goose-desktop/extensions" \
+    "$XDG_CONF_ROOT/Codename Goose/extensions" \
+    "$XDG_CONF_ROOT/Codename-Goose/extensions" \
+    "$XDG_CONF_ROOT/Block/Goose/extensions" \
+    "$LOWER_DIR"; do
+    if [ -d "$(dirname "$d")" ]; then CONF_DIR="$d"; break; fi
+  done
+  : "${CONF_DIR:=$LOWER_DIR}"
+fi
+
+mkdir -p "$CONF_DIR"
+CONF_FILE="$CONF_DIR/gmail-mcp.json"
+
+
+cat > "$CONF_FILE" <<JSON
+{
+  "mcpServers": {
+    "gmail": {
+      "command": "node",
+      "args": ["$MCP_JS"]
+    }
+  }
+}
+JSON
+
+echo "x Goose extension installed for Gmail MCP at: $CONF_FILE"
+echo "Restart Goose Desktop or reload extensions to take effect."

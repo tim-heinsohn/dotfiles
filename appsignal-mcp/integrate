@@ -50,3 +50,5 @@ echo "📖 Documentation: $( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )/d
 command = "docker"
 args = ["run", "-i", "--rm", "-e", "APPSIGNAL_API_KEY", "appsignal/mcp"]
 EOF
+
+echo "✓ AppSignal MCP added to Codex (~/.codex/config.toml)"
