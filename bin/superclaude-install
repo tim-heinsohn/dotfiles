@@ -1,0 +1,30 @@
+#!/bin/bash
+# SuperClaude installer - official Python package method with uv
+set -e
+
+echo "Installing SuperClaude via official Python package..."
+
+# Check if uv is available, fallback to pipx, then pip
+if command -v uv &> /dev/null; then
+    echo "Using uv (fastest)..."
+    uv tool install SuperClaude --force
+    echo "SuperClaude installed via uv"
+elif command -v pipx &> /dev/null; then
+    echo "Using pipx (recommended)..."
+    pipx install SuperClaude --force
+    echo "SuperClaude installed via pipx"
+elif command -v pip &> /dev/null; then
+    echo "Using pip..."
+    pip install --user --force-reinstall SuperClaude
+    echo "SuperClaude installed via pip"
+else
+    echo "Error: No Python package manager found. Please install uv, pipx, or pip first."
+    exit 1
+fi
+
+# Run the official SuperClaude installer
+echo "Running SuperClaude setup..."
+SuperClaude install
+
+echo "SuperClaude installation complete!"
+echo "Available via: SuperClaude or superclaude commands"

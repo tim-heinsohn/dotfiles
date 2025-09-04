@@ -45,7 +45,7 @@ echo "✓ Using version-pinned installation to avoid FastMCP compatibility issue
 echo "  (semgrep-mcp==0.1.4 with mcp==1.3.0)"
 echo ""
 echo "Next steps:"
-echo "1. Add Semgrep MCP to Claude Code configuration: mcp-install integrate semgrep"
+echo "1. Add Semgrep MCP to Claude Code configuration: mcp integrate semgrep"
 echo "2. Optional: Set SEMGREP_APP_TOKEN environment variable for Semgrep Platform integration"
 echo "3. Test functionality with security scans and code analysis"
 echo ""

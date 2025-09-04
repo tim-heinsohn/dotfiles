@@ -95,10 +95,10 @@ claude mcp add-json ~/.gmail-mcp/mcp-config.json
 
 ```bash
 # Update Gmail MCP specifically
-~/dotfiles/bin/mcp-install update gmail
+~/dotfiles/bin/mcp update gmail
 
 # Update all installed MCPs
-~/dotfiles/bin/mcp-install update
+~/dotfiles/bin/mcp update
 
 # Or update manually
 ~/dotfiles/gmail-mcp/install

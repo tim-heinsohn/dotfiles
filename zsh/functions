@@ -100,23 +100,94 @@ function rails_migration_date() {
 
 # Kimi provider toggle
 function kimi_enabled() {
-  [ -f "/tmp/kimi_mode" ]
+  [ -f "/tmp/kimi_on" ]
+}
+
+# Helper: load project metadata
+function _projects_source() {
+  if [[ -f "$HOME/.projects" ]]; then
+    source "$HOME/.projects"
+    return 0
+  else
+    echo "~/.projects not found. Run bin/projects-setup to create a template." >&2
+    return 1
+  fi
+}
+
+# Helper: detect if secondary project is active
+function project_secondary_enabled() {
+  [ -f "/tmp/project_secondary_on" ]
+}
+
+# Helper: set ANTHROPIC_* envs for current provider and selected project
+function _set_anthropic_env_for_selection() {
+  _projects_source || return 1
+
+  local project_prefix
+  local project_label
+  if project_secondary_enabled; then
+    project_prefix="SECONDARY"
+    project_label="secondary"
+  else
+    project_prefix="PRIMARY"
+    project_label="primary"
+  fi
+  local code_var="${project_prefix}_PROJECT_CODE"
+  local project_code="${(P)code_var}"
+
+  if kimi_enabled; then
+    # Use Moonshot (Kimi) for Anthropic-compatible API
+    unset ANTHROPIC_API_KEY
+    local key_var="${project_prefix}_PROJECT_MOONSHOT_AI_API_KEY"
+    export ANTHROPIC_AUTH_TOKEN="${(P)key_var}"
+    export ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic
+    echo "Switched to Kimi mode for ${project_code} (${project_label} project)."
+  else
+    # Use direct Anthropic API
+    unset ANTHROPIC_AUTH_TOKEN
+    unset ANTHROPIC_BASE_URL
+    local key_var="${project_prefix}_PROJECT_ANTHROPIC_API_KEY"
+    export ANTHROPIC_API_KEY="${(P)key_var}"
+    echo "Switched to Anthropic mode for ${project_code} (${project_label} project)."
+  fi
+  _update_claude_settings_provider
+}
+
+# Keep Claude Code settings.json in sync with provider mode
+function _update_claude_settings_provider() {
+  local settings_dir="$HOME/.claude"
+  local settings_file="$settings_dir/settings.json"
+  local helper_path='~/dotfiles/claude-code/bin/anthropic-api-key'
+  mkdir -p "$settings_dir"
+
+  if kimi_enabled; then
+    if [[ -f "$settings_file" ]]; then
+      if command -v jq >/dev/null 2>&1; then
+        local tmp
+        tmp=$(mktemp)
+        jq 'del(.apiKeyHelper)' "$settings_file" > "$tmp" && mv "$tmp" "$settings_file"
+      else
+        sed -i.bak '/"apiKeyHelper"[[:space:]]*:/d' "$settings_file" || true
+      fi
+    fi
+  else
+    if command -v jq >/dev/null 2>&1 && [[ -f "$settings_file" ]]; then
+      local tmp
+      tmp=$(mktemp)
+      jq --arg v "$helper_path" '.apiKeyHelper = $v' "$settings_file" > "$tmp" && mv "$tmp" "$settings_file"
+    else
+      printf '{\n  "apiKeyHelper": "%s"\n}\n' "$helper_path" > "$settings_file"
+    fi
+  fi
 }
 
 function kimi_set() {
   if [[ "$1" == "on" ]]; then
-    touch /tmp/kimi_mode
-    unset ANTHROPIC_API_KEY
-    export ANTHROPIC_AUTH_TOKEN="$(gopass show -o t/ai/moonshot.ai)"
-    export ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic
-    echo "Kimi mode enabled."
+    touch /tmp/kimi_on
   else
-    rm -f /tmp/kimi_mode
-    unset ANTHROPIC_BASE_URL
-    unset ANTHROPIC_AUTH_TOKEN
-    export ANTHROPIC_API_KEY=$(gopass show t/ai/claude/api-key)
-    echo "Anthropic mode enabled."
+    rm -f /tmp/kimi_on
   fi
+  _set_anthropic_env_for_selection
 }
 
 function kimi_toggle() {
@@ -127,5 +198,16 @@ function kimi_toggle() {
   fi
 }
 alias kt=kimi_toggle
+
+# Project selection toggle (primary <-> secondary)
+function project_toggle() {
+  if project_secondary_enabled; then
+    rm -f /tmp/project_secondary_on
+  else
+    touch /tmp/project_secondary_on
+  fi
+  _set_anthropic_env_for_selection
+}
+alias pt=project_toggle
 
 # vim: set ft=zsh:

@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+echo "Integrating Gmail MCP..."
+
+if [ -f "$HOME/.gmail-mcp/mcp-config.json" ] || [ -f "$HOME/.gmail-mcp/dist/index.js" ]; then
+  # Prefer direct command config for consistency with other MCPs
+  config_json="{\"command\":\"node\",\"args\":[\"$HOME/.gmail-mcp/dist/index.js\"]}"
+  echo "Adding Gmail MCP to Claude Code..."
+  claude mcp add-json gmail "$config_json" --scope user
+  echo "✓ Gmail MCP integrated with Claude Code"
+  "$DOTFILES_DIR/bin/codex-mcp" upsert gmail <<EOF
+[mcp.servers.gmail]
+command = "node"
+args = ["$HOME/.gmail-mcp/dist/index.js"]
+EOF
+  # Goose integration
+  if [ -x "$DOTFILES_DIR/gmail-mcp/goose-integrate" ]; then
+    "$DOTFILES_DIR/gmail-mcp/goose-integrate" || true
+  fi
+else
+  echo "Error: Gmail MCP not installed or configured. Run: mcp install gmail" >&2
+  exit 1
+fi

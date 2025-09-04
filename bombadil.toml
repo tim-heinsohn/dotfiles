@@ -14,6 +14,7 @@ claude_settings = { source = "claude-code/settings.json", target = "~/.claude/se
 claude_notes = { source = "claude-code/CLAUDE.md", target = "~/.claude/CLAUDE.md" }
 claude_commands = { source = "claude-code/commands", target = "~/.claude/commands" }
 claude_agents = { source = "claude-code/agents", target = "~/.claude/agents" }
+claude_docs = { source = "claude-code/docs", target = "~/.claude/docs" }
 flameshot =  { source = "utils/flameshot/flameshot.ini", target = "~/.config/flameshot/flameshot.ini" }
 gitattributes = { source = "git/gitattributes", target = ".gitattributes" }
 gitconfig = { source = "git/gitconfig", target = ".gitconfig" }
@@ -45,5 +46,9 @@ zsh_environment = { source = "zsh/environment", target = ".zsh/environment" }
 zsh_functions = { source = "zsh/functions", target = ".zsh/functions" }
 # NOTE: copy manually: "zsh/p10k.zsh" to ".p10k.zsh"
 zsh_p10k_custom = { source = "zsh/p10k.custom.zsh", target = ".zsh/p10k.custom.zsh" }
+zsh_p10k_claude = { source = "zsh/p10k.claude.zsh", target = ".zsh/p10k.claude.zsh" }
 zsh_sheldon = { source = "zsh/plugins.toml", target = ".config/sheldon/plugins.toml" }
 zshrc = { source = "zsh/zshrc", target = ".zshrc" }
+claude_session_monitor = { source = "bin/claude-session-monitor", target = "~/bin/claude-session-monitor" }
+# Note: Codex MCP configuration is managed dynamically via bin/codex-mcp.
+# The file codex/mcp.toml remains as a reference template only and is not symlinked.

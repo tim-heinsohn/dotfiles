@@ -2,10 +2,11 @@ aur/acli-bin
     Software to interact with Atlassian Cloud from the terminal. Supports Bitbucket, Jira, Confluence, Bamboo, and other Atlassian services.
 aur/acpilight
     A backward-compatible xbacklight replacement with ACPI kernel support.
-aur/exif
     A small command-line utility to show and change EXIF information in JPEG files.
 aur/google-chrome
     A browser that combines a minimal design with sophisticated technology.
+aur/goose-desktop
+    An open-source, extensible AI agent that goes beyond code suggestions (with UI)
 aur/html2md
     A command-line tool to convert HTML to Markdown.
 aur/neovim-remote
@@ -56,6 +57,10 @@ extra/arandr
     Provide a simple visual front end for XRandR 1.2.
 extra/asciinema
     Record and share terminal sessions.
+extra/alsa-utils
+    Advanced Linux Sound Architecture - Utilities.
+extra/audacity
+    A program that lets you manipulate digital audio waveforms.
 extra/aws-cli
     Universal Command Line Interface for Amazon Web Services.
 extra/bat
@@ -188,6 +193,10 @@ extra/obs-studio
     Free and open source software for video recording and live streaming.
 extra/p7zip
     A file archiver with a high compression ratio.
+extra/pamixer
+    Pulseaudio command-line mixer like amixer.
+extra/pipewire-jack
+    Low-latency audio/video router and processor - JACK replacement.
 extra/parted
     A program for creating, destroying, resizing, checking and copying partitions.
 extra/pavucontrol
@@ -276,6 +285,8 @@ extra/thunderbird
     A free email application that’s easy to set up and customize.
 extra/tidy
     A tool to tidy down your HTML code to a clean style.
+extra/typst
+    A markup-based typesetting system for the sciences.
 extra/tig
     Text-mode interface for Git.
 extra/toml-bombadil

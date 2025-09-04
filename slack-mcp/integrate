@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+echo "Integrating Slack MCP..."
+
+if [ -d "$HOME/.slack-mcp" ]; then
+  config_json="{\"command\":\"node\",\"args\":[\"$HOME/.slack-mcp/src/slack/dist/index.js\"],\"env\":{\"SLACK_BOT_TOKEN\":\"${SLACK_BOT_TOKEN:-}\",\"SLACK_SIGNING_SECRET\":\"${SLACK_SIGNING_SECRET:-}\"}}"
+  echo "Adding Slack MCP to Claude Code..."
+  claude mcp add-json slack "$config_json" --scope user
+  echo "✓ Slack MCP integrated"
+  echo "Note: Set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET"
+  "$DOTFILES_DIR/bin/codex-mcp" upsert slack <<EOF
+[mcp.servers.slack]
+command = "node"
+args = ["$HOME/.slack-mcp/src/slack/dist/index.js"]
+EOF
+else
+  echo "Error: Slack MCP not installed. Run: mcp install slack" >&2
+  exit 1
+fi

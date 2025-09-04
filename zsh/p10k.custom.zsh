@@ -1,19 +1,46 @@
 # Custom p10k segments
 
-# API key indicator: shows $ for personal key, (c) for company key
+# API key indicator: shows $ for personal key, or current project CODE
+__project_code() {
+  local code
+  if [[ -f "$HOME/.projects" ]]; then
+    source "$HOME/.projects"
+    if [[ -f "/tmp/project_secondary_on" ]]; then
+      code="$SECONDARY_PROJECT_CODE"
+    else
+      code="$PRIMARY_PROJECT_CODE"
+    fi
+  fi
+  echo "${code:-PRJ}"
+}
+
+__project_color() {
+  local color
+  if [[ -f "$HOME/.projects" ]]; then
+    source "$HOME/.projects"
+    if [[ -f "/tmp/project_secondary_on" ]]; then
+      color="$SECONDARY_PROJECT_PROMPT_COLOR"
+    else
+      color="$PRIMARY_PROJECT_PROMPT_COLOR"
+    fi
+  fi
+  echo "${color:-172}"
+}
+
 function prompt_api_key() {
+  local code color
+  code=$(__project_code)
+  color=$(__project_color)
   if kimi_enabled; then
-    if [[ "$MOONSHOT_AI_API_KEY" == "$PERSONAL_MOONSHOT_AI_API_KEY" ]]; then
-      p10k segment -f 208 -t '$'
-    else
-      p10k segment -f 172 -t '(c)'
-    fi
-  elif [[ -n "$ANTHROPIC_API_KEY" && -n "$PERSONAL_ANTHROPIC_API_KEY" ]]; then
-    if [[ "$ANTHROPIC_API_KEY" == "$PERSONAL_ANTHROPIC_API_KEY" ]]; then
-      p10k segment -f 208 -t '$'
-    else
-      p10k segment -f 172 -t '(c)'
-    fi
+    # Kimi provider: show project code only (provider shown via separate segment)
+    p10k segment -f "$color" -t "$code"
+  elif [[ -n "$ANTHROPIC_API_KEY" || -n "$ANTHROPIC_AUTH_TOKEN" ]]; then
+    # Anthropic provider active (direct or via token): show project then provider
+    p10k segment -f "$color" -t "$code"
+    p10k segment -f white -t "A\\"
+  else
+    # Default: show project code if available
+    p10k segment -f "$color" -t "$code"
   fi
 }
 
@@ -64,9 +91,13 @@ function instant_prompt_kimi_mode() {
 }
 
 # Add custom segments to right prompt elements
+# Source Claude Code status line functions
+source ~/dotfiles/zsh/p10k.claude.zsh
+
 typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
-  kimi_mode               # kimi mode indicator
+  api_key                 # project code and/or provider
+  kimi_mode               # provider (Kimi) indicator
   battery_level           # battery percentage
-  api_key                 # anthropic api key indicator
+  claude_status           # claude code status
   ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[@]}
 )

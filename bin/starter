@@ -45,6 +45,9 @@ sudo usermod -aG wheel $USER &&
 # add user to video group to allow adjusting brightness w/o sudo
 sudo usermod -aG video $USER &&
 
+# add user to audio group for microphone access
+sudo usermod -aG audio $USER &&
+
 # run acpi_listen after enabling this and press brightness keys on keyboard,
 # e.g. Fn+F5/F6
 sudo systemctl enable --now acpid &&

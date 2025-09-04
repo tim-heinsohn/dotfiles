@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+echo "Integrating Context7 MCP..."
+
+if [ -f "$HOME/.context7-mcp/mcp-config.json" ] || [ -f "$HOME/.context7-mcp/dist/index.js" ]; then
+  config_json="{\"command\":\"node\",\"args\":[\"$HOME/.context7-mcp/dist/index.js\"],\"env\":{}}"
+  echo "Adding Context7 MCP to Claude Code..."
+  claude mcp add-json context7 "$config_json" --scope user
+  echo "✓ Context7 MCP integrated"
+  "$DOTFILES_DIR/bin/codex-mcp" upsert context7 <<EOF
+[mcp.servers.context7]
+command = "node"
+args = ["$HOME/.context7-mcp/dist/index.js"]
+EOF
+else
+  echo "Error: Context7 MCP not installed or configured. Run: mcp install context7" >&2
+  exit 1
+fi

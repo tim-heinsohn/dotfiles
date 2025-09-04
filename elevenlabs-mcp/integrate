@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+
+DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+echo "Integrating ElevenLabs MCP..."
+
+if [ -d "$HOME/.elevenlabs-mcp" ]; then
+  config_json="{\"command\":\"node\",\"args\":[\"$HOME/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js\"],\"env\":{\"ELEVENLABS_API_KEY\":\"${ELEVENLABS_API_KEY:-}\"}}"
+  echo "Adding ElevenLabs MCP to Claude Code..."
+  claude mcp add-json elevenlabs "$config_json" --scope user
+  echo "✓ ElevenLabs MCP integrated"
+  "$DOTFILES_DIR/bin/codex-mcp" upsert elevenlabs <<EOF
+[mcp.servers.elevenlabs]
+command = "node"
+args = ["$HOME/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js"]
+EOF
+else
+  echo "Error: ElevenLabs MCP not installed. Run: mcp install elevenlabs" >&2
+  exit 1
+fi

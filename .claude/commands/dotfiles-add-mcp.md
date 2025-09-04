@@ -31,7 +31,7 @@ Create `<mcp-name>-mcp/doc/usage.md` with:
 - Best practices and warnings
 
 ### 4. Add to Integration Scripts
-Update `/home/t/dotfiles/bin/mcp-install` to include:
+Update `/home/t/dotfiles/bin/mcp` to include:
 - Add case in `integrate_mcp()` function for your MCP
 - Add detection logic in `update_all_mcps()` for installed directory
 - Update `list_mcps()` help text if needed
@@ -50,8 +50,8 @@ Add reference to your MCP in `claude-code/CLAUDE.md` under Tools section:
 ```
 
 ### 7. Test Integration
-- Run `mcp-install install <mcp-name>` 
-- Run `mcp-install integrate <mcp-name>`
+- Run `mcp install <mcp-name>` 
+- Run `mcp integrate <mcp-name>`
 - Verify MCP appears in `claude mcp list`
 - Test basic functionality
 
@@ -60,7 +60,7 @@ Add reference to your MCP in `claude-code/CLAUDE.md` under Tools section:
 Study the complete Gmail MCP implementation:
 - **Installation**: `/home/t/dotfiles/gmail-mcp/install`
 - **Documentation**: `/home/t/dotfiles/gmail-mcp/doc/usage.md`
-- **Integration**: `/home/t/dotfiles/bin/mcp-install` (lines 55-65)
+- **Integration**: `/home/t/dotfiles/bin/mcp` (lines 55-65)
 - **User docs**: `/home/t/dotfiles/claude-code/docs/tools/gmail-mcp.md`
 - **User reference**: `/home/t/dotfiles/claude-code/CLAUDE.md` (line 7)
 

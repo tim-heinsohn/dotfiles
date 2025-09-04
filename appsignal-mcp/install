@@ -1,0 +1,16 @@
+#!/bin/bash
+set -e
+
+# AppSignal MCP Server Installation Script
+# Updated for Docker-based AppSignal MCP server
+
+DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+echo "🔧 Installing AppSignal MCP Server..."
+
+echo "✅ AppSignal MCP Server uses Docker - no local installation needed!"
+echo ""
+echo "🚀 Next steps:"
+echo "1. Get your AppSignal MCP token from: https://appsignal.com/users/mcp_tokens"
+echo "2. Run: $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/integrate"
+echo ""
+echo "📖 Documentation: $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/doc/usage.md"

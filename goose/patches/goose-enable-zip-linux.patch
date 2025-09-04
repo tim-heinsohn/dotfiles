@@ -1,0 +1,27 @@
+From 7e48fbcec510af86316835e8f983b8dc15b470cd Mon Sep 17 00:00:00 2001
+From: Tim Heinsohn <smile@friendsoft.de>
+Date: Thu, 4 Sep 2025 10:20:09 +0200
+Subject: [PATCH] chore(desktop): enable Electron Forge ZIP maker on Linux
+ (platforms: ['darwin','linux'])
+
+---
+ ui/desktop/forge.config.ts | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/ui/desktop/forge.config.ts b/ui/desktop/forge.config.ts
+index 34f66b1c76..cb7a0399af 100644
+--- a/ui/desktop/forge.config.ts
++++ b/ui/desktop/forge.config.ts
+@@ -27,7 +27,8 @@ module.exports = {
+     },
+     {
+       name: '@electron-forge/maker-zip',
+-      platforms: ['darwin'],
++      // Enable zip on macOS and Linux
++      platforms: ['darwin', 'linux'],
+     },
+     {
+       name: '@electron-forge/maker-deb',
+-- 
+2.51.0
+

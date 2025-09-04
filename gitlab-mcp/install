@@ -1,0 +1,78 @@
+#!/bin/bash
+
+set -e
+set -x  # Enable verbose output
+
+echo "Installing GitLab MCP server..."
+
+# Install the official GitLab MCP server from the servers repository
+echo "Installing GitLab MCP server via npm..."
+npm install -g @modelcontextprotocol/server-gitlab
+
+# Create Claude configuration directory
+echo "Creating Claude configuration..."
+CONFIG_DIR="$HOME/.claude"
+mkdir -p "$CONFIG_DIR"
+
+# Create or update mcp.json file directly
+echo "Configuring Claude MCP..."
+MCP_CONFIG_FILE="$CONFIG_DIR/mcp.json"
+
+# Check if mcp.json exists
+if [ -f "$MCP_CONFIG_FILE" ]; then
+    echo "Existing mcp.json found, updating..."
+    # Backup existing file
+    cp "$MCP_CONFIG_FILE" "$MCP_CONFIG_FILE.backup"
+else
+    echo "Creating new mcp.json..."
+    echo '{}' > "$MCP_CONFIG_FILE"
+fi
+
+# Use jq to add/update the gitlab-mcp configuration
+if command -v jq >/dev/null 2>&1; then
+    echo "Using jq to update configuration..."
+    jq '.mcpServers["gitlab-mcp"] = {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-gitlab"],
+        "env": {
+            "GITLAB_PERSONAL_ACCESS_TOKEN": "YOUR_GITLAB_TOKEN_HERE",
+            "GITLAB_API_URL": "https://gitlab.com/api/v4"
+        }
+    }' "$MCP_CONFIG_FILE" > "$MCP_CONFIG_FILE.tmp" && mv "$MCP_CONFIG_FILE.tmp" "$MCP_CONFIG_FILE"
+else
+    echo "jq not found, using sed to update configuration..."
+    # Create a simple JSON file
+    cat > "$MCP_CONFIG_FILE" << 'EOF'
+{
+  "mcpServers": {
+    "gitlab-mcp": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gitlab"],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "YOUR_GITLAB_TOKEN_HERE",
+        "GITLAB_API_URL": "https://gitlab.com/api/v4"
+      }
+    }
+  }
+}
+EOF
+fi
+
+echo "GitLab MCP server installation complete!"
+echo ""
+echo "Configuration file created at: $MCP_CONFIG_FILE"
+echo ""
+echo "Next steps:"
+echo "1. Create a GitLab personal access token at: https://gitlab.com/-/profile/personal_access_tokens"
+echo "2. Update your Claude configuration with your token:"
+echo "   Edit $MCP_CONFIG_FILE and replace 'YOUR_GITLAB_TOKEN_HERE' with your actual token"
+echo "3. If using self-hosted GitLab, update GITLAB_API_URL accordingly"
+echo "4. Restart Claude Code to load the new MCP server"
+echo ""
+echo "Usage: claude mcp list - to verify GitLab MCP is loaded"
+
+# Clean up the old directory if it exists
+if [ -d "$HOME/.gitlab-mcp" ] && [ -f "$HOME/.gitlab-mcp/package.json" ]; then
+    echo "Cleaning up old installation..."
+    rm -rf "$HOME/.gitlab-mcp"
+fi

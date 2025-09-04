@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ------------------------------------------------------------
+# integrate - Instructions / helpers for wiring goose-mcp-memory
+#             into external MCP-compatible clients.
+# ------------------------------------------------------------
+set -euo pipefail
+
+BIN="$HOME/.local/bin/goose-mcp-memory"
+if [[ ! -x "$BIN" ]]; then
+  echo "ERROR: $BIN not found or not executable. Run ./install first." >&2
+  exit 1
+fi
+
+echo "# ----------------------------------------------------------------\n"
+echo "Memory MCP integration guide\n"
+echo "Binary: $BIN\n"
+echo "It exposes 4 tools: remember_memory, retrieve_memories, remove_memory_category, remove_specific_memory.\n"
+
+echo "## Claude (Anthropic)\n"
+echo "1. Open Claude’s Extensions panel → Add extension.\n2. Choose ‘Standard IO’ (or equivalent).\n3. Command: $BIN\n   Args: (leave empty)\n4. Save. The tools will appear under the extension’s namespace.\n"
+
+echo "## OpenAI Codex Chat (if MCP-enabled)\n"
+echo "Follow the same steps: add a Standard-IO / MCP server extension that runs:\n   $BIN\n"
+
+echo "## Goose Desktop\n"
+echo "No action required – the Memory extension is bundled and enabled by default.\n"
+
+echo "Done.\n"

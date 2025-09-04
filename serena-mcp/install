@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Serena MCP Server Installation Script
+# Semantic code analysis and intelligent editing
+
+set -e
+
+MCP_NAME="serena"
+MCP_DIR="$HOME/.$MCP_NAME-mcp"
+REPO_URL="https://github.com/fkling/serena.git"
+
+echo "🔧 Installing Serena MCP Server..."
+
+# Create directory
+mkdir -p "$MCP_DIR"
+
+# Clone repository
+if [ ! -d "$MCP_DIR/.git" ]; then
+    echo "📥 Cloning Serena repository..."
+    git clone "$REPO_URL" "$MCP_DIR"
+else
+    echo "📥 Updating existing Serena repository..."
+    cd "$MCP_DIR"
+    git pull origin main
+fi
+
+# Install dependencies
+echo "📦 Installing dependencies..."
+cd "$MCP_DIR"
+npm install
+
+# Build the project
+echo "🔨 Building Serena..."
+npm run build
+
+# Make server executable
+chmod +x "$MCP_DIR/dist/index.js"
+
+# Create Claude configuration
+echo "⚙️  Creating Claude configuration..."
+cat > "$MCP_DIR/claude-mcp.json" << EOF
+{
+  "mcpServers": {
+    "serena": {
+      "command": "node",
+      "args": ["$MCP_DIR/dist/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
+EOF
+
+echo "✅ Serena MCP Server installed successfully!"
+echo ""
+echo "📋 Next steps:"
+echo "1. Run 'mcp integrate serena' to add it to Claude Code"
+echo "2. Serena is ready for semantic code analysis and intelligent editing"
+echo "3. See serena-mcp/doc/usage.md for detailed usage instructions"

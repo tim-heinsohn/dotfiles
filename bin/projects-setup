@@ -25,4 +25,36 @@ cat << EOF > $TOML_FILE
 prefix = [ ${ALLOWED_DIRS} ]
 EOF
 
+# ensure ~/.projects exists with a template
+PROJECTS_FILE="$HOME/.projects"
+if [ ! -f "$PROJECTS_FILE" ]; then
+  cat > "$PROJECTS_FILE" << 'EOS'
+# ~/.projects — define primary/secondary project metadata and API keys
+# This file is sourced by shell and status scripts. Keep it POSIX sh-compatible.
+
+# Primary project
+export PRIMARY_PROJECT_NAME="Your Primary Project"
+export PRIMARY_PROJECT_CODE="PRIM"
+export PRIMARY_PROJECT_ANTHROPIC_API_KEY=""
+export PRIMARY_PROJECT_MOONSHOT_AI_API_KEY=""
+# Prompt color for primary project (Powerlevel10k color)
+# Examples: named colors: red, yellow, cyan; 256-color codes: 172 (orange), 208 (orange), 33 (blue)
+export PRIMARY_PROJECT_PROMPT_COLOR="172"
+
+# Secondary project
+export SECONDARY_PROJECT_NAME="Your Secondary Project"
+export SECONDARY_PROJECT_CODE="SEC"
+export SECONDARY_PROJECT_ANTHROPIC_API_KEY=""
+export SECONDARY_PROJECT_MOONSHOT_AI_API_KEY=""
+# Prompt color for secondary project (Powerlevel10k color)
+# Examples: named colors: green, magenta; 256-color codes: 110 (teal), 99 (purple), 160 (red)
+export SECONDARY_PROJECT_PROMPT_COLOR="110"
+
+# Tip:
+# - project_toggle flips between primary and secondary.
+# - kimi_toggle switches provider: Anthropics vs Moonshot (Kimi).
+EOS
+  echo "Initialized $PROJECTS_FILE with template variables."
+fi
+
 # vim: ft=bash iskeyword+=.

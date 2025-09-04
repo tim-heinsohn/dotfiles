@@ -1,11 +1,18 @@
 #!/bin/sh
-# A robust wrapper for i3status to add the hostname.
+# A robust wrapper for i3status to add the hostname and project code.
 
 # Start i3status and pipe its output for processing
 i3status | (
     # Read and print the first two lines (header and opening bracket)
     read -r line && echo "$line"
     read -r line && echo "$line"
+
+    # Source project codes within subshell so variables are available here
+    PROJECTS_FILE="$HOME/.projects"
+    if [ -f "$PROJECTS_FILE" ]; then
+        # shellcheck disable=SC1090
+        . "$PROJECTS_FILE"
+    fi
 
     # Process each JSON array from i3status in a loop
     while read -r line; do
@@ -19,13 +26,21 @@ i3status | (
             leading_comma=""
         fi
 
-        # Inject hostname at the beginning of the array
+        # Determine active project code
+        if [ -f /tmp/project_secondary_on ]; then
+            proj_code="${SECONDARY_PROJECT_CODE}"
+        else
+            proj_code="${PRIMARY_PROJECT_CODE}"
+        fi
+        [ -n "$proj_code" ] || proj_code="PRJ"
+
+        # Prepare injected segments: hostname and project code
         with_hostname=$(echo "$line_to_process" | jq --arg host "$(hostnamectl hostname)" '[{ "full_text": $host, "name": "hostname" }] + .')
+        with_project=$(echo "$with_hostname" | jq --arg proj "$proj_code" '[{ "full_text": $proj, "name": "project" }] + .')
 
         # Print the re-assembled line with the leading comma
-        echo "$leading_comma$with_hostname"
+        echo "$leading_comma$with_project"
     done
 )
 
 # vim: ft=sh ts=4 sw=4 et
-

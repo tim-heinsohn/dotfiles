@@ -1,0 +1,134 @@
+#!/bin/bash
+
+# Brother HL-L2310D Printer Installation Script
+# For Arch Linux with USB connection
+
+set -e
+
+echo "=== Brother HL-L2310D Printer Installation ==="
+echo "This script will set up your Brother HL-L2310D printer on Arch Linux"
+echo
+
+# Check if running as root
+if [[ $EUID -eq 0 ]]; then
+   echo "This script should not be run as root" 
+   exit 1
+fi
+
+# Function to check if package is installed
+is_installed() {
+    pacman -Qi "$1" >/dev/null 2>&1
+}
+
+echo "1. Installing required packages..."
+sudo pacman -S --needed --noconfirm \
+    cups \
+    cups-client \
+    cups-filters \
+    cups-pdf \
+    ghostscript \
+    gsfonts \
+    usbutils \
+    system-config-printer
+
+echo "2. Starting and enabling CUPS service..."
+sudo systemctl start cups
+sudo systemctl enable cups
+
+echo "3. Installing Brother printer drivers..."
+
+# Check if printer is connected via USB
+echo "Checking for Brother printer via USB..."
+if lsusb | grep -i brother >/dev/null; then
+    echo "✓ Brother printer detected via USB"
+    lsusb | grep -i brother
+else
+    echo "⚠ No Brother printer detected via USB"
+    echo "Please ensure your printer is:
+    - Powered on
+    - Connected via USB cable
+    - In a ready state"
+    read -p "Press Enter to continue after checking connections..."
+fi
+
+# Install Brother drivers from AUR
+if ! command -v yay &> /dev/null && ! command -v paru &> /dev/null; then
+    echo "Installing yay AUR helper..."
+    sudo pacman -S --needed --noconfirm base-devel git
+    cd /tmp
+    git clone https://aur.archlinux.org/yay.git
+    cd yay
+    makepkg -si --noconfirm
+fi
+
+echo "Installing Brother HL-L2310D drivers..."
+if command -v yay &> /dev/null; then
+    yay -S --noconfirm brother-hll2310d
+elif command -v paru &> /dev/null; then
+    paru -S --noconfirm brother-hll2310d
+else
+    echo "Please install an AUR helper (yay or paru) to continue"
+    exit 1
+fi
+
+echo "4. Adding printer to CUPS..."
+echo "Waiting for CUPS to be ready..."
+sleep 3
+
+# Try to auto-detect and add printer
+if lpstat -p | grep -i brother >/dev/null 2>&1; then
+    echo "✓ Brother printer already configured"
+else
+    echo "Adding printer via CUPS web interface..."
+    echo "You can also add the printer manually by visiting:"
+    echo "http://localhost:631"
+    echo
+    echo "Steps for manual setup:"
+    echo "1. Go to Administration → Add Printer"
+    echo "2. Select your Brother HL-L2310D from the list"
+    echo "3. Choose the recommended driver (Brother HL-L2310D series)"
+    echo "4. Set printer name and description"
+fi
+
+echo "5. Testing printer setup..."
+
+# Check if printer is now available
+if lpstat -p | grep -i brother >/dev/null 2>&1; then
+    echo "✓ Brother printer successfully configured"
+    lpstat -p
+    
+    echo "6. Setting as default printer (optional)..."
+    read -p "Set Brother HL-L2310D as default printer? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        PRINTER_NAME=$(lpstat -p | grep -i brother | awk '{print $2}' | head -1)
+        if [ -n "$PRINTER_NAME" ]; then
+            sudo lpadmin -d "$PRINTER_NAME"
+            echo "✓ Set $PRINTER_NAME as default printer"
+        fi
+    fi
+    
+    echo "7. Test print..."
+    read -p "Print a test page? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        PRINTER_NAME=$(lpstat -p | grep -i brother | awk '{print $2}' | head -1)
+        if [ -n "$PRINTER_NAME" ]; then
+            echo "Printing test page..."
+            lp /etc/cups/data/testprint
+            echo "✓ Test page sent to printer"
+        fi
+    fi
+else
+    echo "⚠ Printer setup may need manual configuration"
+    echo "Please visit http://localhost:631 to complete setup"
+fi
+
+echo
+echo "=== Installation Complete ==="
+echo "Printer management commands:"
+echo "- Check status: lpstat -p -d"
+echo "- List printers: lpstat -a"
+echo "- CUPS web interface: http://localhost:631"
+echo "- Cancel jobs: cancel -a" 
+echo "- Add printer: sudo lpadmin -p PRINTER_NAME -E -v DEVICE_URI -m PPD_FILE"
