@@ -93,7 +93,7 @@ source ~/.zsh/p10k.custom.zsh
 # [ "$PWD" = "$HOME" ] && {
 #    # Wait for instant prompt to finish
 #    [[ ! -v POWERLEVEL9K_INSTANT_PROMPT ]] || (( ! ${+POWERLEVEL9K_INSTANT_PROMPT_LOADED:-0} )) || return
-#    fortune 1% wisdom 99% $HOME/dotfiles/goodies/fortune
+#    fortune 1% wisdom 99% $HOME/dotfiles/utils/fortune
 # }
 
 # Set Kimi mode if enabled

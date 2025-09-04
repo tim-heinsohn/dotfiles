@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""
+Split an A3 PDF (1 page) into 6 A4 pages with equal scaling, correct crops, and margins.
+
+Usage:
+  split_a3_to_a4 /path/to/Grundriss_A3.pdf [--margin-mm 20] [--dpi 300] [--out-dir DIR]
+
+Dependencies: pdfinfo, pdfunite (poppler), convert (ImageMagick)
+
+TODO: Add an optional vector-preserving mode using pdfjam so content
+      stays vector-based (no rasterization) when possible.
+"""
+
+import subprocess
+import os
+import re
+import shlex
+import argparse
+from pathlib import Path
+
+
+def _get_pdf_page_size_pts(source_pdf: str) -> tuple[float, float]:
+    try:
+        result = subprocess.run(
+            ["pdfinfo", source_pdf], capture_output=True, text=True, check=True
+        )
+        m = re.search(r"Page size:\s*([0-9.]+) x ([0-9.]+) pts", result.stdout)
+        if m:
+            return float(m.group(1)), float(m.group(2))
+    except Exception:
+        pass
+    return 1190.55, 841.89  # A3 landscape fallback
+
+
+def mm_to_px(mm: float, dpi: int) -> int:
+    return int(round(mm / 25.4 * dpi))
+
+
+def pts_to_px(pts: float, dpi: int) -> int:
+    return int(round(pts / 72.0 * dpi))
+
+
+def split_a3_to_a4(source_pdf: str, output_dir: str | None = None, margin_mm: int = 20, dpi: int = 300, dry_run: bool = False) -> str:
+    source_pdf = str(source_pdf)
+    if output_dir is None:
+        output_dir = str(Path(source_pdf).parent)
+    os.makedirs(output_dir, exist_ok=True)
+
+    width_pts, height_pts = _get_pdf_page_size_pts(source_pdf)
+    src_w_px = pts_to_px(width_pts, dpi)
+    src_h_px = pts_to_px(height_pts, dpi)
+
+    a4_w_px = mm_to_px(210, dpi)
+    a4_h_px = mm_to_px(297, dpi)
+    margin_px = mm_to_px(margin_mm, dpi)
+
+    base_crop_w = src_w_px // 2
+    base_crop_h = src_h_px // 3
+    remainder_w = src_w_px - base_crop_w * 2
+    remainder_h = src_h_px - base_crop_h * 3
+
+    print(f"Source (pts): {width_pts:.2f} x {height_pts:.2f}")
+    print(f"Source (px @ {dpi} DPI): {src_w_px} x {src_h_px}")
+    print(f"A4 (px @ {dpi} DPI): {a4_w_px} x {a4_h_px}")
+    print(f"Crop base: {base_crop_w} x {base_crop_h} (remainder {remainder_w} x {remainder_h})")
+    print(f"Margins: {margin_px}px each side ({margin_mm}mm)")
+
+    temp_pdfs = []
+    base_name = Path(source_pdf).stem
+
+    pages = []
+    for row in range(3):
+        for col in range(2):
+            cw = base_crop_w + (remainder_w if col == 1 else 0)
+            ch = base_crop_h + (remainder_h if row == 2 else 0)
+            cx = base_crop_w * col
+            cy = base_crop_h * row
+            pages.append({"x": cx, "y": cy, "width": cw, "height": ch, "page_num": row * 2 + col + 1})
+
+    if dry_run:
+        print("\n-- dry-run --")
+        for p in pages:
+            avail_w = a4_w_px - 2 * margin_px
+            avail_h = a4_h_px - 2 * margin_px
+            sf = min(avail_w / p["width"], avail_h / p["height"]) if avail_w > 0 and avail_h > 0 else 1.0
+            sw = max(1, int(round(p["width"] * sf)))
+            sh = max(1, int(round(p["height"] * sf)))
+            print(f"page {p['page_num']}: crop {p['width']}x{p['height']} @ ({p['x']},{p['y']}) -> {sw}x{sh} onto {a4_w_px}x{a4_h_px}")
+        print("No files written.")
+        return ""
+
+    for i, page in enumerate(pages):
+        temp_pdf = f"{output_dir}/temp_page_{i+1:02d}.pdf"
+        available_width = a4_w_px - 2 * margin_px
+        available_height = a4_h_px - 2 * margin_px
+        scale_factor = min(available_width / page["width"], available_height / page["height"]) if available_width > 0 and available_height > 0 else 1.0
+        scaled_width = max(1, int(round(page["width"] * scale_factor)))
+        scaled_height = max(1, int(round(page["height"] * scale_factor)))
+
+        cmd = [
+            "convert",
+            "-density", str(dpi),
+            f"{source_pdf}[0]",
+            "-crop", f"{page['width']}x{page['height']}+{page['x']}+{page['y']}",
+            "+repage",
+            "-resize", f"{scaled_width}x{scaled_height}!",
+            "-background", "white",
+            "-gravity", "center",
+            "-extent", f"{a4_w_px}x{a4_h_px}",
+            "-units", "PixelsPerInch",
+            "-density", str(dpi),
+            "-quality", "95",
+            temp_pdf,
+        ]
+
+        print(
+            f"📄 Page {i+1}/6: crop {page['width']}x{page['height']} at ({page['x']},{page['y']}); "
+            f"scale→ {scaled_width}x{scaled_height}, center on A4"
+        )
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"❌ Error on page {i+1}: {result.stderr}")
+            raise Exception(f"Failed to create page {i+1}")
+        temp_pdfs.append(temp_pdf)
+
+    final_pdf = f"{output_dir}/{base_name}_A4_6pages.pdf"
+    subprocess.run(["pdfunite"] + temp_pdfs + [final_pdf], check=True)
+
+    for temp_pdf in temp_pdfs:
+        if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+
+    print(f"\n✅ Successfully created: {final_pdf}")
+    print(f"📏 Output pages: A4 @ {dpi} DPI")
+    print(f"📊 Total pages: 6")
+    print(f"🎯 Equal scaling applied to all sections")
+    return final_pdf
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Split an A3 PDF into 6 A4 pages with equal scaling.")
+    parser.add_argument("source_pdf", help="Path to the source A3 PDF")
+    parser.add_argument("--margin-mm", type=int, default=20, help="Margin around content on each A4 page (mm)")
+    parser.add_argument("--dpi", type=int, default=300, help="Rasterization DPI (convert density)")
+    parser.add_argument("--out-dir", default=None, help="Output directory (defaults to source folder)")
+    parser.add_argument("--dry-run", action="store_true", help="Show computed sizes and exit without writing files")
+    args = parser.parse_args()
+
+    try:
+        split_a3_to_a4(args.source_pdf, args.out_dir, args.margin_mm, args.dpi, args.dry_run)
+        print("\n🎉 Splitting completed with equal scaling and proper A4 dimensions!")
+    except subprocess.CalledProcessError as cpe:
+        print(f"\n❌ Subprocess error ({cpe.returncode}): {' '.join(shlex.quote(p) for p in (cpe.cmd if isinstance(cpe.cmd, list) else [str(cpe.cmd)]))}")
+        print(cpe.stderr if hasattr(cpe, 'stderr') and cpe.stderr else "")
+        raise
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        raise
+
+
+if __name__ == "__main__":
+    main()
+
+# vim: set filetype=python :

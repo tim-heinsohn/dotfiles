@@ -14,7 +14,7 @@ claude_settings = { source = "claude-code/settings.json", target = "~/.claude/se
 claude_notes = { source = "claude-code/CLAUDE.md", target = "~/.claude/CLAUDE.md" }
 claude_commands = { source = "claude-code/commands", target = "~/.claude/commands" }
 claude_agents = { source = "claude-code/agents", target = "~/.claude/agents" }
-flameshot =  { source = "goodies/flameshot/flameshot.ini", target = "~/.config/flameshot/flameshot.ini" }
+flameshot =  { source = "utils/flameshot/flameshot.ini", target = "~/.config/flameshot/flameshot.ini" }
 gitattributes = { source = "git/gitattributes", target = ".gitattributes" }
 gitconfig = { source = "git/gitconfig", target = ".gitconfig" }
 gitignore = { source = "git/gitignore", target = ".gitignore" }

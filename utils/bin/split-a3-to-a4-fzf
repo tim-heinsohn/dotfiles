@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+split-a3-to-a4-fzf: Pick a PDF via fzf and split A3→6xA4 using split_a3_to_a4
+
+Usage:
+  split-a3-to-a4-fzf [--search-dir DIR] [--margin-mm N] [--dpi N] [--out-dir DIR] [--dry-run]
+
+Options:
+  --search-dir DIR  Root directory to search for PDFs (default: current dir)
+  --margin-mm N     Margin in millimeters around content on A4 pages (default: 20)
+  --dpi N           Rasterization DPI for convert (default: 300)
+  --out-dir DIR     Output directory (default: source PDF folder)
+  --dry-run         Only compute and show sizes; do not write files
+  -h, --help        Show this help
+
+Requires: fzf, pdfinfo, split_a3_to_a4 in PATH
+EOF
+}
+
+SEARCH_DIR="$(pwd)"
+MARGIN_MM=20
+DPI=300
+OUT_DIR=""
+DRY=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --search-dir) SEARCH_DIR="$2"; shift 2;;
+    --margin-mm) MARGIN_MM="$2"; shift 2;;
+    --dpi) DPI="$2"; shift 2;;
+    --out-dir) OUT_DIR="$2"; shift 2;;
+    --dry-run) DRY="--dry-run"; shift;;
+    -h|--help) usage; exit 0;;
+    *) echo "Unknown option: $1" >&2; usage; exit 2;;
+  esac
+done
+
+command -v fzf >/dev/null 2>&1 || { echo "fzf not found" >&2; exit 1; }
+command -v pdfinfo >/dev/null 2>&1 || { echo "pdfinfo not found" >&2; exit 1; }
+command -v split_a3_to_a4 >/dev/null 2>&1 || { echo "split_a3_to_a4 not in PATH" >&2; exit 1; }
+
+if [[ ! -d "$SEARCH_DIR" ]]; then
+  echo "Search dir does not exist: $SEARCH_DIR" >&2
+  exit 1
+fi
+
+# Find PDFs and pick one
+SEL=$(find "$SEARCH_DIR" -type f \( -iname '*.pdf' -o -iname '*.PDF' \) 2>/dev/null \
+  | sort \
+  | fzf --prompt="PDF> " --height=80% --preview='pdfinfo {} | sed -n "1,20p"' --bind 'enter:accept')
+
+if [[ -z "${SEL:-}" ]]; then
+  echo "No file selected." >&2
+  exit 1
+fi
+
+set -x
+if [[ -n "$OUT_DIR" ]]; then
+  exec split_a3_to_a4 "$SEL" --margin-mm "$MARGIN_MM" --dpi "$DPI" --out-dir "$OUT_DIR" ${DRY}
+else
+  exec split_a3_to_a4 "$SEL" --margin-mm "$MARGIN_MM" --dpi "$DPI" ${DRY}
+fi
+
+# vim: set filetype=sh :
