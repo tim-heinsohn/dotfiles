@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# install-from-source: Build Goose Desktop from a local clone and install a runnable bundle
+# Supports: latest tagged release or main branch
+#
+# Usage:
+#   install-from-source [--repo /path/to/goose] [--ref latest|main|<git-ref>] [--target zip|deb] [--install-dir /opt/goose] [--link /usr/local/bin/goose-gui]
+#
+# Defaults:
+#   --repo        /srv/lib/goose
+#   --ref         latest
+#   --target      auto
+#   --install-dir /opt/goose
+#   --link        /usr/local/bin/goose-gui
+#
+# Requirements:
+#   - Arch/Manjaro: pacman -S --needed base-devel dpkg fakeroot
+#   - Rust (via rustup), Node 22.9+ and npm
+
+REPO=${REPO:-/srv/lib/goose}
+REF=latest
+TARGET=deb # zip would require platform ignorance in sourc repo
+INSTALL_DIR=/opt/goose
+LINK=/usr/local/bin/goose-gui
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo) REPO="$2"; shift 2 ;;
+    --ref) REF="$2"; shift 2 ;;
+    --target) TARGET="$2"; shift 2 ;;
+    --install-dir) INSTALL_DIR="$2"; shift 2 ;;
+    --link) LINK="$2"; shift 2 ;;
+    -h|--help)
+      grep '^# ' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) echo "Unknown arg: $1" >&2; exit 1 ;;
+  esac
+
+done
+
+# Abort if AUR goose-desktop is installed to avoid confusion
+if command -v pacman >/dev/null 2>&1; then
+  if pacman -Qi goose-desktop >/dev/null 2>&1; then
+    echo "ERROR: Detected installed AUR package 'goose-desktop'." >&2
+    echo "Please remove it before installing from source to avoid conflicts:" >&2
+    echo "  sudo pacman -Rns goose-desktop" >&2
+    exit 1
+  fi
+fi
+
+if [[ ! -d "$REPO/.git" ]]; then
+  echo "ERROR: repo not found at $REPO (expected a git clone)" >&2
+  exit 1
+fi
+
+# Ensure prerequisites exist (best-effort)
+if command -v pacman >/dev/null 2>&1; then
+  sudo pacman -S --needed --noconfirm base-devel dpkg fakeroot || true
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "ERROR: cargo (Rust) not found in PATH" >&2; exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "ERROR: node not found in PATH" >&2; exit 1
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "ERROR: npm not found in PATH" >&2; exit 1
+fi
+
+pushd "$REPO" >/dev/null
+
+echo "==> Fetching tags"
+git fetch --tags --prune --quiet || true
+
+case "$REF" in
+  latest)
+    TAG=$(git tag --sort=-v:refname | head -n1)
+    if [[ -z "${TAG:-}" ]]; then echo "ERROR: no tags found" >&2; exit 1; fi
+    echo "==> Checking out latest tag: $TAG"
+    git checkout -q "$TAG"
+    ;;
+  main|master)
+    echo "==> Checking out $REF"
+    git checkout -q "$REF"
+    git pull -q --rebase || true
+    ;;
+  *)
+    echo "==> Checking out ref: $REF"
+    git checkout -q "$REF"
+    ;;
+esac
+
+# Build Rust backend
+echo "==> Building Rust backend (goose-server)"
+cargo build --release -p goose-server
+
+# Prepare UI
+pushd ui/desktop >/dev/null
+
+echo "==> Installing UI dependencies"
+# Primary attempt: reproducible install
+if ! npm ci; then
+  echo "WARN: npm ci failed; falling back to npm install" >&2
+  rm -rf node_modules package-lock.json || true
+  npm install
+fi
+
+# Workaround npm optional deps/rollup bug: ensure platform rollup package exists
+if ! node -e "require('@rollup/rollup-linux-x64-gnu');" >/dev/null 2>&1; then
+  echo "INFO: fixing rollup optional dependency by reinstalling without lockfile" >&2
+  rm -rf node_modules package-lock.json || true
+  npm install
+fi
+
+echo "==> Staging backend binary into UI"
+mkdir -p src/bin
+cp -f ../../target/release/goosed src/bin/
+
+# Package
+# Apply optional local patches (e.g., enable zip on Linux)
+if [ -f "$HOME/dotfiles/goose/patches/goose-enable-zip-linux.patch" ]; then
+  echo "==> Applying local patch: goose-enable-zip-linux.patch"
+  git apply "$HOME/dotfiles/goose/patches/goose-enable-zip-linux.patch" || echo "WARN: patch already applied or failed; continuing"
+fi
+
+case "$TARGET" in
+  auto|zip)
+    echo "==> Building ZIP distribution"
+    npm run make -- --targets=@electron-forge/maker-zip
+    OUT_DIR="out/Goose-linux-x64"
+    ;;
+  deb)
+    echo "==> Building DEB package"
+    npm run make -- --targets=@electron-forge/maker-deb
+    OUT_DIR="out/Goose-linux-x64" # also place a runnable tree here
+    ;;
+  *) echo "ERROR: unknown target $TARGET (use auto|zip|deb)" >&2; exit 1 ;;
+esac
+
+# Install to INSTALL_DIR and symlink
+sudo mkdir -p "$INSTALL_DIR"
+sudo rsync -a --delete "$OUT_DIR/" "$INSTALL_DIR/"
+
+if [[ -n "$LINK" ]]; then
+  sudo ln -sf "$INSTALL_DIR/Goose" "$LINK"
+fi
+
+echo "\n✅ Goose installed"
+echo "   Repo:        $REPO"
+echo "   Ref:         $(git rev-parse --abbrev-ref HEAD || true) @ $(git rev-parse --short HEAD || true)"
+echo "   Target:      $TARGET"
+echo "   Installed:   $INSTALL_DIR"
+echo "   Launcher:    ${LINK:-<none>}"
+
+echo "\nRun: $LINK"
