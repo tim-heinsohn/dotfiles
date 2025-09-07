@@ -36,7 +36,12 @@ if [ ! -f "$PROJECTS_FILE" ]; then
 export PRIMARY_PROJECT_NAME="Your Primary Project"
 export PRIMARY_PROJECT_CODE="PRIM"
 export PRIMARY_PROJECT_ANTHROPIC_API_KEY=""
+export PRIMARY_PROJECT_OPENAI_API_KEY=""
 export PRIMARY_PROJECT_MOONSHOT_AI_API_KEY=""
+# Goose defaults for primary project (see goose/config.md)
+# Example values: GOOSE_PROVIDER=anthropic|openai, GOOSE_MODEL=claude-3-7-sonnet|gpt-4o-mini
+export PRIMARY_PROJECT_GOOSE_PROVIDER=""
+export PRIMARY_PROJECT_GOOSE_MODEL=""
 # Prompt color for primary project (Powerlevel10k color)
 # Examples: named colors: red, yellow, cyan; 256-color codes: 172 (orange), 208 (orange), 33 (blue)
 export PRIMARY_PROJECT_PROMPT_COLOR="172"
@@ -45,7 +50,12 @@ export PRIMARY_PROJECT_PROMPT_COLOR="172"
 export SECONDARY_PROJECT_NAME="Your Secondary Project"
 export SECONDARY_PROJECT_CODE="SEC"
 export SECONDARY_PROJECT_ANTHROPIC_API_KEY=""
+export SECONDARY_PROJECT_OPENAI_API_KEY=""
 export SECONDARY_PROJECT_MOONSHOT_AI_API_KEY=""
+# Goose defaults for secondary project (see goose/config.md)
+# Example values: GOOSE_PROVIDER=anthropic|openai, GOOSE_MODEL=claude-3-7-sonnet|gpt-4o-mini
+export SECONDARY_PROJECT_GOOSE_PROVIDER=""
+export SECONDARY_PROJECT_GOOSE_MODEL=""
 # Prompt color for secondary project (Powerlevel10k color)
 # Examples: named colors: green, magenta; 256-color codes: 110 (teal), 99 (purple), 160 (red)
 export SECONDARY_PROJECT_PROMPT_COLOR="110"
@@ -56,5 +66,30 @@ export SECONDARY_PROJECT_PROMPT_COLOR="110"
 EOS
   echo "Initialized $PROJECTS_FILE with template variables."
 fi
+
+# Merge newly added envs into existing ~/.projects without overwriting
+# Append if missing, keep user values intact
+ensure_var() {
+  # $1: VAR name, $2: default value
+  local var="$1"
+  local def="$2"
+  if ! grep -Eq "^[[:space:]]*export[[:space:]]+${var}=" "$PROJECTS_FILE"; then
+    printf '\n# Added by bin/projects-setup: ensure %s exists\nexport %s=%q\n' "$var" "$var" "$def" >> "$PROJECTS_FILE"
+    echo "Appended missing var: $var"
+  fi
+}
+
+ensure_var PRIMARY_PROJECT_OPENAI_API_KEY ""
+ensure_var SECONDARY_PROJECT_OPENAI_API_KEY ""
+ensure_var PRIMARY_PROJECT_ANTHROPIC_API_KEY ""
+ensure_var SECONDARY_PROJECT_ANTHROPIC_API_KEY ""
+ensure_var PRIMARY_PROJECT_MOONSHOT_AI_API_KEY ""
+ensure_var SECONDARY_PROJECT_MOONSHOT_AI_API_KEY ""
+
+# New Goose defaults (see goose/config.md):
+ensure_var PRIMARY_PROJECT_GOOSE_PROVIDER ""
+ensure_var PRIMARY_PROJECT_GOOSE_MODEL ""
+ensure_var SECONDARY_PROJECT_GOOSE_PROVIDER ""
+ensure_var SECONDARY_PROJECT_GOOSE_MODEL ""
 
 # vim: ft=bash iskeyword+=.

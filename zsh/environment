@@ -36,22 +36,42 @@ export GPG_TTY=$(tty)
 
 # Only load gopass secrets in GUI environments
 if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ]; then
-  GEMINI_API_KEY=$(gopass show -o t/ai/gemini/api-key)
-  export GEMINI_API_KEY
-  MISTRAL_API_KEY=$(gopass show -o t/ai/mistral/api-key)
-  export MISTRAL_API_KEY
+  # LLMs
   ANTHROPIC_API_KEY=$(gopass show -o t/ai/claude/api-key)
   export ANTHROPIC_API_KEY
-  export PERSONAL_ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+  export PERSONAL_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
   DEEPSEEK_API_KEY=$(gopass show -o t/ai/deepseek/api-key)
   export DEEPSEEK_API_KEY
-  OPENROUTER_API_KEY=$(gopass show -o t/ai/openrouter.ai)
-  export OPENROUTER_API_KEY
+  export PERSONAL_DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+
+  GEMINI_API_KEY=$(gopass show -o t/ai/gemini/api-key)
+  export GEMINI_API_KEY
+  export PERSONAL_GEMINI_API_KEY=${GEMINI_API_KEY}
+
+  MISTRAL_API_KEY=$(gopass show -o t/ai/mistral/api-key)
+  export MISTRAL_API_KEY
+  export PERSONAL_MISTRAL_API_KEY=${MISTRAL_API_KEY}
+
   MOONSHOT_AI_API_KEY=$(gopass show -o t/ai/moonshot.ai)
   export MOONSHOT_AI_API_KEY
-  export PERSONAL_MOONSHOT_AI_API_KEY=$MOONSHOT_AI_API_KEY
+  export PERSONAL_MOONSHOT_AI_API_KEY=${MOONSHOT_AI_API_KEY}
 
-  # Semgrep MCP Platform integration
+  OPENAI_API_KEY=$(gopass show -o t/ai/openai/api-key)
+  export OPENAI_API_KEY
+  export PERSONAL_OPENAI_API_KEY=${OPENAI_API_KEY}
+
+  OPENROUTER_API_KEY=$(gopass show -o t/ai/openrouter.ai)
+  export OPENROUTER_API_KEY
+  export PERSONAL_OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+
+  # Apply project-specific overrides via shared helper
+  if [ -f "$HOME/dotfiles/zsh/lib/projects-env.zsh" ]; then
+    source "$HOME/dotfiles/zsh/lib/projects-env.zsh"
+    projects_apply_llm_env_from_selection
+  fi
+
+  # MCPs
   if command -v semgrep-mcp &> /dev/null; then
     SEMGREP_APP_TOKEN=$(gopass show -o t/dev/semgrep cli_token)
     export SEMGREP_APP_TOKEN
@@ -67,5 +87,16 @@ export REDIS_URL=redis://localhost:6379
 # f.dev
 export F_BANK_TRANSACTIONS_PATH="$HOME/f.doc.2023/Banken/"
 export F_BANK_DOCUMENTS_PATH="$HOME/f.doc.2023/Steuern/Einkommensteuer/"
+
+# Goose CLI/Desktop defaults when available
+if command -v goose-gui >/dev/null 2>&1 \
+  || command -v goose-desktop >/dev/null 2>&1 \
+  || command -v goose >/dev/null 2>&1 \
+  || command -v goose-cli >/dev/null 2>&1; then
+  # Defaults for Goose CLI/Desktop. Use new top-level envs.
+  export GOOSE_PROVIDER="openai"
+  export GOOSE_MODEL="gpt-5"
+  # API keys are provider-specific (e.g., OPENAI_API_KEY, ANTHROPIC_API_KEY)
+fi
 
 # vim: set ft=zsh:

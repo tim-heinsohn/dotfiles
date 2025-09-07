@@ -123,34 +123,75 @@ function project_secondary_enabled() {
 function _set_anthropic_env_for_selection() {
   _projects_source || return 1
 
-  local project_prefix
-  local project_label
-  if project_secondary_enabled; then
-    project_prefix="SECONDARY"
-    project_label="secondary"
+  local project_prefix project_label
+  if [[ -f "$HOME/dotfiles/zsh/lib/projects-env.zsh" ]]; then
+    source "$HOME/dotfiles/zsh/lib/projects-env.zsh"
+    if __projects_is_secondary; then
+      project_prefix="SECONDARY"; project_label="secondary"
+    else
+      project_prefix="PRIMARY"; project_label="primary"
+    fi
   else
-    project_prefix="PRIMARY"
-    project_label="primary"
+    if project_secondary_enabled; then
+      project_prefix="SECONDARY"; project_label="secondary"
+    else
+      project_prefix="PRIMARY"; project_label="primary"
+    fi
   fi
   local code_var="${project_prefix}_PROJECT_CODE"
   local project_code="${(P)code_var}"
 
   if kimi_enabled; then
     # Use Moonshot (Kimi) for Anthropic-compatible API
-    unset ANTHROPIC_API_KEY
     local key_var="${project_prefix}_PROJECT_MOONSHOT_AI_API_KEY"
-    export ANTHROPIC_AUTH_TOKEN="${(P)key_var}"
+    local moonshot_key="${(P)key_var}"
+    export ANTHROPIC_AUTH_TOKEN="$moonshot_key"
+    # For Goose in Kimi mode, also expose the key via ANTHROPIC_API_KEY
+    export ANTHROPIC_API_KEY="$moonshot_key"
     export ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic
+    # Goose supports ANTHROPIC_HOST; point it to Kimi endpoint
+    export ANTHROPIC_HOST=https://api.moonshot.ai/anthropic
+    # Kimi latest model overrides
+    export ANTHROPIC_MODEL=kimi-k2-0905-preview
+    export ANTHROPIC_SMALL_FAST_MODEL=kimi-k2-0905-preview
     echo "Switched to Kimi mode for ${project_code} (${project_label} project)."
   else
     # Use direct Anthropic API
     unset ANTHROPIC_AUTH_TOKEN
     unset ANTHROPIC_BASE_URL
+    # Reset Goose Anthropic host to default if previously set
+    unset ANTHROPIC_HOST
+    # Remove Kimi-specific model overrides
+    unset ANTHROPIC_MODEL
+    unset ANTHROPIC_SMALL_FAST_MODEL
     local key_var="${project_prefix}_PROJECT_ANTHROPIC_API_KEY"
     export ANTHROPIC_API_KEY="${(P)key_var}"
     echo "Switched to Anthropic mode for ${project_code} (${project_label} project)."
   fi
   _update_claude_settings_provider
+}
+
+# Helper: set Goose OpenAI API key for selected project
+function _set_openai_env_for_selection() {
+  # Prefer shared helper to avoid duplicated logic
+  if [[ -f "$HOME/dotfiles/zsh/lib/projects-env.zsh" ]]; then
+    source "$HOME/dotfiles/zsh/lib/projects-env.zsh"
+    projects_apply_llm_env_from_selection
+    return 0
+  fi
+
+  # Fallback: set provider API key from selected project's OPENAI key
+  _projects_source || return 1
+  local project_prefix project_label
+  if project_secondary_enabled; then
+    project_prefix="SECONDARY"; project_label="secondary"
+  else
+    project_prefix="PRIMARY"; project_label="primary"
+  fi
+  local key_var="${project_prefix}_PROJECT_OPENAI_API_KEY"
+  local key_value="${(P)key_var}"
+  export OPENAI_API_KEY="$key_value"
+  echo "Set OpenAI key from ${project_label} project."
 }
 
 # Keep Claude Code settings.json in sync with provider mode
@@ -206,8 +247,44 @@ function project_toggle() {
   else
     touch /tmp/project_secondary_on
   fi
+  # Apply per-project LLM envs and Goose key via shared helper
+  if [[ -f "$HOME/dotfiles/zsh/lib/projects-env.zsh" ]]; then
+    source "$HOME/dotfiles/zsh/lib/projects-env.zsh"
+    projects_apply_llm_env_from_selection
+  fi
+  # Apply per-project Goose defaults (provider/model) if present in ~/.projects
+  if [[ -f "$HOME/.projects" ]]; then
+    source "$HOME/.projects"
+    local project_prefix
+    if project_secondary_enabled; then
+      project_prefix="SECONDARY"
+    else
+      project_prefix="PRIMARY"
+    fi
+    local prov_var="${project_prefix}_PROJECT_GOOSE_PROVIDER"
+    local model_var="${project_prefix}_PROJECT_GOOSE_MODEL"
+    local prov_val="${(P)prov_var}"
+    local model_val="${(P)model_var}"
+    if [[ -n "$prov_val" ]]; then export GOOSE_PROVIDER="$prov_val"; fi
+    if [[ -n "$model_val" ]]; then export GOOSE_MODEL="$model_val"; fi
+  fi
+  # Then apply Anthropic/Kimi provider specifics and Claude settings sync
   _set_anthropic_env_for_selection
 }
 alias pt=project_toggle
+
+# Wrap the claude CLI so that in Kimi mode we avoid leaking the Moonshot key as ANTHROPIC_API_KEY.
+# Only define the wrapper if a real external "claude" binary exists on PATH.
+typeset -g __CLAUDE_BIN
+__CLAUDE_BIN=$(whence -p claude 2>/dev/null || true)
+if [[ -n "$__CLAUDE_BIN" && -x "$__CLAUDE_BIN" ]]; then
+  function claude() {
+    if kimi_enabled; then
+      ANTHROPIC_API_KEY= "$__CLAUDE_BIN" "$@"
+    else
+      "$__CLAUDE_BIN" "$@"
+    fi
+  }
+fi
 
 # vim: set ft=zsh:
