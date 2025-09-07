@@ -13,5 +13,12 @@ ln -sf ~/dotfiles/zsh/p10k.zsh ~/.p10k.zsh
 mkdir -p ~/.zsh
 ln -sf ~/dotfiles/zsh/p10k.claude.zsh ~/.zsh/p10k.claude.zsh
 
+# Symlink MCP CLI from ~/mcp if present
+if [ -x "$HOME/mcp/bin/mcp" ]; then
+  mkdir -p "$HOME/bin"
+  ln -sf "$HOME/mcp/bin/mcp" "$HOME/bin/mcp"
+  echo "Linked ~/bin/mcp -> ~/mcp/bin/mcp"
+fi
+
 # Print reminder for brightness control
 echo "Run ~/dotfiles/acpi/enable to enable brightness control."
