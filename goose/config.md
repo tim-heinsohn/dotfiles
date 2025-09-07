@@ -35,6 +35,18 @@ How it’s provisioned
 - The developer’s server uses gopass to fetch secrets and injects them when serving the installer.
 - The client installer decodes the payload into `~/.zsh/environment` (600) and updates `~/.zshrc` to source it.
 
+Moonshot (Kimi) via Anthropic-compatible API
+- Defaults applied by the installer for Kimi (Moonshot):
+  - `GOOSE_PROVIDER=anthropic`
+  - `GOOSE_MODEL=kimi-k2-0905-preview`
+  - `ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic`
+  - `ANTHROPIC_HOST=https://api.moonshot.ai/anthropic`
+  - `ANTHROPIC_MODEL=kimi-k2-0905-preview`
+  - `ANTHROPIC_SMALL_FAST_MODEL=kimi-k2-0905-preview`
+- API key mapping:
+  - `ANTHROPIC_API_KEY` is populated from `gopass show -o inaudito/services/moonshot.ai api_key`
+  - Falls back to `inaudito/services/anthropic-claude api_key` if Moonshot key is absent.
+
 Examples (`~/.zsh/environment`)
   export GOOSE_PROVIDER=anthropic
   export GOOSE_MODEL=claude-3-7-sonnet

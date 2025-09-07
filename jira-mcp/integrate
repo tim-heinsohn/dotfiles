@@ -12,9 +12,5 @@ if [ -f "$HOME/.jira-mcp/bin/mcp-server" ]; then
   echo "Note: Set JIRA_API_TOKEN, JIRA_EMAIL, and JIRA_URL environment variables"
   "$DOTFILES_DIR/bin/codex-mcp" upsert jira <<EOF
 [mcp.servers.jira]
-command = "$HOME/.jira-mcp/bin/mcp-server"
-EOF
-else
-  echo "Error: Jira MCP not installed. Run: mcp install jira" >&2
-  exit 1
-fi
+# Goose integration
+"$DOTFILES_DIR/goose/integrate" upsert-stdio jira "$HOME/.jira-mcp/bin/mcp-server"

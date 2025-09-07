@@ -11,10 +11,5 @@ if [ -d "$HOME/.elevenlabs-mcp" ]; then
   echo "✓ ElevenLabs MCP integrated"
   "$DOTFILES_DIR/bin/codex-mcp" upsert elevenlabs <<EOF
 [mcp.servers.elevenlabs]
-command = "node"
-args = ["$HOME/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js"]
-EOF
-else
-  echo "Error: ElevenLabs MCP not installed. Run: mcp install elevenlabs" >&2
-  exit 1
-fi
+# Goose integration
+"$DOTFILES_DIR/goose/integrate" upsert-stdio elevenlabs node "$HOME/.elevenlabs-mcp/elevenlabs-mcp/dist/index.js" --env-key ELEVENLABS_API_KEY

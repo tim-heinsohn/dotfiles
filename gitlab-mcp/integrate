@@ -11,6 +11,8 @@ if [ -d "$HOME/.gitlab-mcp" ]; then
   echo "✓ GitLab MCP integrated"
   echo "Note: Set GITLAB_PERSONAL_ACCESS_TOKEN and optionally GITLAB_URL"
   "$DOTFILES_DIR/bin/codex-mcp" upsert gitlab <<EOF
+# Goose integration
+"$DOTFILES_DIR/goose/integrate" upsert-stdio gitlab node "$HOME/.gitlab-mcp/dist/index.js" --env-key GITLAB_PERSONAL_ACCESS_TOKEN
 [mcp.servers.gitlab]
 command = "node"
 args = ["$HOME/.gitlab-mcp/dist/index.js"]

@@ -12,10 +12,5 @@ if [ -d "$HOME/.youtube-playlist-mcp" ] && [ -f "$HOME/.youtube-playlist-mcp/dis
   echo "Note: Ensure OAuth credentials are set up (see ~/.youtube-playlist-mcp/oauth-setup.md)"
   "$DOTFILES_DIR/bin/codex-mcp" upsert youtube-playlist <<EOF
 [mcp.servers.youtube-playlist]
-command = "node"
-args = ["$HOME/.youtube-playlist-mcp/dist/index.js"]
-EOF
-else
-  echo "Error: YouTube Playlist MCP not installed. Run: mcp install youtube-playlist" >&2
-  exit 1
-fi
+# Goose integration
+"$DOTFILES_DIR/goose/integrate" upsert-stdio youtube-playlist node "$HOME/.youtube-playlist-mcp/dist/index.js"

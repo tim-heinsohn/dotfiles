@@ -92,7 +92,11 @@ function instant_prompt_kimi_mode() {
 
 # Add custom segments to right prompt elements
 # Source Claude Code status line functions
-source ~/dotfiles/zsh/p10k.claude.zsh
+if [[ -f "$HOME/.zsh/p10k.claude.zsh" ]]; then
+  source "$HOME/.zsh/p10k.claude.zsh"
+elif [[ -f "$HOME/dotfiles/zsh/p10k.claude.zsh" ]]; then
+  source "$HOME/dotfiles/zsh/p10k.claude.zsh"
+fi
 
 typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
   api_key                 # project code and/or provider

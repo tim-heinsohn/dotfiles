@@ -1,0 +1,144 @@
+#!/bin/bash
+set -euo pipefail
+
+XDG_CONF_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}"
+GOOSE_YAML="$XDG_CONF_ROOT/goose/config.yaml"
+mkdir -p "$(dirname "$GOOSE_YAML")"
+
+usage() {
+  cat <<USAGE
+Usage:
+  $(basename "$0") upsert-stdio <name> <cmd> [args...] [--env KEY=VALUE ...] [--env-key KEY ...]
+  $(basename "$0") upsert-sse <name> <uri> [--env KEY=VALUE ...] [--env-key KEY ...]
+  $(basename "$0") upsert-streamable-http <name> <uri> [--env KEY=VALUE ...] [--env-key KEY ...]
+USAGE
+}
+
+cmd=${1:-}; shift || true
+[ -z "${cmd:-}" ] && usage && exit 1
+
+declare -a ENV_PAIRS
+declare -a ENV_KEYS
+
+# Parse trailing flags for env/env-key
+parse_flags() {
+  local rest=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --env)
+        shift; [ $# -gt 0 ] || { echo "--env requires KEY=VALUE" >&2; exit 1; }
+        ENV_PAIRS+=("$1"); shift ;;
+      --env-key)
+        shift; [ $# -gt 0 ] || { echo "--env-key requires KEY" >&2; exit 1; }
+        ENV_KEYS+=("$1"); shift ;;
+      --)
+        shift; break ;;
+      *)
+        rest+=("$1"); shift ;;
+    esac
+  done
+  printf '%s\n' "${rest[@]}"
+}
+
+# Ensure extensions map exists when using yq
+ensure_yq_extensions() {
+  yq -y -i '.extensions = (.extensions // {})' "$GOOSE_YAML" || true
+}
+
+# Set envs/env_keys for a given name using yq
+apply_yq_envs() {
+  local name="$1"
+  if [ ${#ENV_PAIRS[@]:-0} -gt 0 ]; then
+    yq -y -i '.extensions["'"$name"'"].envs = {}' "$GOOSE_YAML"
+    for kv in "${ENV_PAIRS[@]}"; do
+      local k="${kv%%=*}" v="${kv#*=}"
+      yq -y -i '.extensions["'"$name"'"].envs["'"$k"'"] = "'"$v"'"' "$GOOSE_YAML"
+    done
+  fi
+  if [ ${#ENV_KEYS[@]:-0} -gt 0 ]; then
+    yq -y -i '.extensions["'"$name"'"].env_keys = []' "$GOOSE_YAML"
+    for k in "${ENV_KEYS[@]}"; do
+      yq -y -i '.extensions["'"$name"'"].env_keys += ["'"$k"'"]' "$GOOSE_YAML"
+    done
+  fi
+}
+
+append_yaml_fragment() {
+  local fragment="$1"
+  if [ -f "$GOOSE_YAML" ] && grep -q '^extensions:' "$GOOSE_YAML"; then
+    { echo ""; echo "extensions:"; printf '%s\n' "$fragment"; } >> "$GOOSE_YAML"
+  else
+    { echo "extensions:"; printf '%s\n' "$fragment"; } > "$GOOSE_YAML"
+  fi
+}
+
+case "$cmd" in
+  upsert-stdio)
+    # Collect name, cmd, args until flags
+    args_before_flags=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --env|--env-key|--) break ;;
+        *) args_before_flags+=("$1"); shift ;;
+      esac
+    done
+    set -- "${args_before_flags[@]}" "--" "$@"
+    args=($(parse_flags "$@"))
+    name=${args[0]:-}; bin=${args[1]:-}
+    [ -n "${name:-}" ] && [ -n "${bin:-}" ] || { usage; exit 1; }
+    # Remaining are stdio args
+    stdio_args=("${args[@]:2}")
+    if command -v yq >/dev/null 2>&1; then
+      ensure_yq_extensions
+      yq -y -i '.extensions["'"$name"'"] = {"enabled": true, "type": "stdio", "name": "'"$name"'", "cmd": "'"$bin"'", "args": []}' "$GOOSE_YAML"
+      for a in "${stdio_args[@]}"; do yq -y -i '.extensions["'"$name"'"].args += ["'"$a"'"]' "$GOOSE_YAML"; done
+      apply_yq_envs "$name"
+    else
+      frag="  $name:\n    enabled: true\n    type: stdio\n    name: $name\n    cmd: $bin\n    args: ["
+      first=1; for a in "${stdio_args[@]}"; do if [ $first -eq 1 ]; then frag+="\"$a\""; first=0; else frag+=", \"$a\""; fi; done; frag+="]"
+      if [ ${#ENV_PAIRS[@]:-0} -gt 0 ]; then frag+="\n    envs:"; for kv in "${ENV_PAIRS[@]}"; do frag+="\n      ${kv%%=*}: ${kv#*=}"; done; fi
+      if [ ${#ENV_KEYS[@]:-0} -gt 0 ]; then frag+="\n    env_keys: ["; first=1; for k in "${ENV_KEYS[@]}"; do if [ $first -eq 1 ]; then frag+="\"$k\""; first=0; else frag+=", \"$k\""; fi; done; frag+="]"; fi
+      append_yaml_fragment "$frag"
+    fi
+    echo "x Goose: upserted stdio '$name' into $GOOSE_YAML"
+    ;;
+  upsert-sse)
+    args_before_flags=()
+    while [[ $# -gt 0 ]]; do case "$1" in --env|--env-key|--) break ;; *) args_before_flags+=("$1"); shift ;; esac; done
+    set -- "${args_before_flags[@]}" "--" "$@"
+    args=($(parse_flags "$@"))
+    name=${args[0]:-}; uri=${args[1]:-}
+    [ -n "${name:-}" ] && [ -n "${uri:-}" ] || { usage; exit 1; }
+    if command -v yq >/dev/null 2>&1; then
+      ensure_yq_extensions
+      yq -y -i '.extensions["'"$name"'"] = {"enabled": true, "type": "sse", "name": "'"$name"'", "uri": "'"$uri"'"}' "$GOOSE_YAML"
+      apply_yq_envs "$name"
+    else
+      frag="  $name:\n    enabled: true\n    type: sse\n    name: $name\n    uri: $uri"
+      if [ ${#ENV_PAIRS[@]:-0} -gt 0 ]; then frag+="\n    envs:"; for kv in "${ENV_PAIRS[@]}"; do frag+="\n      ${kv%%=*}: ${kv#*=}"; done; fi
+      if [ ${#ENV_KEYS[@]:-0} -gt 0 ]; then frag+="\n    env_keys: ["; first=1; for k in "${ENV_KEYS[@]}"; do if [ $first -eq 1 ]; then frag+="\"$k\""; first=0; else frag+=", \"$k\""; fi; done; frag+="]"; fi
+      append_yaml_fragment "$frag"
+    fi
+    echo "x Goose: upserted sse '$name' into $GOOSE_YAML"
+    ;;
+  upsert-streamable-http)
+    args_before_flags=()
+    while [[ $# -gt 0 ]]; do case "$1" in --env|--env-key|--) break ;; *) args_before_flags+=("$1"); shift ;; esac; done
+    set -- "${args_before_flags[@]}" "--" "$@"
+    args=($(parse_flags "$@"))
+    name=${args[0]:-}; uri=${args[1]:-}
+    [ -n "${name:-}" ] && [ -n "${uri:-}" ] || { usage; exit 1; }
+    if command -v yq >/dev/null 2>&1; then
+      ensure_yq_extensions
+      yq -y -i '.extensions["'"$name"'"] = {"enabled": true, "type": "streamable_http", "name": "'"$name"'", "uri": "'"$uri"'"}' "$GOOSE_YAML"
+      apply_yq_envs "$name"
+    else
+      frag="  $name:\n    enabled: true\n    type: streamable_http\n    name: $name\n    uri: $uri"
+      if [ ${#ENV_PAIRS[@]:-0} -gt 0 ]; then frag+="\n    envs:"; for kv in "${ENV_PAIRS[@]}"; do frag+="\n      ${kv%%=*}: ${kv#*=}"; done; fi
+      if [ ${#ENV_KEYS[@]:-0} -gt 0 ]; then frag+="\n    env_keys: ["; first=1; for k in "${ENV_KEYS[@]}"; do if [ $first -eq 1 ]; then frag+="\"$k\""; first=0; else frag+=", \"$k\""; fi; done; frag+="]"; fi
+      append_yaml_fragment "$frag"
+    fi
+    echo "x Goose: upserted streamable_http '$name' into $GOOSE_YAML"
+    ;;
+  *) usage; exit 1 ;;
+esac

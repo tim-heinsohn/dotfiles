@@ -12,6 +12,5 @@ echo "✓ YouTube Transcript MCP integrated"
 
 "$DOTFILES_DIR/bin/codex-mcp" upsert youtube-transcript <<EOF
 [mcp.servers.youtube-transcript]
-command = "npx"
-args = ["-y", "@sinco-lab/mcp-youtube-transcript"]
-EOF
+# Goose integration
+"$DOTFILES_DIR/goose/integrate" upsert-stdio youtube-transcript npx -y @sinco-lab/mcp-youtube-transcript

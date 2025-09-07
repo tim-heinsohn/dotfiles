@@ -11,26 +11,6 @@ if [ -f "$HOME/.mail-server-mcp/wrapper-primary" ] && [ -f "$HOME/.mail-server-m
   echo "✓ mail-primary integrated"
   "$DOTFILES_DIR/bin/codex-mcp" upsert mail-primary <<EOF
 [mcp.servers.mail-primary]
-command = "$HOME/.mail-server-mcp/wrapper-primary"
-EOF
-
-  echo "Adding mail-secondary to Claude Code..."
-  secondary_config="{\"command\":\"$HOME/.mail-server-mcp/wrapper-secondary\"}"
-  claude mcp add-json mail-secondary "$secondary_config" --scope user
-  echo "✓ mail-secondary integrated"
-  "$DOTFILES_DIR/bin/codex-mcp" upsert mail-secondary <<EOF
-[mcp.servers.mail-secondary]
-command = "$HOME/.mail-server-mcp/wrapper-secondary"
-EOF
-
-  cat <<'EOF'
-
-Next steps:
-- Copy ~/.mail-server-mcp/example-project.envrc to your projects as .envrc
-- Edit PRIMARY_MAIL_* and SECONDARY_MAIL_* variables per project
-- Run 'direnv allow' in each project directory
-EOF
-else
-  echo "Error: Mail Server MCP not installed. Run: mcp install mail-server" >&2
-  exit 1
-fi
+# Goose integration (primary/secondary)
+"$DOTFILES_DIR/goose/integrate" upsert-stdio mail-primary "$HOME/.mail-server-mcp/wrapper-primary"
+"$DOTFILES_DIR/goose/integrate" upsert-stdio mail-secondary "$HOME/.mail-server-mcp/wrapper-secondary"

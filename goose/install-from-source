@@ -9,7 +9,7 @@ set -euo pipefail
 #
 # Defaults:
 #   --repo        /srv/lib/goose
-#   --ref         latest
+#   --ref         main
 #   --target      auto
 #   --install-dir /opt/goose
 #   --link        /usr/local/bin/goose-gui
@@ -19,7 +19,7 @@ set -euo pipefail
 #   - Rust (via rustup), Node 22.9+ and npm
 
 REPO=${REPO:-/srv/lib/goose}
-REF=latest
+REF=main
 TARGET=deb # zip would require platform ignorance in sourc repo
 INSTALL_DIR=/opt/goose
 LINK=/usr/local/bin/goose-gui
@@ -72,19 +72,33 @@ fi
 
 pushd "$REPO" >/dev/null
 
-echo "==> Fetching tags"
-git fetch --tags --prune --quiet || true
+echo "==> Fetching updates and tags"
+# Keep local default branch and tags up-to-date
+git fetch --all --tags --prune --quiet || true
 
 case "$REF" in
   latest)
-    TAG=$(git tag --sort=-v:refname | head -n1)
-    if [[ -z "${TAG:-}" ]]; then echo "ERROR: no tags found" >&2; exit 1; fi
-    echo "==> Checking out latest tag: $TAG"
-    git checkout -q "$TAG"
+    # Prefer semver tags that look like v1.2.3 (or 1.2.3) and pick highest
+    TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n1)
+    if [[ -z "${TAG:-}" ]]; then
+      TAG=$(git tag -l '*.*.*' --sort=-v:refname | head -n1)
+    fi
+    if [[ -z "${TAG:-}" ]]; then
+      echo "WARN: no semver-like tags found; falling back to main" >&2
+      REF=fallback-main
+    else
+      echo "==> Checking out latest tag: $TAG"
+      git checkout -q "$TAG"
+    fi
     ;;
   main|master)
     echo "==> Checking out $REF"
     git checkout -q "$REF"
+    git pull -q --rebase || true
+    ;;
+  fallback-main)
+    echo "==> Checking out main (fallback)"
+    git checkout -q main || git checkout -q master
     git pull -q --rebase || true
     ;;
   *)

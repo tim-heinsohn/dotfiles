@@ -10,6 +10,8 @@ if [ -f "$HOME/.context7-mcp/mcp-config.json" ] || [ -f "$HOME/.context7-mcp/dis
   claude mcp add-json context7 "$config_json" --scope user
   echo "✓ Context7 MCP integrated"
   "$DOTFILES_DIR/bin/codex-mcp" upsert context7 <<EOF
+# Goose integration
+"$DOTFILES_DIR/goose/integrate" upsert-stdio context7 node "$HOME/.context7-mcp/dist/index.js"
 [mcp.servers.context7]
 command = "node"
 args = ["$HOME/.context7-mcp/dist/index.js"]

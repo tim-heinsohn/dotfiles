@@ -10,16 +10,9 @@ if [ -f "$HOME/.gmail-mcp/mcp-config.json" ] || [ -f "$HOME/.gmail-mcp/dist/inde
   echo "Adding Gmail MCP to Claude Code..."
   claude mcp add-json gmail "$config_json" --scope user
   echo "✓ Gmail MCP integrated with Claude Code"
+
+  # Codex
   "$DOTFILES_DIR/bin/codex-mcp" upsert gmail <<EOF
 [mcp.servers.gmail]
-command = "node"
-args = ["$HOME/.gmail-mcp/dist/index.js"]
-EOF
-  # Goose integration
-  if [ -x "$DOTFILES_DIR/gmail-mcp/goose-integrate" ]; then
-    "$DOTFILES_DIR/gmail-mcp/goose-integrate" || true
-  fi
-else
-  echo "Error: Gmail MCP not installed or configured. Run: mcp install gmail" >&2
-  exit 1
-fi
+  # Goose integration (Desktop)
+  "$DOTFILES_DIR/goose/integrate" upsert-stdio gmail node "$HOME/.gmail-mcp/dist/index.js"

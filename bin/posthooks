@@ -9,6 +9,9 @@
 
 # Setup p10k.zsh symlink (bypassing bombadil validation)
 ln -sf ~/dotfiles/zsh/p10k.zsh ~/.p10k.zsh
+# Setup p10k.claude.zsh symlink (bypassing bombadil validation due to Tera parsing ${#...})
+mkdir -p ~/.zsh
+ln -sf ~/dotfiles/zsh/p10k.claude.zsh ~/.zsh/p10k.claude.zsh
 
 # Print reminder for brightness control
 echo "Run ~/dotfiles/acpi/enable to enable brightness control."

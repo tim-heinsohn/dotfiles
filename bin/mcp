@@ -406,37 +406,28 @@ list_mcps() {
 
         # Codex: mark enabled if key exists in ~/.codex/mcp.toml
 
-        # Goose: mark enabled if extension config references this MCP
-        # Goose: mark enabled if any Goose extensions dir references this MCP
-        goose_icon_tmp="—"
-        for d in "${XDG_CONFIG_HOME:-$HOME/.config}"/goose*/extensions "${XDG_CONFIG_HOME:-$HOME/.config}"/*Goose*/extensions; do
-            [ -d "$d" ] || continue
-            if grep -Riq "\"$mcp_name\"" "$d" 2>/dev/null; then
-                goose_icon_tmp="x"; break
+            # Goose: mark enabled via ~/.config/goose/config.yaml
+            goose_icon_tmp="—"
+            cfg_yaml="${XDG_CONFIG_HOME:-$HOME/.config}/goose/config.yaml"
+            if [ -f "$cfg_yaml" ]; then
+              if command -v yq >/dev/null 2>&1; then
+                if yq -e '.extensions | has("'"$mcp_name"'")' "$cfg_yaml" >/dev/null 2>&1; then goose_icon_tmp="x"; fi
+                if [ "$mcp_name" = "mail-server" ] && yq -e '.extensions | (has("mail-primary") or has("mail-secondary"))' "$cfg_yaml" >/dev/null 2>&1; then goose_icon_tmp="x"; fi
+              else
+                block=$(sed -n '/^extensions:/,/^[^[:space:]]/p' "$cfg_yaml")
+                if printf '%s
+' "$block" | grep -Eq '^[[:space:]]+'"$mcp_name"':'; then goose_icon_tmp="x"; fi
+                if [ "$mcp_name" = "mail-server" ] && printf '%s
+' "$block" | grep -Eq '^[[:space:]]*(mail-primary|mail-secondary):'; then goose_icon_tmp="x"; fi
+              fi
             fi
-            if [ "$mcp_name" = "mail-server" ] && grep -Riq "\"mail-\(primary\|secondary\)\"" "$d" 2>/dev/null; then
-                goose_icon_tmp="x"; break
+            # Built-in Memory extension shows when Goose exists
+            if [ "$mcp_name" = "memory" ] && ( command -v goose-desktop >/dev/null 2>&1 || command -v goose >/dev/null 2>&1 ); then
+              goose_icon_tmp="x"
             fi
-        done
+            if [ "$goose_icon_tmp" = "x" ]; then goose_icon="x"; fi
 
-        # Special-case: built-in Memory extension is always present when Goose exists
-        if [[ $mcp_name == memory ]] && \
-           ( command -v goose-desktop >/dev/null 2>&1 || command -v goose >/dev/null 2>&1 ); then
-            goose_icon_tmp="x"
-        fi
-
-        if [ "$goose_icon_tmp" = "x" ]; then goose_icon="x"; fi
-        goose_dir="${XDG_CONFIG_HOME:-$HOME/.config}/goose/extensions"
-        if [ -d "$goose_dir" ]; then
-            if grep -Riq "\"$mcp_name\"" "$goose_dir" 2>/dev/null; then
-                goose_icon="x"
-            else
-                if [ "$mcp_name" = "mail-server" ] && grep -Riq "\"mail-primary\"\|\"mail-secondary\"" "$goose_dir" 2>/dev/null; then
-                    goose_icon="x"
-                fi
-            fi
-        fi
-        if [ -n "$codex_mcps" ]; then
+            if [ -n "$codex_mcps" ]; then
             if echo " $codex_mcps " | grep -q " $mcp_name "; then
                 codex_icon="x"
             else

@@ -45,6 +45,8 @@ echo ""
 echo "📖 Documentation: $( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )/doc/usage.md"
 
 # Codex: upsert into ~/.codex/config.toml
+# Goose: upsert into ~/.config/goose/config.yaml
+"$DOTFILES_DIR/goose/integrate" upsert-stdio appsignal docker run -i --rm -e APPSIGNAL_API_KEY appsignal/mcp --env-key APPSIGNAL_API_KEY
 "$DOTFILES_DIR/bin/codex-mcp" upsert appsignal <<EOF
 [mcp.servers.appsignal]
 command = "docker"
