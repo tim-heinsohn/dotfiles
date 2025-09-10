@@ -29,7 +29,11 @@ fi
 
 # Add to Claude Code
 echo "Adding AppSignal MCP to Claude Code..."
-claude mcp add appsignal -e APPSIGNAL_API_KEY=your_api_key_here -- docker run -i --rm -e APPSIGNAL_API_KEY appsignal/mcp
+if [ -n "${APPSIGNAL_API_KEY:-}" ]; then
+    claude mcp add appsignal -e APPSIGNAL_API_KEY="$APPSIGNAL_API_KEY" -- docker run -i --rm -e APPSIGNAL_API_KEY appsignal/mcp
+else
+    claude mcp add appsignal -- docker run -i --rm -e APPSIGNAL_API_KEY appsignal/mcp
+fi
 
 
 echo "✅ AppSignal MCP integrated with Claude Code!"

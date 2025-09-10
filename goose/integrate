@@ -11,6 +11,7 @@ Usage:
   $(basename "$0") upsert-stdio <name> <cmd> [args...] [--env KEY=VALUE ...] [--env-key KEY ...]
   $(basename "$0") upsert-sse <name> <uri> [--env KEY=VALUE ...] [--env-key KEY ...]
   $(basename "$0") upsert-streamable-http <name> <uri> [--env KEY=VALUE ...] [--env-key KEY ...]
+  $(basename "$0") remove <name>
 USAGE
 }
 
@@ -48,14 +49,14 @@ ensure_yq_extensions() {
 # Set envs/env_keys for a given name using yq
 apply_yq_envs() {
   local name="$1"
-  if [ ${#ENV_PAIRS[@]:-0} -gt 0 ]; then
+  if [ ${#ENV_PAIRS[@]} -gt 0 ]; then
     yq -y -i '.extensions["'"$name"'"].envs = {}' "$GOOSE_YAML"
     for kv in "${ENV_PAIRS[@]}"; do
       local k="${kv%%=*}" v="${kv#*=}"
       yq -y -i '.extensions["'"$name"'"].envs["'"$k"'"] = "'"$v"'"' "$GOOSE_YAML"
     done
   fi
-  if [ ${#ENV_KEYS[@]:-0} -gt 0 ]; then
+  if [ ${#ENV_KEYS[@]} -gt 0 ]; then
     yq -y -i '.extensions["'"$name"'"].env_keys = []' "$GOOSE_YAML"
     for k in "${ENV_KEYS[@]}"; do
       yq -y -i '.extensions["'"$name"'"].env_keys += ["'"$k"'"]' "$GOOSE_YAML"
@@ -139,6 +140,18 @@ case "$cmd" in
       append_yaml_fragment "$frag"
     fi
     echo "x Goose: upserted streamable_http '$name' into $GOOSE_YAML"
+    ;;
+  remove)
+    name=${1:-}
+    [ -n "$name" ] || { usage; exit 1; }
+    if command -v yq >/dev/null 2>&1; then
+      ensure_yq_extensions
+      yq -y -i 'del(.extensions["'"$name"'"])' "$GOOSE_YAML" || true
+      echo "x Goose: removed '$name' from $GOOSE_YAML"
+    else
+      echo "yq not found; cannot safely remove '$name' from $GOOSE_YAML" >&2
+      exit 1
+    fi
     ;;
   *) usage; exit 1 ;;
 esac
