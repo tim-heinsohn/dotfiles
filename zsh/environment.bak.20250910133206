@@ -23,16 +23,7 @@ export FZF_DEFAULT_OPTS="--ansi --preview-window 'right:60%' --preview 'bat --co
        # via <https://github.com/sharkdp/bat/issues/357>
 export GTK_THEME=Adwaita:dark
 export LESS="-R --ignore-case -P ?f%f:stdin.  line %lt–%lb/%L  ?e(END):%PB\%."
-# Keep RVM first in PATH so RVM gem bins take precedence.
-# Google Cloud SDK bin will be moved to the end (see block below).
-export PATH="$HOME/.rvm/bin:$PATH:$HOME/bin:$HOME/.local/bin"
-
-# Ensure Google Cloud SDK bin is at the end (zsh only).
-if [[ -n ${ZSH_VERSION-} ]]; then
-  typeset -U path
-  path=(${path:#/opt/google-cloud-cli/bin})
-  path+=("/opt/google-cloud-cli/bin")
-fi
+export PATH="$PATH:$HOME/bin:$HOME/.local/bin:$HOME/.rvm/bin"
 
 if [ -d "$HOME/f.dev/bin" ]; then
   export PATH="$PATH:$HOME/f.dev/bin"

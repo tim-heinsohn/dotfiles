@@ -46,6 +46,10 @@ export PRIMARY_PROJECT_GOOSE_MODEL=""
 # Examples: named colors: red, yellow, cyan; 256-color codes: 172 (orange), 208 (orange), 33 (blue)
 export PRIMARY_PROJECT_PROMPT_COLOR="172"
 
+# Codex CLI state dir for primary project (keeps config/history/trusted projects private)
+# Example: /home/you/.codex-private-prim or simply ~/.codex-private
+export PRIMARY_PROJECT_CODEX_HOME=""
+
 # Secondary project
 export SECONDARY_PROJECT_NAME="Your Secondary Project"
 export SECONDARY_PROJECT_CODE="SEC"
@@ -59,6 +63,10 @@ export SECONDARY_PROJECT_GOOSE_MODEL=""
 # Prompt color for secondary project (Powerlevel10k color)
 # Examples: named colors: green, magenta; 256-color codes: 110 (teal), 99 (purple), 160 (red)
 export SECONDARY_PROJECT_PROMPT_COLOR="110"
+
+# Codex CLI state dir for secondary project (keeps config/history/trusted projects private)
+# Example: /home/you/.codex-private-sec or simply ~/.codex-private
+export SECONDARY_PROJECT_CODEX_HOME=""
 
 # Tip:
 # - project_toggle flips between primary and secondary.
@@ -91,5 +99,9 @@ ensure_var PRIMARY_PROJECT_GOOSE_PROVIDER ""
 ensure_var PRIMARY_PROJECT_GOOSE_MODEL ""
 ensure_var SECONDARY_PROJECT_GOOSE_PROVIDER ""
 ensure_var SECONDARY_PROJECT_GOOSE_MODEL ""
+
+# Ensure Codex per-project state directories are present in ~/.projects
+ensure_var PRIMARY_PROJECT_CODEX_HOME ""
+ensure_var SECONDARY_PROJECT_CODEX_HOME ""
 
 # vim: ft=bash iskeyword+=.

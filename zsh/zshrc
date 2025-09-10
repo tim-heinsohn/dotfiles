@@ -100,3 +100,17 @@ source ~/.zsh/p10k.custom.zsh
 if kimi_enabled; then
   kimi_set "on" >/dev/null 2>&1
 fi
+# >>> PATH normalize: RVM first, gcloud at end >>>
+# Ensure PATH order after all init:
+# - Keep RVM first so ruby/gem bins take precedence
+# - Move Google Cloud SDK bin to the end
+if [[ -n ${ZSH_VERSION-} ]]; then
+  typeset -U path
+  # Keep RVM bin first
+  path=(${path:#$HOME/.rvm/bin})
+  path=($HOME/.rvm/bin $path)
+  # Move Google Cloud SDK bin to the end
+  path=(${path:#/opt/google-cloud-cli/bin})
+  path+=(/opt/google-cloud-cli/bin)
+fi
+# <<< PATH normalize <<<
