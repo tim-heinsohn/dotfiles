@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# rvm-gems-cleanup: Rebuild native extensions and clean up stubbed gems
+#
+# What it does
+# - Sources RVM and (optionally) switches to a Ruby version
+# - Runs `gem pristine --all --extensions` in current and @global gemsets
+# - Optionally runs `bundle install` in a given project dir, parses
+#   "missing extensions" warnings, and attempts to fix them by
+#   rebuilding or uninstalling the specific versions.
+#
+# Usage
+#   rvm-gems-cleanup [--ruby <version>] [--default] [--bundle <dir>]
+#                    [--dry-run] [--only-pristine]
+#
+# Examples
+#   rvm-gems-cleanup --ruby 3.4.3 --default
+#   rvm-gems-cleanup --bundle "$HOME/mcp"
+#   rvm-gems-cleanup --ruby 3.4.3 --bundle "$HOME/mcp"
+
+RUBY_VERSION=""
+SET_DEFAULT=false
+BUNDLE_DIR=""
+DRY_RUN=false
+ONLY_PRISTINE=false
+
+usage() {
+  cat <<USAGE
+Usage: rvm-gems-cleanup [options]
+
+Options:
+  -r, --ruby <version>   Use this Ruby (e.g. 3.4.3)
+  -d, --default          Also set the above Ruby as RVM default
+  -b, --bundle <dir>     Run bundle install in this directory and fix warnings
+  -n, --dry-run          Print actions without executing them
+      --only-pristine    Only run gem pristine; do not uninstall versions
+  -h, --help             Show this help
+USAGE
+}
+
+log()  { printf "[cleanup] %s\n" "$*"; }
+warn() { printf "[cleanup] WARN: %s\n" "$*" >&2; }
+run()  { if $DRY_RUN; then echo "+ $*"; else eval "$*"; fi; }
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -r|--ruby) RUBY_VERSION=${2:-}; shift 2 ;;
+    -d|--default) SET_DEFAULT=true; shift ;;
+    -b|--bundle) BUNDLE_DIR=${2:-}; shift 2 ;;
+    -n|--dry-run) DRY_RUN=true; shift ;;
+    --only-pristine) ONLY_PRISTINE=true; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) warn "Unknown arg: $1"; usage; exit 1 ;;
+  esac
+done
+
+# Source RVM (temporarily disable nounset; RVM may reference unset vars)
+if [[ -s "$HOME/.rvm/scripts/rvm" ]]; then
+  # shellcheck disable=SC1091
+  set +u
+  source "$HOME/.rvm/scripts/rvm"
+  set -u
+else
+  warn "RVM not found at $HOME/.rvm/scripts/rvm";
+  exit 1
+fi
+
+# Helper to call rvm with nounset disabled
+rvme() { set +u; command rvm "$@"; local rc=$?; set -u; return $rc; }
+
+# Select Ruby if requested
+if [[ -n "$RUBY_VERSION" ]]; then
+  log "Using Ruby $RUBY_VERSION"
+  run "rvme use $RUBY_VERSION"
+  if $SET_DEFAULT; then
+    log "Setting Ruby $RUBY_VERSION as default"
+    run "rvme --default use $RUBY_VERSION"
+  fi
+fi
+
+# Determine current and global gemsets for the active Ruby
+set +u
+CURRENT_FULL=$(rvm current)
+set -u
+BASE_NO_GEMSET=${CURRENT_FULL%@*}
+GLOBAL_GEMSET="$BASE_NO_GEMSET@global"
+
+# Run gem pristine in current gemset
+log "Running gem pristine --all --extensions in $CURRENT_FULL"
+run "rvme \"$CURRENT_FULL\" do gem pristine --all --extensions || true"
+
+# Run gem pristine in @global too (harmless if same as current)
+if [[ "$CURRENT_FULL" != "$GLOBAL_GEMSET" ]]; then
+  log "Running gem pristine --all --extensions in $GLOBAL_GEMSET"
+  run "rvme \"$GLOBAL_GEMSET\" do gem pristine --all --extensions || true"
+fi
+
+# If no bundle directory provided, we are done after pristine
+if [[ -z "$BUNDLE_DIR" ]]; then
+  log "Done. (No bundle dir provided for targeted checks)"
+  exit 0
+fi
+
+if [[ ! -d "$BUNDLE_DIR" ]]; then
+  warn "Bundle dir does not exist: $BUNDLE_DIR"
+  exit 1
+fi
+
+# Run bundle install and capture warnings
+TMP_OUT=$(mktemp)
+trap 'rm -f "$TMP_OUT"' EXIT
+
+log "Running bundle install in: $BUNDLE_DIR (to detect missing extensions)"
+if $DRY_RUN; then
+  echo "+ (cd \"$BUNDLE_DIR\" && bundle install)"
+else
+  (cd "$BUNDLE_DIR" && bundle install) | tee "$TMP_OUT" || true
+fi
+
+extract_missing() {
+  # Prints lines in the form: name:version from bundler warnings
+  if $DRY_RUN; then
+    return 0
+  fi
+  sed -n -E 's/.*Bundler::StubSpecification name=([^ ]+) version=([^ ]+) .*/\1:\2/p' "$TMP_OUT" | sort -u
+}
+
+MISSING_LIST=""
+if ! $DRY_RUN; then
+  MISSING_LIST=$(extract_missing || true)
+fi
+
+if [[ -z "${MISSING_LIST:-}" ]]; then
+  log "No missing extension warnings detected. All good."
+  exit 0
+fi
+
+log "Detected gems with missing extensions:"; echo "$MISSING_LIST" | sed 's/^/  - /'
+
+# Try to pristine specific versions first
+while read -r pair; do
+  [[ -z "$pair" ]] && continue
+  name=${pair%%:*}
+  ver=${pair##*:}
+  log "Pristine: $name -v $ver (current gemset)"
+  run "rvme \"$CURRENT_FULL\" do gem pristine \"$name\" --version \"$ver\" --extensions || true"
+  if [[ "$CURRENT_FULL" != "$GLOBAL_GEMSET" ]]; then
+    log "Pristine: $name -v $ver (@global)"
+    run "rvme \"$GLOBAL_GEMSET\" do gem pristine \"$name\" --version \"$ver\" --extensions || true"
+  fi
+done <<< "$MISSING_LIST"
+
+if $ONLY_PRISTINE; then
+  log "--only-pristine set; skipping uninstall attempts"
+else
+  # Re-run bundle to see if warnings persist; if they do, uninstall the specific versions
+  if $DRY_RUN; then
+    echo "+ (cd \"$BUNDLE_DIR\" && bundle install)"
+  else
+    : > "$TMP_OUT"
+    (cd "$BUNDLE_DIR" && bundle install) | tee "$TMP_OUT" || true
+    STILL_MISSING=$(extract_missing || true)
+    if [[ -n "$STILL_MISSING" ]]; then
+      log "Warnings persist. Uninstalling exact versions from current gemset:"
+      echo "$STILL_MISSING" | sed 's/^/  - /'
+      while read -r pair; do
+        [[ -z "$pair" ]] && continue
+        name=${pair%%:*}
+        ver=${pair##*:}
+        log "Uninstall: $name -v $ver (current gemset)"
+        run "rvme \"$CURRENT_FULL\" do gem uninstall -aIx \"$name\" -v \"$ver\" || true"
+      done <<< "$STILL_MISSING"
+      log "Re-running bundle install to verify warnings are gone"
+      (cd "$BUNDLE_DIR" && bundle install) || true
+    else
+      log "No warnings after targeted pristine."
+    fi
+  fi
+fi
+
+log "Cleanup complete."
