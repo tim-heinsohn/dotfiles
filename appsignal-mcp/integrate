@@ -27,7 +27,7 @@ if [ -z "${APPSIGNAL_API_KEY:-}" ]; then
     fi
 fi
 
-# Add to Claude Code
+# Add to Claude Code (minimal envs; Goose will handle USER_AGENT/APPSIGNAL_DEBUG)
 echo "Adding AppSignal MCP to Claude Code..."
 if [ -n "${APPSIGNAL_API_KEY:-}" ]; then
     claude mcp add appsignal -e APPSIGNAL_API_KEY="$APPSIGNAL_API_KEY" -- docker run -i --rm -e APPSIGNAL_API_KEY appsignal/mcp
@@ -49,12 +49,29 @@ echo ""
 echo "📖 Documentation: $( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )/doc/usage.md"
 
 # Codex: upsert into ~/.codex/config.toml
-# Goose: upsert into ~/.config/goose/config.yaml
-"$DOTFILES_DIR/goose/integrate" upsert-stdio appsignal docker run -i --rm -e APPSIGNAL_API_KEY appsignal/mcp --env-key APPSIGNAL_API_KEY
-"$DOTFILES_DIR/bin/codex-mcp" upsert appsignal <<EOF
+# Goose: upsert into ~/.config/goose/config.yaml with defaults for USER_AGENT and APPSIGNAL_DEBUG
+
+#
+# Goose integration
+# - Forward APPSIGNAL_API_KEY from the environment at runtime
+# - Also forward USER_AGENT and APPSIGNAL_DEBUG into the container
+# - Provide default values in config so GUI sessions (which may not inherit env) work reliably
+"$DOTFILES_DIR/goose/integrate" upsert-stdio appsignal docker run -i --rm \
+  -e APPSIGNAL_API_KEY -e USER_AGENT -e APPSIGNAL_DEBUG \
+  appsignal/mcp \
+  --env-key APPSIGNAL_API_KEY \
+  --env USER_AGENT="Goose/1.7 Linux" \
+  --env APPSIGNAL_DEBUG=true
+
+# Codex integration (forward env only; do not store values)
+"$DOTFILES_DIR/bin/codex-mcp" upsert appsignal <<EOF2
 [mcp.servers.appsignal]
 command = "docker"
-args = ["run", "-i", "--rm", "-e", "APPSIGNAL_API_KEY", "appsignal/mcp"]
-EOF
-
-echo "✓ AppSignal MCP added to Codex (~/.codex/config.toml)"
+args = [
+  "run", "-i", "--rm",
+  "-e", "APPSIGNAL_API_KEY",
+  "-e", "USER_AGENT",
+  "-e", "APPSIGNAL_DEBUG",
+  "appsignal/mcp"
+]
+EOF2
