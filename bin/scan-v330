@@ -1,0 +1,304 @@
+#!/bin/bash
+
+# Epson Perfection V330 Command-Line Scanner
+# Usage: scan-v330 [options] [output-file]
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCANNER_NAME="Epson Perfection V330"
+DEFAULT_OUTPUT_DIR="$HOME/Scans"
+
+# Default settings
+RESOLUTION=300
+MODE="Gray"
+FORMAT="png"
+OUTPUT_FILE=""
+BATCH_MODE=false
+BATCH_COUNT=0
+PROMPT_EACH=false
+DEVICE=""
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+usage() {
+    cat << EOF
+Epson Perfection V330 Command-Line Scanner
+
+Usage: $(basename "$0") [OPTIONS] [OUTPUT_FILE]
+
+OPTIONS:
+    -r, --resolution DPI    Scan resolution (75, 150, 300, 600, 1200, 2400, 4800)
+                            Default: 300
+    -m, --mode MODE         Scan mode: Color, Gray, LineArt
+                            Default: Gray
+    -f, --format FORMAT     Output format: pnm, tiff, png, jpeg
+                            Default: png
+    -d, --device DEVICE     Scanner device (auto-detected if not specified)
+    -b, --batch             Enable batch mode (multiple pages)
+    -c, --count NUM         Number of pages to scan in batch mode
+    -p, --prompt            Prompt before each scan in batch mode
+    -h, --help              Show this help message
+
+EXAMPLES:
+    # Basic grayscale scan
+    scan-v330 scan.png
+
+    # High-resolution color scan
+    scan-v330 -r 600 -m Color photo.tiff
+
+    # Batch scan multiple pages
+    scan-v330 -b -c 5 document-%03d.png
+
+    # Line art with custom resolution
+    scan-v330 -r 600 -m LineArt drawing.pbm
+
+    # JPEG with specific quality settings
+    scan-v330 -f jpeg -r 300 photo.jpg
+
+EOF
+}
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+detect_scanner() {
+    local scanner_info
+    scanner_info=$(scanimage -L 2>/dev/null | grep "Epson Perfection V330" || true)
+    
+    if [[ -z "$scanner_info" ]]; then
+        log_error "Epson Perfection V330 scanner not found"
+        echo "Available scanners:"
+        scanimage -L
+        exit 1
+    fi
+    
+    # Extract device name from scanimage output using awk
+    DEVICE=$(echo "$scanner_info" | awk -F'\`' '{print $2}' | cut -d"'" -f1)
+    log_info "Found scanner: $scanner_info"
+    log_info "Extracted device: '$DEVICE'"
+}
+
+validate_settings() {
+    # Validate resolution
+    case "$RESOLUTION" in
+        75|150|300|600|1200|2400|4800) ;;
+        *) log_error "Invalid resolution: $RESOLUTION"; exit 1 ;;
+    esac
+    
+    # Validate mode
+    case "$MODE" in
+        Color|Gray|LineArt) ;;
+        *) log_error "Invalid mode: $MODE"; exit 1 ;;
+    esac
+    
+    # Validate format
+    case "$FORMAT" in
+        pnm|tiff|png|jpeg) ;;
+        *) log_error "Invalid format: $FORMAT"; exit 1 ;;
+    esac
+}
+
+get_scanimage_format() {
+    case "$FORMAT" in
+        pnm) echo "pnm" ;;
+        tiff) echo "tiff" ;;
+        png) echo "png" ;;
+        jpeg) echo "jpeg" ;;
+    esac
+}
+
+get_file_extension() {
+    case "$FORMAT" in
+        pnm) echo ".pnm" ;;
+        tiff) echo ".tiff" ;;
+        png) echo ".png" ;;
+        jpeg) echo ".jpg" ;;
+    esac
+}
+
+single_scan() {
+    local output_file="$1"
+    local scanimage_format
+    scanimage_format=$(get_scanimage_format)
+    
+    log_info "Starting scan: ${RESOLUTION} DPI, $MODE, $FORMAT format"
+    log_info "Output: $output_file"
+    
+    # Create output directory if it doesn't exist
+    mkdir -p "$(dirname "$output_file")"
+    
+    # Build scanimage command
+    local cmd=(scanimage)
+    cmd+=(-d "$DEVICE")
+    cmd+=(--resolution "$RESOLUTION")
+    cmd+=(--mode "$MODE")
+    cmd+=(--format="$scanimage_format")
+    
+    # Execute scan
+    if "${cmd[@]}" > "$output_file"; then
+        log_info "Scan completed: $output_file"
+        
+        # Show file info
+        if command -v identify >/dev/null 2>&1; then
+            local dimensions
+            dimensions=$(identify -format "%wx%h" "$output_file" 2>/dev/null || echo "unknown")
+            local file_size
+            file_size=$(du -h "$output_file" | cut -f1)
+            log_info "Result: ${dimensions} pixels, $file_size"
+        fi
+    else
+        log_error "Scan failed"
+        exit 1
+    fi
+}
+
+batch_scan() {
+    local output_pattern="$1"
+    local count_text=""
+    
+    if [[ $BATCH_COUNT -gt 0 ]]; then
+        count_text=" (max $BATCH_COUNT pages)"
+    fi
+    
+    log_info "Starting batch scan$count_text"
+    log_info "Pattern: $output_pattern"
+    log_info "Mode: ${RESOLUTION} DPI, $MODE, $FORMAT format"
+    
+    # Create output directory if it doesn't exist
+    mkdir -p "$(dirname "$output_pattern")"
+    
+    # Build scanimage command for batch mode
+    local cmd=(scanimage)
+    cmd+=(-d "$DEVICE")
+    cmd+=(--resolution "$RESOLUTION")
+    cmd+=(--mode "$MODE")
+    cmd+=(--format="$(get_scanimage_format)")
+    cmd+=(--batch="$output_pattern")
+    
+    if [[ $BATCH_COUNT -gt 0 ]]; then
+        cmd+=(--batch-count="$BATCH_COUNT")
+    fi
+    
+    if [[ $PROMPT_EACH == true ]]; then
+        cmd+=(--batch-prompt)
+    fi
+    
+    # Execute batch scan
+    log_info "Place documents in scanner and press Enter to start..."
+    read -r
+    
+    if "${cmd[@]}"; then
+        log_info "Batch scan completed"
+    else
+        log_error "Batch scan failed"
+        exit 1
+    fi
+}
+
+monitor_start_button() {
+    log_info "Monitoring for START button press..."
+    log_info "Press Ctrl+C to stop monitoring"
+    
+    # This would require a button monitoring daemon
+    # For now, provide instructions for manual setup
+    cat << EOF
+
+START button monitoring is not implemented yet.
+To enable START button functionality, you would need to:
+
+1. Install a button monitoring daemon (if available for your scanner)
+2. Configure it to execute this script when START is pressed
+3. Or use scanbd (Scanner Button Daemon) for generic button support
+
+For now, use this script manually with batch mode:
+    scan-v330 -b -c 10 scan_\%03d.png
+
+EOF
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -r|--resolution)
+            RESOLUTION="$2"
+            shift 2
+            ;;
+        -m|--mode)
+            MODE="$2"
+            shift 2
+            ;;
+        -f|--format)
+            FORMAT="$2"
+            shift 2
+            ;;
+        -d|--device)
+            DEVICE="$2"
+            shift 2
+            ;;
+        -b|--batch)
+            BATCH_MODE=true
+            shift
+            ;;
+        -c|--count)
+            BATCH_COUNT="$2"
+            shift 2
+            ;;
+        -p|--prompt)
+            PROMPT_EACH=true
+            shift
+            ;;
+        --start-button)
+            monitor_start_button
+            exit 0
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            log_error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+        *)
+            OUTPUT_FILE="$1"
+            shift
+            ;;
+    esac
+done
+
+# Detect scanner if device not specified
+if [[ -z "$DEVICE" ]]; then
+    detect_scanner
+fi
+
+# Validate settings
+validate_settings
+
+# Set default output file if not provided
+if [[ -z "$OUTPUT_FILE" ]]; then
+    timestamp=$(date +"%Y%m%d_%H%M%S")
+    ext=$(get_file_extension)
+    OUTPUT_FILE="$DEFAULT_OUTPUT_DIR/scan_${timestamp}${ext}"
+fi
+
+# Perform scan
+if [[ $BATCH_MODE == true ]]; then
+    batch_scan "$OUTPUT_FILE"
+else
+    single_scan "$OUTPUT_FILE"
+fi

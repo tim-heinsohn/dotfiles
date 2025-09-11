@@ -32,6 +32,11 @@ nvm alias default 24.4.0
 # Setup Git service CLIs
 "${DOTFILES_DIR}/bin/git-cli-setup" &&
 
+# Setup Epson V330 scanner (if connected)
+if lsusb | grep -q "04b8:0142"; then
+    "${DOTFILES_DIR}/bin/scanner-epson-v330-setup"
+fi &&
+
 # overcommit
 gem list overcommit -i >/dev/null 2>&1 || gem install overcommit &&
 
@@ -53,5 +58,5 @@ sudo usermod -aG audio $USER &&
 sudo systemctl enable --now acpid &&
 sudo systemctl enable --now bluetooth &&
 sudo systemctl enable --now docker &&
-sudo systemctl enable --now qotd &&
+# sudo systemctl enable --now qotd &&
 echo "Done."

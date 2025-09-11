@@ -1,0 +1,202 @@
+#!/bin/bash
+
+# Epson V330 Batch Scanning with START Button Simulation
+# Monitors for scanner readiness and provides interactive batch scanning
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Default settings
+RESOLUTION=300
+MODE="Gray"
+FORMAT="png"
+OUTPUT_DIR="$HOME/Scans/batch_$(date +%Y%m%d_%H%M%S)"
+PREFIX="scan"
+START_COUNT=1
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+usage() {
+    cat << EOF
+Epson V330 Interactive Batch Scanner
+
+Usage: $(basename "$0") [OPTIONS]
+
+OPTIONS:
+    -r, --resolution DPI    Scan resolution (default: 300)
+    -m, --mode MODE         Scan mode: Color, Gray, LineArt (default: Gray)
+    -f, --format FORMAT     Output format: png, tiff, jpeg (default: png)
+    -d, --directory DIR     Output directory (default: ~/Scans/batch_TIMESTAMP)
+    -p, --prefix PREFIX     Filename prefix (default: scan)
+    -s, --start NUM         Starting number (default: 1)
+    -h, --help              Show this help
+
+CONTROLS:
+    Enter    - Scan current page
+    n        - Next page (increment counter)
+    p        - Previous page (decrement counter)  
+    r        - Rescan current page
+    q        - Quit batch scanning
+    s        - Skip to specific number
+
+EOF
+}
+
+log_info() {
+    echo -e "${GREEN}[BATCH]${NC} $1"
+}
+
+log_prompt() {
+    echo -e "${BLUE}[INPUT]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -r|--resolution)
+            RESOLUTION="$2"
+            shift 2
+            ;;
+        -m|--mode)
+            MODE="$2"
+            shift 2
+            ;;
+        -f|--format)
+            FORMAT="$2"
+            shift 2
+            ;;
+        -d|--directory)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        -p|--prefix)
+            PREFIX="$2"
+            shift 2
+            ;;
+        -s|--start)
+            START_COUNT="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# Create output directory
+mkdir -p "$OUTPUT_DIR"
+
+echo -e "${GREEN}Epson V330 Batch Scanner${NC}"
+echo "Output directory: $OUTPUT_DIR"
+echo "Settings: ${RESOLUTION} DPI, $MODE, $FORMAT"
+echo
+echo "Controls:"
+echo "  Enter - Scan page"
+echo "  n     - Next page"
+echo "  p     - Previous page"
+echo "  r     - Rescan page"
+echo "  s     - Skip to number"
+echo "  q     - Quit"
+echo
+echo "Starting with page $START_COUNT..."
+
+current_count=$START_COUNT
+successful_scans=0
+
+while true; do
+    # Generate filename
+    filename=$(printf "%s_%03d.%s" "$PREFIX" "$current_count" "$FORMAT")
+    filepath="$OUTPUT_DIR/$filename"
+    
+    log_prompt "Page $current_count - Place document and press Enter to scan (or n/p/r/s/q): "
+    
+    # Read single character without requiring Enter
+    read -r -n 1 -s key
+    echo  # newline
+    
+    case "$key" in
+        $'\n'|"")
+            # Scan current page
+            log_info "Scanning page $current_count..."
+            if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
+                log_info "✓ Saved: $filename"
+                ((current_count++))
+                ((successful_scans++))
+            else
+                log_error "✗ Scan failed for page $((current_count))"
+            fi
+            ;;
+        n|N)
+            # Next page
+            ((current_count++))
+            log_info "Advanced to page $current_count"
+            ;;
+        p|P)
+            # Previous page
+            if [[ $current_count -gt 1 ]]; then
+                ((current_count--))
+                log_info "Went back to page $current_count"
+            else
+                log_warn "Already at first page"
+            fi
+            ;;
+        r|R)
+            # Rescan current page
+            log_info "Rescanning page $current_count..."
+            if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
+                log_info "✓ Rescanned: $filename"
+                # Only increment successful_scans if this was a new scan
+                if [[ ! -f "$filepath" ]]; then
+                    ((successful_scans++))
+                fi
+            else
+                log_error "✗ Rescan failed"
+            fi
+            ;;
+        s|S)
+            # Skip to specific number
+            log_prompt "Enter page number: "
+            read -r new_count
+            if [[ "$new_count" =~ ^[0-9]+$ ]] && [[ $new_count -gt 0 ]]; then
+                current_count=$new_count
+                log_info "Skipped to page $current_count"
+            else
+                log_error "Invalid page number"
+            fi
+            ;;
+        q|Q)
+            # Quit
+            log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
+            echo
+            echo "Summary:"
+            echo "  Attempted pages: $((current_count - START_COUNT))"
+            echo "  Successful scans: $successful_scans"
+            echo "  Files in: $OUTPUT_DIR"
+            ls -la "$OUTPUT_DIR" 2>/dev/null || true
+            exit 0
+            ;;
+        *)
+            log_warn "Unknown command: $key"
+            ;;
+    esac
+done

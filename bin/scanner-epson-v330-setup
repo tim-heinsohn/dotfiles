@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Epson Perfection V330 Scanner Setup for Arch Linux
+# Based on 2025 AUR packages and SANE backend support
+
+set -euo pipefail
+
+echo "Setting up Epson Perfection V330 scanner..."
+
+# Install base SANE packages and build tools
+echo "Installing SANE backend and base packages..."
+sudo pacman -S --needed --noconfirm base-devel sane simple-scan
+
+# Note about xsane - skip due to compilation issues
+echo "Note: xsane is available but has compilation issues with modern GTK."
+echo "Using simple-scan instead (recommended and actively maintained)."
+echo "If you need xsane specifically, you can try installing it later with:"
+echo "  yay -S xsane"
+echo "  (may require manual patching to compile)"
+
+# Install Epson iscan packages from AUR
+echo "Installing Epson iscan packages from AUR..."
+yay -S --needed --noconfirm iscan iscan-data iscan-plugin-perfection-v330
+
+# Add user to scanner group
+echo "Adding user to scanner group..."
+sudo gpasswd -a "$USER" scanner
+newgrp scanner || true
+
+# Create udev rule for Epson V330 (USB ID 04b8:0142)
+echo "Creating udev rule for Epson V330..."
+sudo tee /etc/udev/rules.d/79-epson-v330.rules > /dev/null << 'EOF'
+# Epson Perfection V330  04b8:0142
+ATTRS{idVendor}=="04b8", ATTRS{idProduct}=="0142", MODE="0664", GROUP="scanner", ENV{libsane_matched}="yes"
+EOF
+
+# Reload udev rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+# Test scanner detection
+echo "Testing scanner detection..."
+if scanimage -L | grep -q "Epson Perfection V330"; then
+    echo "✓ Scanner detected successfully!"
+else
+    echo "⚠ Scanner not detected. Please check USB connection and try:"
+    echo "  - Re-plug USB cable"
+    echo "  - Try different USB port (avoid USB 3.0)"
+    echo "  - Reboot system"
+fi
+
+# Optional: Enable network sharing
+read -p "Enable network scanner sharing (saned)? [y/N] " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo "Enabling scanner network sharing..."
+    sudo systemctl enable --now saned.socket
+    echo "Note: You may need to open TCP port 6566 in your firewall"
+fi
+
+echo "Epson V330 scanner setup complete!"
+echo "Available scanning applications:"
+echo "  - simple-scan (GNOME/GTK - recommended)"
+echo "  - iscan (Epson's Qt GUI)"
+echo "  - scan-v330 (command-line tool)"
+echo "  - scan-v330-batch (interactive batch scanning)"
+echo "  - GIMP: File → Create → Scanner/Camera (if xsane installed later)"
+echo ""
+echo "Troubleshooting:"
+echo "  - If scanner not visible, re-plug USB or reboot"
+echo "  - Ensure you're in the 'scanner' group (log out/in if needed)"
+echo "  - Use 'scanimage -L' to test detection"
