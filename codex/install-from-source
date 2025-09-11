@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+echo ">>> Managing patched Codex installation..."
+
+# Step 1: Uninstall the official npm package to avoid PATH conflicts
+echo "--- Checking for and removing existing @openai/codex npm package..."
+if npm list -g @openai/codex >/dev/null 2>&1; then
+    echo "Found existing package, uninstalling..."
+    npm uninstall -g @openai/codex
+else
+    echo "Official package not found, skipping uninstall."
+fi
+
+# Step 2: Build and install the patched version from source
+echo ">>> Building patched Codex from source..."
+
+# Navigate to the Rust project directory
+cd /srv/lib/codex/codex-rs
+
+# Build the release binary
+echo "--- Running cargo build --release (this may take a while)..."
+cargo build --release
+
+# Ensure the destination directory exists
+echo "--- Ensuring ~/.cargo/bin exists..."
+mkdir -p ~/.cargo/bin
+
+# Install the binary to the user's cargo bin directory
+echo "--- Installing the patched binary to ~/.cargo/bin/codex..."
+cp -f target/release/codex ~/.cargo/bin/
+
+echo ">>> Patched Codex has been successfully built and installed."
