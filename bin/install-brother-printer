@@ -23,7 +23,6 @@ is_installed() {
 echo "1. Installing required packages..."
 sudo pacman -S --needed --noconfirm \
     cups \
-    cups-client \
     cups-filters \
     cups-pdf \
     ghostscript \
