@@ -1,0 +1,306 @@
+#!/usr/bin/env bash
+#
+# usb-hub-recover — Reset a flaky USB hub/port and ensure autosuspend is disabled
+#
+# This helper addresses recurring enumeration failures like:
+#   - usb X-Y: device descriptor read/64, error -71 (EPROTO)
+#   - Device not responding to setup address / unable to enumerate
+# Typical root cause: marginal external USB 2.0 hub, weak upstream cable, or
+# power instability. The script performs the following steps:
+#   1) Ensure USB autosuspend is disabled for the target hub model at runtime
+#      and persistently via a udev rule (unless --no-udev is used).
+#   2) Attempt a targeted reset of the USB device path (unbind/bind of the
+#      specific device) when available.
+#   3) Escalate to resetting the xHCI controller (unbind/bind) if needed.
+#
+# Defaults match a common Terminus Technology hub seen on this system:
+#   VENDOR:PRODUCT = 1a40:0101  ("USB 2.0 Hub [MTT]")
+# You can override with --id or provide an explicit USB device path via --dev.
+#
+# Usage:
+#   usb-hub-recover [--id VENDOR:PRODUCT] [--dev USB_PATH] [--no-udev]
+# Examples:
+#   usb-hub-recover                   # auto-detect 1a40:0101 hub, fix + reset
+#   usb-hub-recover --dev 1-6         # operate on a specific USB device path
+#   usb-hub-recover --id 1234:abcd    # operate on a different hub model
+#   usb-hub-recover --no-udev         # do not write a persistent udev rule
+#
+# Exit status: 0 on success, non‑zero on error.
+#
+# Notes:
+# - Writing to /sys and /etc/udev requires root; this script will request sudo
+#   only when a privileged action is actually needed (no blanket re-exec).
+# - Resetting the xHCI controller will temporarily drop ALL USB devices.
+# - Verbose logging is printed to stderr to aid troubleshooting.
+#
+# vim: set ft=sh ts=2 sw=2 et:
+
+set -Eeuo pipefail
+
+DEFAULT_ID="1a40:0101"       # Terminus Technology Inc. USB 2.0 Hub [MTT]
+USB_ID="$DEFAULT_ID"
+USB_DEV_PATH=""              # e.g. 1-6 or 1-6.1.2
+WRITE_UDEV=1
+
+info()  { printf "[INFO] %s\n" "$*" >&2; }
+warn()  { printf "[WARN] %s\n" "$*" >&2; }
+err()   { printf "[ERR ] %s\n"  "$*" >&2; }
+die()   { err "$*"; exit 1; }
+
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+usage() {
+  sed -n '1,80p' "$0" >&2
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage; exit 0 ;;
+    --id)
+      [[ $# -ge 2 ]] || die "--id requires VENDOR:PRODUCT"
+      USB_ID="$2"; shift 2 ;;
+    --dev)
+      [[ $# -ge 2 ]] || die "--dev requires a USB path like 1-6"
+      USB_DEV_PATH="$2"; shift 2 ;;
+    --no-udev)
+      WRITE_UDEV=0; shift ;;
+    *)
+      die "Unknown argument: $1" ;;
+  esac
+done
+
+SUDO_READY=0
+require_sudo() {
+  # Ask for sudo only when actually needed. Cache success to avoid repeated prompts.
+  if [[ $SUDO_READY -eq 1 ]]; then return 0; fi
+  if ! have_cmd sudo; then
+    die "sudo not found. Re-run this command as root, or install sudo."
+  fi
+  info "Requesting sudo privileges for privileged operations..."
+  sudo -v || die "sudo authentication failed."
+  SUDO_READY=1
+}
+
+can_write() {
+  # Return success if the current user can write the file (or its parent when not present yet).
+  local path="$1"
+  if [[ -e "$path" ]]; then [[ -w "$path" ]]; else [[ -w "$(dirname -- "$path")" ]]; fi
+}
+
+write_line() {
+  # Safely write a single line VALUE to FILE, using sudo when necessary.
+  local value="$1" file="$2"
+  if can_write "$file"; then
+    printf '%s\n' "$value" > "$file"
+  else
+    require_sudo
+    printf '%s\n' "$value" | sudo tee "$file" >/dev/null
+  fi
+}
+
+write_file() {
+  # Safely replace FILE contents with TEXT, using sudo when necessary.
+  local text="$1" file="$2"
+  if can_write "$file"; then
+    printf '%s\n' "$text" > "$file"
+  else
+    require_sudo
+    printf '%s\n' "$text" | sudo tee "$file" >/dev/null
+  fi
+}
+
+split_id_vendor() { printf "%s" "$1" | cut -d: -f1; }
+split_id_product() { printf "%s" "$1" | cut -d: -f2; }
+
+VENDOR_HEX=$(split_id_vendor "$USB_ID")
+PRODUCT_HEX=$(split_id_product "$USB_ID")
+[[ -n "$VENDOR_HEX" && -n "$PRODUCT_HEX" ]] || die "Invalid USB ID: $USB_ID"
+
+SYSFS_USB_DEVICES="/sys/bus/usb/devices"
+SYSFS_USB_DRIVER="/sys/bus/usb/drivers/usb"
+SYSFS_PCI_XHCI_DRIVER="/sys/bus/pci/drivers/xhci_hcd"
+
+# Locate the hub device path if not provided: match idVendor/idProduct in sysfs
+autodetect_usb_path() {
+  local dev
+  shopt -s nullglob
+  for dev in "$SYSFS_USB_DEVICES"/*; do
+    [[ -f "$dev/idVendor" && -f "$dev/idProduct" ]] || continue
+    local v p
+    v=$(<"$dev/idVendor") || true
+    p=$(<"$dev/idProduct") || true
+    if [[ "$v" == "$VENDOR_HEX" && "$p" == "$PRODUCT_HEX" ]]; then
+      basename "$dev"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [[ -z "$USB_DEV_PATH" ]]; then
+  if path=$(autodetect_usb_path); then
+    USB_DEV_PATH="$path"
+    info "Detected hub $USB_ID at USB path: $USB_DEV_PATH"
+  else
+    warn "Could not auto-detect $USB_ID in sysfs."
+    if [[ -d "$SYSFS_USB_DEVICES/1-6" ]]; then
+      USB_DEV_PATH="1-6"
+      info "Using fallback USB path: $USB_DEV_PATH"
+    else
+      warn "No sysfs device for 1-6 found. Targeted reset may be skipped."
+    fi
+  fi
+fi
+
+ensure_autosuspend_off_runtime() {
+  # Disable autosuspend at runtime for the selected device path, if present.
+  local devpath="$1"
+  local pctl="$SYSFS_USB_DEVICES/$devpath/power/control"
+  if [[ -e "$pctl" ]]; then
+    local cur
+    cur=$(<"$pctl") || cur="?"
+    if [[ "$cur" != "on" ]]; then
+      info "Disabling autosuspend at runtime for $devpath (was: $cur)"
+      if ! write_line on "$pctl"; then
+        warn "Failed to set power/control=on for $devpath"
+      fi
+    else
+      info "Autosuspend already disabled for $devpath (power/control=on)"
+    fi
+  else
+    warn "Runtime power/control not present for $devpath; skipping runtime autosuspend step."
+  fi
+}
+
+ensure_autosuspend_off_persistent() {
+  # Install a persistent udev rule to force power/control=on for the hub model.
+  local rule_path="/etc/udev/rules.d/99-usb-noautosuspend-${VENDOR_HEX}-${PRODUCT_HEX}.rules"
+  local rule_line="ACTION==\"add\", SUBSYSTEM==\"usb\", ATTR{idVendor}==\"${VENDOR_HEX}\", ATTR{idProduct}==\"${PRODUCT_HEX}\", TEST==\"power/control\", ATTR{power/control}=\"on\""
+
+  if [[ $WRITE_UDEV -eq 0 ]]; then
+    info "--no-udev specified; skipping persistent udev rule."
+    return 0
+  fi
+
+  if [[ -f "$rule_path" ]]; then
+    if grep -Fq "$rule_line" "$rule_path"; then
+      info "Persistent udev rule already present: $(basename "$rule_path")"
+    else
+      info "Updating existing rule at $rule_path"
+      write_file "$rule_line" "$rule_path"
+    fi
+  else
+    info "Writing persistent udev rule: $rule_path"
+    write_file "$rule_line" "$rule_path"
+  fi
+
+  if have_cmd udevadm; then
+    info "Reloading udev rules and triggering for $USB_ID"
+    require_sudo
+    sudo udevadm control --reload || warn "udevadm control --reload failed"
+    sudo udevadm trigger -s usb --attr-match=idVendor="$VENDOR_HEX" --attr-match=idProduct="$PRODUCT_HEX" || \
+      warn "udevadm trigger did not apply (device may be absent)"
+  else
+    warn "udevadm not found; please reload udev rules manually."
+  fi
+}
+
+reset_usb_device() {
+  local devpath="$1"
+  if [[ -z "$devpath" ]]; then
+    warn "No USB device path available to unbind/bind; skipping targeted reset."
+    return 1
+  fi
+
+  if [[ ! -d "$SYSFS_USB_DEVICES/$devpath" ]]; then
+    warn "USB device path $devpath not present in sysfs; skipping targeted reset."
+    return 1
+  fi
+
+  info "Attempting targeted reset of USB device: $devpath (unbind/bind)"
+  if [[ -e "$SYSFS_USB_DRIVER/unbind" && -e "$SYSFS_USB_DRIVER/bind" ]]; then
+    write_line "$devpath" "$SYSFS_USB_DRIVER/unbind" || warn "Unbind failed for $devpath"
+    sleep 1
+    write_line "$devpath" "$SYSFS_USB_DRIVER/bind"   || warn "Bind failed for $devpath"
+    sleep 1
+  else
+    warn "USB core driver bind/unbind endpoints not present; skipping."
+    return 1
+  fi
+
+  if [[ -d "$SYSFS_USB_DEVICES/$devpath" ]]; then
+    info "Device $devpath appears present after targeted reset."
+    return 0
+  else
+    warn "Device $devpath not present after targeted reset."
+    return 1
+  fi
+}
+
+detect_xhci_pci_id() {
+  # Locate the xHCI PCI ID (e.g., 0000:00:14.0). Prefer lspci; fallback to sysfs.
+  if have_cmd lspci; then
+    local line first
+    line=$(lspci -Dn | grep -i ' xhci ' || true)
+    if [[ -n "$line" ]]; then
+      first="${line%% *}"
+      if [[ "$first" == 0000:*:*.* || "$first" == 0000:* ]]; then
+        printf '%s\n' "$first"
+      else
+        printf '0000:%s\n' "$first"
+      fi
+      return 0
+    fi
+  fi
+  local devs
+  devs=("$SYSFS_PCI_XHCI_DRIVER"/*:*)
+  if [[ -e "${devs[0]:-}" ]]; then
+    basename "${devs[0]}"
+    return 0
+  fi
+  return 1
+}
+
+reset_xhci_controller() {
+  local pci_id
+  if ! pci_id=$(detect_xhci_pci_id); then
+    die "Unable to detect xHCI PCI ID; cannot perform host controller reset."
+  fi
+  info "Resetting xHCI host controller $pci_id (unbind/bind) — this will drop ALL USB briefly"
+  write_line "$pci_id" "$SYSFS_PCI_XHCI_DRIVER/unbind" || warn "xhci unbind failed for $pci_id"
+  sleep 1
+  write_line "$pci_id" "$SYSFS_PCI_XHCI_DRIVER/bind"   || warn "xhci bind failed for $pci_id"
+  sleep 1
+}
+
+post_status() {
+  info "Current USB topology (lsusb -t):"
+  if have_cmd lsusb; then
+    lsusb -t || true
+  else
+    warn "lsusb not available to show topology."
+  fi
+}
+
+main() {
+  info "Target hub model: $USB_ID"
+  [[ -n "$USB_DEV_PATH" ]] && info "Target USB device path: $USB_DEV_PATH"
+
+  # 1) Persistent + runtime autosuspend mitigation
+  ensure_autosuspend_off_persistent
+  [[ -n "$USB_DEV_PATH" ]] && ensure_autosuspend_off_runtime "$USB_DEV_PATH"
+
+  # 2) Targeted device reset (best case)
+  if ! reset_usb_device "$USB_DEV_PATH"; then
+    warn "Targeted USB reset did not complete successfully; escalating to xHCI reset."
+    reset_xhci_controller
+  fi
+
+  # 3) Post-state
+  post_status
+  info "Done. If issues persist, replace or power the hub and upstream cable."
+}
+
+main "$@"
