@@ -16,6 +16,7 @@ declare -a NPM_PACKAGES=(
     "bash-language-server"
     "dockerfile-language-server-nodejs"
     "vscode-langservers-extracted"
+    "codebuff"
 )
 
 log() {

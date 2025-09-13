@@ -25,7 +25,7 @@ export GTK_THEME=Adwaita:dark
 export LESS="-R --ignore-case -P ?f%f:stdin.  line %lt–%lb/%L  ?e(END):%PB\%."
 # Keep RVM first in PATH so RVM gem bins take precedence.
 # Google Cloud SDK bin will be moved to the end (see block below).
-export PATH="$HOME/.rvm/bin:$PATH:$HOME/bin:$HOME/.local/bin"
+export PATH="$HOME/.rvm/bin:$PATH:$HOME/bin:$HOME/.local/bin:$HOME/.cargo/bin"
 
 # Ensure Google Cloud SDK bin is at the end (zsh only).
 if [[ -n ${ZSH_VERSION-} ]]; then
