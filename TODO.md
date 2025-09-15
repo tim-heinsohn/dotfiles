@@ -1,3 +1,4 @@
+1. target_env_toggle / tet for clients & MCPs URLs and keys
 1. memory MCP (via Goose)
 1. Codex: AGENTS.md at user level?
 1. Google Drive MPC
