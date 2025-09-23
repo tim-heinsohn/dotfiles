@@ -12,6 +12,7 @@ declare -a NPM_PACKAGES=(
     "@atlaskit/editor-markdown-transformer"
     "@google/gemini-cli"
     "@microsoft/compose-language-service"
+    "@openai/codex"
     "@spotlightjs/spotlight"
     "@usebruno/cli"
     "bash-language-server"
@@ -42,20 +43,6 @@ check_nvm_node() {
         log "ERROR: Node.js is not installed or not in PATH"
         log "Make sure to install nvm and set up Node.js first"
         exit 1
-    fi
-}
-
-install_codex_from_source() {
-    local script_path="$HOME/dotfiles/codex/install-from-source"
-    if [ -x "$script_path" ]; then
-        log ">>> Running patched Codex installer from source..."
-        if "$script_path"; then
-            log "✓ Successfully installed patched Codex"
-        else
-            log "✗ Failed to install patched Codex"
-        fi
-    else
-        log "⚠ Patched Codex install script not found or not executable at $script_path"
     fi
 }
 
@@ -192,21 +179,18 @@ main() {
             check_npm
             check_nvm_node
             install_packages
-            install_codex_from_source
             install_mcp_get_local
             ;;
         update)
             check_npm
             check_nvm_node
             update_packages
-            install_codex_from_source
             install_mcp_get_local
             ;;
         auto)
             check_npm
             check_nvm_node
             install_or_update_packages
-            install_codex_from_source
             install_mcp_get_local
             ;;
         -h|--help|help)
