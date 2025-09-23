@@ -131,7 +131,11 @@ while true; do
     log_prompt "Page $current_count - Place document and press Enter to scan (or n/p/r/s/q): "
     
     # Read single character without requiring Enter
-    read -r -n 1 -s key
+    if ! read -r -n 1 -s key; then
+        echo
+        log_info "Input closed; ending batch"
+        break
+    fi
     echo  # newline
     
     case "$key" in
@@ -140,21 +144,21 @@ while true; do
             log_info "Scanning page $current_count..."
             if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
                 log_info "✓ Saved: $filename"
-                ((current_count++))
-                ((successful_scans++))
+                current_count=$((current_count + 1))
+                successful_scans=$((successful_scans + 1))
             else
                 log_error "✗ Scan failed for page $((current_count))"
             fi
             ;;
         n|N)
             # Next page
-            ((current_count++))
+            current_count=$((current_count + 1))
             log_info "Advanced to page $current_count"
             ;;
         p|P)
             # Previous page
             if [[ $current_count -gt 1 ]]; then
-                ((current_count--))
+                current_count=$((current_count - 1))
                 log_info "Went back to page $current_count"
             else
                 log_warn "Already at first page"
@@ -167,7 +171,7 @@ while true; do
                 log_info "✓ Rescanned: $filename"
                 # Only increment successful_scans if this was a new scan
                 if [[ ! -f "$filepath" ]]; then
-                    ((successful_scans++))
+                    successful_scans=$((successful_scans + 1))
                 fi
             else
                 log_error "✗ Rescan failed"
@@ -200,3 +204,11 @@ while true; do
             ;;
     esac
 done
+
+log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
+echo
+echo "Summary:"
+echo "  Attempted pages: $((current_count - START_COUNT))"
+echo "  Successful scans: $successful_scans"
+echo "  Files in: $OUTPUT_DIR"
+ls -la "$OUTPUT_DIR" 2>/dev/null || true

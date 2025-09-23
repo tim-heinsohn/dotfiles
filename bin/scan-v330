@@ -8,6 +8,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCANNER_NAME="Epson Perfection V330"
 DEFAULT_OUTPUT_DIR="$HOME/Scans"
+FAKE_MODE="${SCAN_V330_FAKE:-}"
+SKIP_DETECT="${SCAN_V330_SKIP_DETECT:-}"
 
 # Default settings
 RESOLUTION=300
@@ -76,6 +78,12 @@ log_error() {
 }
 
 detect_scanner() {
+    if [[ -n "$SKIP_DETECT" || -n "$FAKE_MODE" ]]; then
+        DEVICE="${DEVICE:-FAKE_DEVICE}"
+        log_warn "Skipping scanner detection (debug mode)"
+        return
+    fi
+
     local scanner_info
     scanner_info=$(scanimage -L 2>/dev/null | grep "Epson Perfection V330" || true)
     
@@ -95,7 +103,7 @@ detect_scanner() {
 validate_settings() {
     # Validate resolution
     case "$RESOLUTION" in
-        75|150|300|600|1200|2400|4800) ;;
+        75|150|200|300|600|1200|2400|4800) ;;
         *) log_error "Invalid resolution: $RESOLUTION"; exit 1 ;;
     esac
     
@@ -107,7 +115,7 @@ validate_settings() {
     
     # Validate format
     case "$FORMAT" in
-        pnm|tiff|png|jpeg) ;;
+        pnm|tiff|png|jpeg|pdf) ;;
         *) log_error "Invalid format: $FORMAT"; exit 1 ;;
     esac
 }
@@ -118,6 +126,7 @@ get_scanimage_format() {
         tiff) echo "tiff" ;;
         png) echo "png" ;;
         jpeg) echo "jpeg" ;;
+        pdf) echo "png" ;;
     esac
 }
 
@@ -127,6 +136,7 @@ get_file_extension() {
         tiff) echo ".tiff" ;;
         png) echo ".png" ;;
         jpeg) echo ".jpg" ;;
+        pdf) echo ".pdf" ;;
     esac
 }
 
@@ -134,35 +144,108 @@ single_scan() {
     local output_file="$1"
     local scanimage_format
     scanimage_format=$(get_scanimage_format)
+    local actual_output="$output_file"
+    local temp_file=""
     
     log_info "Starting scan: ${RESOLUTION} DPI, $MODE, $FORMAT format"
     log_info "Output: $output_file"
     
     # Create output directory if it doesn't exist
     mkdir -p "$(dirname "$output_file")"
-    
-    # Build scanimage command
-    local cmd=(scanimage)
-    cmd+=(-d "$DEVICE")
-    cmd+=(--resolution "$RESOLUTION")
-    cmd+=(--mode "$MODE")
-    cmd+=(--format="$scanimage_format")
-    
-    # Execute scan
-    if "${cmd[@]}" > "$output_file"; then
-        log_info "Scan completed: $output_file"
-        
-        # Show file info
-        if command -v identify >/dev/null 2>&1; then
-            local dimensions
-            dimensions=$(identify -format "%wx%h" "$output_file" 2>/dev/null || echo "unknown")
-            local file_size
-            file_size=$(du -h "$output_file" | cut -f1)
-            log_info "Result: ${dimensions} pixels, $file_size"
+
+    if [[ "$FORMAT" == "pdf" ]]; then
+        local dir_name
+        dir_name="$(dirname "$output_file")"
+        local base_name
+        base_name="$(basename "${output_file%.pdf}")"
+        if [[ -z "$base_name" ]]; then
+            base_name="scan"
+        fi
+        temp_file=$(mktemp "${dir_name}/${base_name}.XXXXXX.${scanimage_format}")
+        actual_output="$temp_file"
+    fi
+
+    if [[ -n "$FAKE_MODE" ]]; then
+        log_warn "Generating fake scan output (debug mode)"
+        if [[ -n "$temp_file" ]]; then
+            rm -f "$temp_file"
+            temp_file=""
+            actual_output="$output_file"
+        else
+            actual_output="$output_file"
+        fi
+
+        if [[ "$FORMAT" == "pdf" ]]; then
+            cat <<'EOF' > "$output_file"
+%PDF-1.4
+1 0 obj <<>> endobj
+trailer <<>>
+%%EOF
+EOF
+        else
+            printf "FAKE %s scan\n" "$FORMAT" > "$output_file"
         fi
     else
-        log_error "Scan failed"
+        # Build scanimage command
+        local cmd=(scanimage)
+        cmd+=(-d "$DEVICE")
+        cmd+=(--resolution "$RESOLUTION")
+        cmd+=(--mode "$MODE")
+        cmd+=(--format="$scanimage_format")
+
+        # Execute scan
+        if ! "${cmd[@]}" > "$actual_output"; then
+            log_error "Scan failed"
+            [[ -n "$temp_file" ]] && rm -f "$temp_file"
+            exit 1
+        fi
+    fi
+
+    if [[ ! -s "$actual_output" ]]; then
+        log_error "Scan produced no data"
+        [[ -n "$temp_file" ]] && rm -f "$temp_file"
         exit 1
+    fi
+
+    if [[ -n "$temp_file" ]]; then
+        if command -v img2pdf >/dev/null 2>&1; then
+            if ! img2pdf "$actual_output" --output "$output_file" --dpi "$RESOLUTION"; then
+                log_error "Failed to convert scan to PDF using img2pdf"
+                rm -f "$temp_file"
+                exit 1
+            fi
+        elif command -v magick >/dev/null 2>&1; then
+            if ! magick -units PixelsPerInch -density "$RESOLUTION" "$actual_output" "$output_file"; then
+                log_error "Failed to convert scan to PDF using ImageMagick magick"
+                rm -f "$temp_file"
+                exit 1
+            fi
+        elif command -v convert >/dev/null 2>&1; then
+            if ! convert -units PixelsPerInch -density "$RESOLUTION" "$actual_output" "$output_file"; then
+                log_error "Failed to convert scan to PDF using ImageMagick convert"
+                rm -f "$temp_file"
+                exit 1
+            fi
+        else
+            log_error "PDF output requires img2pdf or ImageMagick"
+            rm -f "$temp_file"
+            exit 1
+        fi
+        rm -f "$temp_file"
+        actual_output="$output_file"
+    else
+        actual_output="$output_file"
+    fi
+
+    log_info "Scan completed: $actual_output"
+    
+    # Show file info
+    if command -v identify >/dev/null 2>&1; then
+        local dimensions
+        dimensions=$(identify -format "%wx%h" "$actual_output" 2>/dev/null || echo "unknown")
+        local file_size
+        file_size=$(du -h "$actual_output" | cut -f1)
+        log_info "Result: ${dimensions} pixels, $file_size"
     fi
 }
 
@@ -280,6 +363,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Guard against unsupported combinations
+if [[ $BATCH_MODE == true && $FORMAT == "pdf" ]]; then
+    log_error "PDF output is not supported in --batch mode; use scan-v330-batch or choose png/tiff"
+    exit 1
+fi
 
 # Detect scanner if device not specified
 if [[ -z "$DEVICE" ]]; then
