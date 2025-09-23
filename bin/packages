@@ -207,6 +207,8 @@ extra/pdftk
     Command-line tool for working with PDFs.
 extra/plocate
     Alternative to locate, faster and compatible with mlocate's database.
+extra/poppler
+    PDF rendering library based on xpdf 3.0. Provides pdfattach, pdfdetach, pdffonts, pdfimages, pdfinfo, pdfseparate, pdfsig, pdftocairo, pdftohtml, pdftoppm, pdftops, pdftotext, pdfunite.
 extra/postgresql
     A powerful, open source object-relational database system.
 extra/postgresql-libs
