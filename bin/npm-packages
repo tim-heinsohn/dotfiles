@@ -13,10 +13,11 @@ declare -a NPM_PACKAGES=(
     "@google/gemini-cli"
     "@microsoft/compose-language-service"
     "@spotlightjs/spotlight"
+    "@usebruno/cli"
     "bash-language-server"
+    "codebuff"
     "dockerfile-language-server-nodejs"
     "vscode-langservers-extracted"
-    "codebuff"
 )
 
 log() {

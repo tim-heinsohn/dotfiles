@@ -3,6 +3,8 @@ aur/acli-bin
 aur/acpilight
     A backward-compatible xbacklight replacement with ACPI kernel support.
     A small command-line utility to show and change EXIF information in JPEG files.
+aur/bruno-bin
+    Opensource API Client for Exploring and Testing APIs.
 aur/google-chrome
     A browser that combines a minimal design with sophisticated technology.
 aur/goose-desktop
