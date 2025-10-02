@@ -19,6 +19,9 @@ fpath=(~/.local/share/sheldon/repos/github.com/zsh-users/zsh-completions/src $fp
 autoload -Uz compinit
 compinit
 
+# gopass gatekeeper (check before environment loads secrets)
+source ~/.zsh/lib/gopass-gatekeeper.sh >/dev/null 2>&1
+
 # environment (to be read before aliases)
 source ~/.zsh/environment >/dev/null 2>&1
 

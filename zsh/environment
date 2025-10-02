@@ -44,7 +44,7 @@ export XCLIP_SELECTION="clipboard"
 export GPG_TTY=$(tty)
 
 # Only load gopass secrets in GUI environments
-if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ]; then
+if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ] && [ "${SKIP_GOPASS_LOAD:-0}" != "1" ]; then
   # LLMs
   ANTHROPIC_API_KEY=$(gopass show -o t/ai/claude/api-key)
   export ANTHROPIC_API_KEY
