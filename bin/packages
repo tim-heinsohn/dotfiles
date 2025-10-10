@@ -275,6 +275,10 @@ extra/texlive-binextra
     Extra binaries for TeX Live.
 extra/texlive-latexextra
     TeX Live - Large collection of add-on packages for LaTeX.
+extra/texlive-langgreek
+    Greek language support files for TeX Live needed by hyperref's Unicode tables.
+extra/texlive-plaingeneric
+    Supplies tracklang.sty and other generic TeX utilities required by Polyglossia/Hyperref.
 extra/texlive-xetex
     TeX Live - XeTeX and packages.
 extra/texlive-fontsextra

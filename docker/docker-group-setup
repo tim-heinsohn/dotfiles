@@ -1,6 +1,37 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # ! DISCOURAGED!
 # see <https://github.com/moby/moby/issues/9976>
-sudo usermod -aG docker $USER
-newgrp docker
+
+if lsmod 2>/dev/null | grep -q '^veth'; then
+  echo "veth kernel module already loaded"
+else
+  if ! command -v modprobe >/dev/null 2>&1; then
+    echo "modprobe not available; please load the veth module manually before retrying" >&2
+  else
+    echo "Loading veth kernel module (requires sudo)"
+    if sudo modprobe veth; then
+      echo "Loaded veth kernel module"
+    else
+      echo "Failed to load veth module for kernel $(uname -r). Ensure the matching kernel modules package is installed or the feature is built-in." >&2
+    fi
+  fi
+fi
+
+if id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
+  echo "User '$USER' already belongs to docker group; skipping usermod"
+else
+  echo "Adding '$USER' to docker group (requires sudo)"
+  sudo usermod -aG docker "$USER"
+  echo "Group change recorded; a new shell session will be required"
+fi
+
+cat <<'EOF'
+
+Next steps:
+  - Log out and back in so the docker group membership takes effect.
+  - Run `docker info` to confirm daemon access.
+  - Run `lsmod | grep veth` to verify the veth module is loaded.
+EOF
