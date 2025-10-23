@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Toggle between French and German keyboard layouts and refresh i3status.
+
+set -eu
+
+layout=$(setxkbmap -query | awk '/layout:/ {print $2}') || layout=""
+layout=${layout%%,*}
+
+case "$layout" in
+    fr) target_layout=de ;;
+    de) target_layout=fr ;;
+    *) target_layout=fr ;;
+esac
+
+setxkbmap "$target_layout"
+
+# Wake up i3status so the bar reflects the new layout immediately.
+killall -q -SIGUSR1 i3status 2>/dev/null || true
+
+exit 0
