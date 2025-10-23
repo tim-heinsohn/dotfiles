@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# Ensure Caps Lock is turned off, then reload Xmodmap and refresh i3status.
+
+set -eu
+
+# Determine current Caps Lock state; if it is on, toggle it off via xdotool.
+caps_state=$(xset -q 2>/dev/null | awk '/Caps Lock:/ {print $4; exit}' | tr '[:upper:]' '[:lower:]')
+
+if [ "${caps_state:-off}" = "on" ]; then
+    if command -v xdotool >/dev/null 2>&1; then
+        xdotool key Caps_Lock
+    else
+        echo "disable-capslock: xdotool not found; cannot toggle Caps Lock" >&2
+    fi
+fi
+
+# Reload keyboard remappings.
+xmodmap "$HOME/.Xmodmap"
+
+# Update any status indicators immediately.
+killall -q -SIGUSR1 i3status 2>/dev/null || true
+
+exit 0

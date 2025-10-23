@@ -38,8 +38,21 @@ i3status | (
         with_hostname=$(echo "$line_to_process" | jq --arg host "$(hostnamectl hostname)" '[{ "full_text": $host, "name": "hostname" }] + .')
         with_project=$(echo "$with_hostname" | jq --arg proj "$proj_code" '[{ "full_text": $proj, "name": "project" }] + .')
 
+        # Add a red CAPS indicator when Caps Lock is active.
+        caps_state=$(xset -q 2>/dev/null | awk '/Caps Lock:/ {print $4; exit}' | tr '[:upper:]' '[:lower:]')
+        with_caps="$with_project"
+        if [ "${caps_state:-off}" = "on" ]; then
+            with_caps=$(echo "$with_project" | jq --arg text "CAPS" --arg color "#FF3B30" '[{ "full_text": $text, "name": "caps_lock", "color": $color }] + .')
+        fi
+
+        # Determine current keyboard layout from setxkbmap and format for display.
+        layout=$(setxkbmap -query | awk '/layout:/ {print $2}' | cut -d',' -f1)
+        [ -n "$layout" ] || layout="??"
+        layout_display=$(printf '%s' "$layout" | tr '[:lower:]' '[:upper:]')
+        with_layout=$(echo "$with_caps" | jq --arg layout "$layout_display" '[{ "full_text": $layout, "name": "keyboard_layout" }] + .')
+
         # Print the re-assembled line with the leading comma
-        echo "$leading_comma$with_project"
+        echo "$leading_comma$with_layout"
     done
 )
 
