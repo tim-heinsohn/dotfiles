@@ -23,6 +23,8 @@ aur/qotd
     A simple RFC 865-compliant QOTD (quote of the day) daemon.
 aur/slackdump
     Save your private and public slack messages, threads, files, and users locally.
+aur/unciv
+    Open-source remake of Civilization V.
 aur/spotrec
     Spotify desktop client recorder for PulseAudio.
 aur/spotify

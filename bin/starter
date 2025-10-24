@@ -59,4 +59,8 @@ sudo systemctl enable --now acpid &&
 sudo systemctl enable --now bluetooth &&
 sudo systemctl enable --now docker &&
 # sudo systemctl enable --now qotd &&
+
+# Switch to Java 17 for unciv compatibility (Java 25 causes build failures)
+sudo archlinux-java set java-17-openjdk &&
+
 echo "Done."
