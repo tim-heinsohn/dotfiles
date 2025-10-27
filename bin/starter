@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
@@ -7,8 +7,9 @@ sudo pacman -Suy --needed --noconfirm git &&
 # Restart gpg daemons to use updated versions after system update
 gpgconf --kill all 2>/dev/null || true &&
 git -C "${DOTFILES_DIR}" pull || git clone "${DOTFILES_REPO}" "${DOTFILES_DIR}" &&
-ln -sf ${DOTFILES_DIR}/bombadil.toml ~/.config/bombadil.toml &&
-cd ${DOTFILES_DIR} &&
+ln -sf "${DOTFILES_DIR}/bombadil.toml" "$HOME/.config/bombadil.toml" &&
+cd "${DOTFILES_DIR}" &&
+"${DOTFILES_DIR}/bin/setup-wallpapers" &&
 "${DOTFILES_DIR}/aider/install" &&
 "${DOTFILES_DIR}/aur/yay-install" &&
 "${DOTFILES_DIR}/bin/packages-install" &&
@@ -45,13 +46,13 @@ gem list overcommit -i >/dev/null 2>&1 || gem install overcommit &&
 
 # add user to wheel group to get sudo privileges granted, e. g. for journalctl
 # NOTE: requires "%wheel ALL=(ALL) ALL" in visudo
-sudo usermod -aG wheel $USER &&
+sudo usermod -aG wheel "$USER" &&
 
 # add user to video group to allow adjusting brightness w/o sudo
-sudo usermod -aG video $USER &&
+sudo usermod -aG video "$USER" &&
 
 # add user to audio group for microphone access
-sudo usermod -aG audio $USER &&
+sudo usermod -aG audio "$USER" &&
 
 # run acpi_listen after enabling this and press brightness keys on keyboard,
 # e.g. Fn+F5/F6

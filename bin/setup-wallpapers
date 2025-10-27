@@ -1,0 +1,69 @@
+#!/bin/bash
+
+set -euo pipefail
+
+log() {
+  printf 'setup-wallpapers: %s\n' "$1"
+}
+
+ensure_repo() {
+  if [[ -z "${WALLPAPERS_REPO:-}" ]]; then
+    log "WALLPAPERS_REPO not set; skipping repository sync"
+    return
+  fi
+
+  if [[ -d "${WALLPAPERS_DIR}/.git" ]]; then
+    log "Updating wallpapers repository"
+    git -C "$WALLPAPERS_DIR" fetch --prune
+    git -C "$WALLPAPERS_DIR" pull --ff-only
+  elif [[ -d "${WALLPAPERS_DIR}" ]]; then
+    if [[ -z "$(ls -A "$WALLPAPERS_DIR" 2>/dev/null)" ]]; then
+      log "Directory exists but is empty; cloning repository"
+      rmdir "$WALLPAPERS_DIR"
+      git clone "$WALLPAPERS_REPO" "$WALLPAPERS_DIR"
+    else
+      log "Directory exists and is not a git repo; skipping clone"
+    fi
+  else
+    log "Cloning wallpapers repository"
+    git clone "$WALLPAPERS_REPO" "$WALLPAPERS_DIR"
+  fi
+}
+
+ensure_cron() {
+  if ! command -v fcrontab >/dev/null 2>&1; then
+    log "fcrontab command not available; skipping cron setup"
+    return
+  fi
+
+  cron_line="*/20 * * * *    \\command feh --bg-fill --randomize --no-fehbg ${WALLPAPERS_DIR} ${WALLPAPERS_DIR}"
+  existing_crontab=$(fcrontab -l 2>/dev/null || true)
+
+  if printf '%s\n' "$existing_crontab" | grep -Fqx "$cron_line"; then
+    log "Cron entry already present"
+    return
+  fi
+
+  {
+    if [[ -n "$existing_crontab" ]]; then
+      printf '%s\n' "$existing_crontab"
+    fi
+    printf '%s\n' "$cron_line"
+  } | fcrontab -
+
+  log "Cron entry installed"
+}
+
+main() {
+  if [[ -z "${WALLPAPERS_DIR:-}" ]]; then
+    log "WALLPAPERS_DIR not set; skipping"
+    return
+  fi
+
+  mkdir -p "$(dirname "$WALLPAPERS_DIR")"
+  [[ -n "${WALLPAPERS_REPO:-}" ]] || mkdir -p "$WALLPAPERS_DIR"
+  ensure_repo
+  ensure_cron
+}
+
+main "$@"

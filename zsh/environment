@@ -108,4 +108,12 @@ if command -v goose-gui >/dev/null 2>&1 \
   # API keys are provider-specific (e.g., OPENAI_API_KEY, ANTHROPIC_API_KEY)
 fi
 
+# Additional dirs
+export DATAFILES_DIR="$HOME/datafiles"
+export WALLPAPERS_DIR="/srv/Wallpapers"
+
+if [ -n "${DATAFILES_DIR:-}" ] && [ -f "${DATAFILES_DIR}/zsh/environment" ]; then
+  source "${DATAFILES_DIR}/zsh/environment"
+fi
+
 # vim: set ft=zsh:
