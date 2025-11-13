@@ -29,6 +29,7 @@ nvim_keymaps = { source = "nvim/lua/keymaps.lua", target = ".config/nvim/lua/key
 nvim_plugins = { source = "nvim/lua/plugins.lua", target = ".config/nvim/lua/plugins.lua" }
 nvim_lsp_setup = { source = "nvim/lua/lsp_setup.lua", target = ".config/nvim/lua/lsp_setup.lua" }
 npmrc = { source = "npm/npmrc", target = ".npmrc" }
+pandoc_defaults = { source = "pandoc/defaults.yaml", target = ".pandoc/defaults.yaml" }
 railsrc = { source = "rails/railsrc", target = ".railsrc" }
 rofi = { source = "rofi/config", target = ".config/rofi/config.rasi" }
 rofi_pass = { source = "rofi/rofi-pass", target = ".config/rofi-pass/config" }

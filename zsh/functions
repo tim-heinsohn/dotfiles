@@ -152,8 +152,9 @@ function _set_anthropic_env_for_selection() {
     # Goose supports ANTHROPIC_HOST; point it to Kimi endpoint
     export ANTHROPIC_HOST=https://api.moonshot.ai/anthropic
     # Kimi latest model overrides
-    export ANTHROPIC_MODEL=kimi-k2-0905-preview
-    export ANTHROPIC_SMALL_FAST_MODEL=kimi-k2-0905-preview
+    # export ANTHROPIC_MODEL=kimi-k2-0905-preview
+    export ANTHROPIC_MODEL=kimi-k2-thinking
+    export ANTHROPIC_SMALL_FAST_MODEL=kimi-k2-thinking
     echo "Switched to Kimi mode for ${project_code} (${project_label} project)."
   else
     # Use direct Anthropic API

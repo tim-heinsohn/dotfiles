@@ -1,0 +1,19 @@
+# Pandoc default settings
+# Generated: November 3, 2025
+# 
+# Use XeLaTeX for better Unicode/emoji support in PDF output
+# This enables proper handling of checkmarks, emojis, and special characters
+
+pdf-engine: xelatex
+
+# Markdown input options
+from: markdown
+
+# PDF output options
+to: pdf
+
+# Don't number sections by default (can override with --number-sections)
+number-sections: false
+
+# Verbosity
+quiet: false

@@ -18,6 +18,7 @@ export BAT_THEME="Monokai Extended" # bat --list-themes
 export EDITOR="nvim"
 export DOTFILES_DIR="$HOME/dotfiles"
 export DIRENV_WARN_TIMEOUT=10s
+export PANDOC_PDF_ENGINE=xelatex  # Use XeLaTeX for better Unicode support in PDF output
 export FZF_DEFAULT_COMMAND='ag --hidden -a --ignore .git -l -g ""' # let fzf find hidden files
 export FZF_DEFAULT_OPTS="--ansi --preview-window 'right:60%' --preview 'bat --color=always --style=header,grid --line-range :300 {}'"
        # via <https://github.com/sharkdp/bat/issues/357>

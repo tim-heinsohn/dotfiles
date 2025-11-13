@@ -30,7 +30,7 @@ exec_always --no-startup-id setxkbmap fr
 exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock --nofork
 
 # lock session
-bindsym $mod+Shift+x exec --no-startup-id loginctl lock-session
+# bindsym $mod+Shift+x exec --no-startup-id loginctl lock-session
 bindsym $mod+Shift+y exec "i3lock -c 35373A"
 
 # auto lock the screen
@@ -92,9 +92,6 @@ bindsym $mod+d exec --no-startup-id rofi -modes 'dict:dict' -theme DarkBlue -sho
 # calculator
 bindsym $mod+c exec --no-startup-id rofi -show calc -theme DarkBlue -modi calc -no-show-match -no-sort > /dev/null
 
-# emoji 
-bindsym $mod+e exec --no-startup-id rofi -show emoji -modi emoji theme DarkBlue
-
 # password manager
 #bindsym $mod+p exec rofi-pass
 bindsym $mod+p exec --no-startup-id rofi-pass -theme DarkBlue --root $HOME/.password-store/inaudito-private:$HOME/ia.passwords/:$HOME/.password-store
@@ -124,6 +121,7 @@ bindsym $mod+f fullscreen toggle
 
 # change container layout (stacked, tabbed, toggle split)
 bindsym $mod+s layout stacking
+bindsym $mod+Shift+s layout toggle stack
 bindsym $mod+t layout tabbed
 bindsym $mod+Shift+t layout toggle split
 
@@ -183,7 +181,7 @@ bindsym $mod+Shift+c reload
 # restart i3 inplace (preserves your layout/session, can be used to upgrade i3)
 bindsym $mod+Shift+r restart
 # exit i3 (logs you out of your X session)
-bindsym $mod+Shift+e exec "i3-nagbar -t warning -m 'You pressed the exit shortcut. Do you really want to exit i3? This will end your X session.' -B 'Yes, exit i3' 'i3-msg exit'"
+bindsym $mod+Shift+x exec "i3-nagbar -t warning -m 'You pressed the exit shortcut. Do you really want to exit i3? This will end your X session.' -B 'Yes, exit i3' 'i3-msg exit'"
 
 # resize window (you can also use the mouse for that)
 mode "resize" {
