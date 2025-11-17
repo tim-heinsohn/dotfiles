@@ -69,7 +69,7 @@ extra/aws-cli
     Universal Command Line Interface for Amazon Web Services.
 extra/bat
     Cat clone with syntax highlighting and git integration.
-extra/bind 9.20.13-1 (2.1 MiB 7.0 MiB)
+extra/bind
     A complete, highly portable implementation of the DNS protocol. # nslookup
 extra/bluez
     Daemons for the bluetooth protocol stack.
@@ -85,7 +85,7 @@ extra/chromium
     An open-source browser project for a safer, faster, and more stable web.
 extra/cocogitto
     Set of CLI tools for the conventional commit and semver specifications.
-extra/code 1.104.3-1 (25.4 MiB 158.8 MiB)
+extra/code
     The Open Source build of Visual Studio Code (vscode) editor.
 extra/ctags
     Generates an index file of language objects found in source files.
@@ -117,7 +117,7 @@ extra/evolution
     A personal information management application with mail, calendar and contacts.
 extra/fd
     Simple, fast and user-friendly alternative to find.
-extra/fcron 3.4.0-1 (125.8 KiB 282.2 KiB)
+extra/fcron
     Feature-rich cron implementation (optimized for systems that are not always on).
 extra/ffmpeg4.4
     Complete solution to record, convert and stream audio and video.
@@ -125,7 +125,7 @@ extra/feh
     Fast and light imlib2-based image viewer.
 extra/firefox
     Fast, Private & Safe Web Browser.
-extra/firefox-developer-edition 145.0b4-1 (79.2 MiB 272.9 MiB)
+extra/firefox-developer-edition
     Fast, Private & Safe Web Browser (Developer Edition).
 extra/flameshot
     A powerful yet simple to use screenshot software.
@@ -301,7 +301,7 @@ extra/the_silver_searcher
     Code searching tool similar to Ack, but faster.
 extra/thunderbird
     A free email application that's easy to set up and customize.
-extra/tcpdump 4.99.5-1 (431.2 KiB 1.1 MiB)
+extra/tcpdump
     Powerful command-line packet analyzer.
 extra/tidy
     A tool to tidy down your HTML code to a clean style.
@@ -311,7 +311,7 @@ extra/tig
     Text-mode interface for Git.
 extra/toml-bombadil
     Adotfile manager with templating.
-extra/traceroute 2.1.6-1 (38.9 KiB 78.8 KiB)
+extra/traceroute
     Tracks the route taken by packets over an IP network.
 extra/traefik
     A modern HTTP reverse proxy and load balancer for deploying microservices.
