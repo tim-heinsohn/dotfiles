@@ -64,4 +64,6 @@ sudo systemctl enable --now docker &&
 # Switch to Java 17 for unciv compatibility (Java 25 causes build failures)
 sudo archlinux-java set java-17-openjdk &&
 
+sudo paccache -rk1 &&
+
 echo "Done."

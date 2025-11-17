@@ -205,6 +205,8 @@ extra/obs-studio
     Free and open source software for video recording and live streaming.
 extra/p7zip
     A file archiver with a high compression ratio.
+extra/pacman-contrib
+    Contributed scripts and tools for pacman systems. # paccache
 extra/pamixer
     Pulseaudio command-line mixer like amixer.
 extra/pipewire-jack
@@ -223,6 +225,8 @@ extra/postgresql
     A powerful, open source object-relational database system.
 extra/postgresql-libs
     Libraries for use with PostgreSQL.
+extra/postgresql-old-upgrade
+    Older PostgreSQL for migrating major versions with pg_upgrade
 extra/pv
     A terminal-based tool for monitoring the progress of data through a pipeline.
 extra/pulseaudio-bluetooth

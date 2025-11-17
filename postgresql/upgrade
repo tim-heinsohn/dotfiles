@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# Performs the Arch Linux pg_upgrade workflow automatically: it validates the
+# environment, detects the currently running major version from the data
+# directory, provisions the matching old/new binaries, stops PostgreSQL via
+# systemd, re-initializes a fresh cluster with matching locales/checksums,
+# runs pg_upgrade, re-applies specific configuration (listen_addresses plus all
+# host-based auth rules), and restarts the service after analyzing the new
+# cluster. All steps happen under the postgres user where required, with safety
+# checks and rollback traps so failures restore the original data directory.
+#
+# See also: https://wiki.archlinux.org/title/PostgreSQL#Upgrading_PostgreSQL
+set -euo pipefail
+
+DATA_DIR="/var/lib/postgres/data"
+SERVICE_NAME="postgresql"
+
+log() {
+  echo "[postgres/upgrade] $*"
+}
+
+fail() {
+  echo "[postgres/upgrade][error] $*" >&2
+  exit 1
+}
+
+bytes_to_human() {
+  python3 - "$1" <<'PY'
+import sys
+n = max(int(sys.argv[1]), 0)
+units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
+if n == 0:
+    print("0 B")
+    sys.exit(0)
+idx = min(len(units) - 1, int((n.bit_length() - 1) / 10))
+value = n / (1024 ** idx)
+print(f"{value:.2f} {units[idx]}")
+PY
+}
+
+require_root() {
+  if [[ $EUID -ne 0 ]]; then
+    fail "This script must be run as root so it can stop systemd services and manage /var/lib/postgres."
+  fi
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    fail "Required command '$1' is not available in PATH."
+  fi
+}
+
+require_root
+require_command pg_upgrade
+require_command pg_config
+require_command psql
+require_command pgrep
+require_command systemctl
+require_command python3
+require_command runuser
+require_command perl
+require_command df
+require_command du
+
+if [[ ! -d $DATA_DIR ]]; then
+  fail "Data directory $DATA_DIR does not exist. Nothing to upgrade."
+fi
+
+if [[ ! -f "$DATA_DIR/PG_VERSION" ]]; then
+  fail "Could not find $DATA_DIR/PG_VERSION. Is there an initialized cluster to upgrade?"
+fi
+
+CURRENT_MAJOR=$(tr -d '[:space:]' < "$DATA_DIR/PG_VERSION")
+if [[ -z $CURRENT_MAJOR ]]; then
+  fail "Unable to read current major version from PG_VERSION."
+fi
+
+NEW_VERSION_RAW=$(psql --version 2>/dev/null | awk '{print $3}')
+if [[ -z $NEW_VERSION_RAW ]]; then
+  fail "Unable to detect the installed PostgreSQL version via psql --version."
+fi
+NEW_MAJOR=${NEW_VERSION_RAW%%.*}
+
+if [[ "$NEW_MAJOR" == "$CURRENT_MAJOR" ]]; then
+  log "Installed PostgreSQL major version ($NEW_MAJOR) already matches data directory. Nothing to do."
+  exit 0
+fi
+
+log "Checking required free space for pg_upgrade copy"
+DATA_BYTES=$(du -sb "$DATA_DIR" | awk '{print $1}')
+AVAILABLE_BYTES=$(df -B1 "$DATA_DIR" | awk 'NR==2 {print $4}')
+HUMAN_DATA=$(bytes_to_human "$DATA_BYTES")
+HUMAN_FREE=$(bytes_to_human "$AVAILABLE_BYTES")
+if (( AVAILABLE_BYTES < DATA_BYTES )); then
+  SHORTAGE=$((DATA_BYTES - AVAILABLE_BYTES))
+  fail "Not enough free space on $(df -P "$DATA_DIR" | awk 'NR==2 {print $6}') for pg_upgrade. Cluster size ${HUMAN_DATA}, free ${HUMAN_FREE}. Free an additional $(bytes_to_human "$SHORTAGE") and retry."
+fi
+log "Cluster size ${HUMAN_DATA}, free ${HUMAN_FREE} - continuing"
+
+# Note: postgresql-old-upgrade is swapped along with Postgres and be kept installed for future upgrades.
+OLD_BINDIR="/opt/pgsql-${CURRENT_MAJOR}/bin"
+if [[ ! -x "$OLD_BINDIR/postgres" ]]; then
+  fail "Expected old server binaries in $OLD_BINDIR were not found. Install 'postgresql-old-upgrade'."
+fi
+if [[ ! -x "$OLD_BINDIR/pg_controldata" ]]; then
+  fail "pg_controldata was not found in $OLD_BINDIR. Ensure 'postgresql-old-upgrade' is installed."
+fi
+
+NEW_BINDIR=$(pg_config --bindir)
+if [[ ! -x "$NEW_BINDIR/postgres" ]]; then
+  fail "pg_config reported $NEW_BINDIR but postgres binary not found there."
+fi
+
+HOST_RULES_FILE=$(mktemp)
+trap 'rm -f "$HOST_RULES_FILE"' EXIT
+
+LISTEN_LINE=$(perl -ne 'next if /^\s*#/; if (/^\s*listen_addresses\s*=/) {print; exit}' "$DATA_DIR/postgresql.conf" || true)
+perl -ne 'next if /^\s*#/; if (/^\s*host(?:ssl|nossl)?\b/) {print}' "$DATA_DIR/pg_hba.conf" > "$HOST_RULES_FILE"
+
+log "Stopping systemd service $SERVICE_NAME"
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+  systemctl stop "$SERVICE_NAME"
+fi
+
+log "Ensuring no postgres backends remain"
+if pgrep -u postgres postgres >/dev/null 2>&1; then
+  fail "postgres processes are still running. Stop them before continuing."
+fi
+
+log "Gathering control data from existing cluster"
+CONTROL_DATA=$("$OLD_BINDIR/pg_controldata" "$DATA_DIR")
+get_from_control() {
+  local key=$1
+  printf '%s\n' "$CONTROL_DATA" | awk -F ':' -v needle="$key" '$1 ~ needle {gsub(/^ +| +$/,"",$2); print $2}' | head -n1
+}
+ENCODING=$(get_from_control '^Encoding$')
+LC_COLLATE=$(get_from_control '^LC_COLLATE$')
+LC_CTYPE=$(get_from_control '^LC_CTYPE$')
+CHECKSUM_VERSION=$(get_from_control '^Data page checksum version$')
+
+INITDB_ARGS=("-D" "$DATA_DIR")
+[[ -n $ENCODING ]] && INITDB_ARGS+=("--encoding=$ENCODING")
+[[ -n $LC_COLLATE ]] && INITDB_ARGS+=("--lc-collate=$LC_COLLATE")
+[[ -n $LC_CTYPE ]] && INITDB_ARGS+=("--lc-ctype=$LC_CTYPE")
+case $CHECKSUM_VERSION in
+  1)
+    INITDB_ARGS+=("--data-checksums")
+    ;;
+  0)
+    INITDB_ARGS+=("--no-data-checksums")
+    ;;
+esac
+
+OLD_DATA_DIR="${DATA_DIR}-old-${CURRENT_MAJOR}"
+if [[ -e $OLD_DATA_DIR ]]; then
+  fail "Backup directory $OLD_DATA_DIR already exists. Move it away before retrying to avoid overwriting previous backup."
+fi
+
+log "Renaming data directory to $OLD_DATA_DIR"
+mv "$DATA_DIR" "$OLD_DATA_DIR"
+ROLLBACK_NEEDED=1
+cleanup_on_fail() {
+  if [[ ${ROLLBACK_NEEDED:-0} -eq 1 ]]; then
+    log "Restoring original data directory after failure"
+    if [[ -n $DATA_DIR && -d $DATA_DIR ]]; then
+      rm -rf -- "$DATA_DIR"
+    fi
+    mv "$OLD_DATA_DIR" "$DATA_DIR"
+  fi
+}
+trap 'rm -f "$HOST_RULES_FILE"; cleanup_on_fail' EXIT
+
+log "Initializing fresh cluster for PostgreSQL $NEW_MAJOR"
+install -d -m 0700 -o postgres -g postgres "$DATA_DIR"
+runuser -u postgres -- initdb "${INITDB_ARGS[@]}"
+
+log "Running pg_upgrade"
+as_postgres() {
+  runuser -u postgres -- "$@"
+}
+if ! as_postgres bash -c "cd '$DATA_DIR' && '$NEW_BINDIR/pg_upgrade' -b '$OLD_BINDIR' -B '$NEW_BINDIR' -d '$OLD_DATA_DIR' -D '$DATA_DIR'"; then
+  fail "pg_upgrade failed; inspect output and resolve before retrying."
+fi
+
+ROLLBACK_NEEDED=0
+
+apply_listen_setting() {
+  local line=$1
+  [[ -z $line ]] && return
+  python3 - "$DATA_DIR/postgresql.conf" "$line" <<'PY'
+import pathlib, sys, re
+conf_path = pathlib.Path(sys.argv[1])
+line = sys.argv[2].rstrip()
+text = conf_path.read_text()
+pattern = re.compile(r'^\s*(?:#\s*)?listen_addresses\s*=.*$', re.MULTILINE)
+if pattern.search(text):
+    text = pattern.sub(line, text, count=1)
+else:
+    if not text.endswith('\n'):
+        text += '\n'
+    text += line + '\n'
+conf_path.write_text(text)
+PY
+}
+
+apply_hba_hosts() {
+  local hba=$1
+  local rules=$2
+  [[ ! -s $rules ]] && return
+  python3 - "$hba" "$rules" <<'PY'
+import pathlib, sys
+hba_path = pathlib.Path(sys.argv[1])
+rules_path = pathlib.Path(sys.argv[2])
+host_lines = [line for line in rules_path.read_text().splitlines() if line.strip()]
+text_lines = hba_path.read_text().splitlines()
+filtered = [line for line in text_lines if not line.lstrip().startswith(('host', 'hostssl', 'hostnossl'))]
+if filtered and filtered[-1].strip():
+    filtered.append('')
+filtered.extend(host_lines)
+filtered.append('')
+hba_path.write_text('\n'.join(filtered))
+PY
+}
+
+apply_listen_setting "$LISTEN_LINE"
+apply_hba_hosts "$DATA_DIR/pg_hba.conf" "$HOST_RULES_FILE"
+
+log "Restoring ownership"
+chown -R postgres:postgres "$DATA_DIR"
+
+log "Running analyze_new_cluster.sh"
+if [[ -x "$DATA_DIR/analyze_new_cluster.sh" ]]; then
+  as_postgres bash -c "cd '$DATA_DIR' && ./analyze_new_cluster.sh"
+else
+  log "analyze_new_cluster.sh not found; skipping statistics refresh"
+fi
+
+log "Starting PostgreSQL service"
+systemctl start "$SERVICE_NAME"
+
+log "Upgrade complete! Consider reviewing delete_old_cluster.sh in $DATA_DIR to purge the old data directory when ready."

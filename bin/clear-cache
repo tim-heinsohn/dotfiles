@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+INTENSE=false
+ASSUME_YES=false
+
+usage() {
+  cat <<USAGE
+Usage: $(basename "$0") [--intense] [--yes]
+  --intense   add aggressive cleanups (docker system prune -a, pacman -Scc)
+  -y, --yes   automatically approve prompts triggered by --intense
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --intense)
+      INTENSE=true
+      shift
+      ;;
+    -y|--yes)
+      ASSUME_YES=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+log() {
+  echo "[clear-cache] $*"
+}
+
+clear_cache_dir() {
+  local path=$1
+  local label=$2
+  if [[ -d $path || -f $path ]]; then
+    log "Removing $label cache at $path"
+    rm -rf -- "$path"
+  else
+    log "Skipping $label cache ($path not found)"
+  fi
+}
+
+clear_pip_cache() {
+  local pip_cmd
+  for pip_cmd in pip pip3; do
+    if command -v "$pip_cmd" >/dev/null 2>&1; then
+      log "Running: $pip_cmd cache purge"
+      "$pip_cmd" cache purge >/dev/null 2>&1 && return
+    fi
+  done
+  if command -v python >/dev/null 2>&1 && python -m pip --version >/dev/null 2>&1; then
+    log "Running: python -m pip cache purge"
+    python -m pip cache purge >/dev/null 2>&1 && return
+  fi
+  if command -v python3 >/dev/null 2>&1 && python3 -m pip --version >/dev/null 2>&1; then
+    log "Running: python3 -m pip cache purge"
+    python3 -m pip cache purge >/dev/null 2>&1 && return
+  fi
+  clear_cache_dir "$HOME/.cache/pip" "pip"
+}
+
+clear_playwright_cache() {
+  local dir="$HOME/.cache/ms-playwright"
+  if command -v playwright >/dev/null 2>&1; then
+    if playwright cache clear >/dev/null 2>&1; then
+      log "Cleared Playwright cache via playwright cache clear"
+      return
+    fi
+  fi
+  clear_cache_dir "$dir" "Playwright (ms-playwright)"
+}
+
+clear_spotify_cache() {
+  clear_cache_dir "$HOME/.cache/spotify" "Spotify"
+}
+
+clear_go_cache() {
+  local dir="$HOME/.cache/go-build"
+  if command -v go >/dev/null 2>&1; then
+    log "Running: go clean -cache"
+    if go clean -cache >/dev/null 2>&1; then
+      return
+    fi
+  fi
+  clear_cache_dir "$dir" "Go build"
+}
+
+clear_npm_cache() {
+  local cache_dir="$HOME/.npm/_cacache"
+  if command -v npm >/dev/null 2>&1; then
+    log "Running: npm cache clean --force"
+    if npm cache clean --force >/dev/null 2>&1; then
+      return
+    fi
+  fi
+  clear_cache_dir "$cache_dir" "npm"
+}
+
+confirm_action() {
+  local prompt=$1
+  if $ASSUME_YES; then
+    log "$prompt (auto-approved)"
+    return 0
+  fi
+  read -r -p "$prompt [y/N] " reply || true
+  case $reply in
+    [yY]|[yY][eE][sS]) return 0 ;;
+    *) log "Skipped: $prompt"; return 1 ;;
+  esac
+}
+
+run_if_present() {
+  local binary=$1
+  shift
+  if ! command -v "$binary" >/dev/null 2>&1; then
+    log "Skipping $* ($binary not found)"
+    return 0
+  fi
+  log "Running: $*"
+  "$@"
+}
+
+# Docker cleanup
+if command -v docker >/dev/null 2>&1; then
+  run_if_present docker docker volume prune -f >/dev/null
+  if $INTENSE && confirm_action "Run docker system prune -a --volumes and docker builder prune?"; then
+    log "Running: docker system prune -a --volumes -f"
+    docker system prune -a --volumes -f >/dev/null
+    log "Running: docker builder prune -f"
+    docker builder prune -f >/dev/null
+  fi
+else
+  log "Skipping Docker cleanup (docker not installed)"
+fi
+
+# Pacman cache trimming
+run_if_present paccache sudo paccache -rk1 >/dev/null
+if $INTENSE; then
+  if command -v pacman >/dev/null 2>&1; then
+    if confirm_action "Run sudo pacman -Scc --noconfirm?"; then
+      log "Running: sudo pacman -Scc --noconfirm"
+      sudo pacman -Scc --noconfirm >/dev/null
+    fi
+  else
+    log "Skipping pacman -Scc (pacman not installed)"
+  fi
+fi
+
+# uv cache
+run_if_present uv uv cache clean >/dev/null
+
+# yay cache
+run_if_present yay yay -Scc --noconfirm >/dev/null
+
+clear_playwright_cache
+clear_pip_cache
+clear_spotify_cache
+clear_go_cache
+clear_npm_cache
+
+# Journald vacuum (30 days)
+if command -v journalctl >/dev/null 2>&1; then
+  log "Running: sudo journalctl --vacuum-time=30d"
+  sudo journalctl --vacuum-time=30d >/dev/null
+else
+  log "Skipping journald vacuum (journalctl not available)"
+fi
+
+# /var/log archives cleanup (>30 days, compressed)
+if command -v find >/dev/null 2>&1; then
+  log "Removing archived logs older than 30 days"
+  sudo find /var/log -type f \
+    \( -name '*.gz' -o -name '*.xz' -o -name '*.bz2' -o -name '*.old' \) \
+    -mtime +30 -print -delete
+else
+  log "Skipping /var/log cleanup (find not available)"
+fi
+
+log "Done."
+log "Additional disk-space ideas:"
+log "- Remove old PostgreSQL backups under /var/lib/postgres/data-old-* once new clusters are stable."
+log "- Review orphaned packages with: sudo pacman -Rns \$(pacman -Qdtq) after checking the list." 
+log "- Use sudo ncdu / or sudo du -xh /var | sort -h | tail to spot large directories before upgrades."
