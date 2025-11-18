@@ -162,6 +162,11 @@ module LiveUsb
         puts "   Password: #{options[:ssh_password]}"
       end
 
+      # Add console font setting if TER16x32 is in boot params
+      if options[:boot_params]&.include?('TER16x32')
+        combined_params << "consolefont=ter-v32n"
+      end
+
       # Customize ISO if any parameters specified
       if combined_params.any?
         options[:boot_params] = combined_params.join(' ')
@@ -528,6 +533,9 @@ module LiveUsb
       cmd = [xorriso, '-osirrox', 'on', '-indev', iso_path, '-extract', '/', extract_dir]
       run_system!(cmd)
 
+      # Make extracted files writable
+      run_system!(['chmod', '-R', 'u+w', extract_dir])
+
       # Find and modify grub configs
       grub_configs = Dir.glob(File.join(extract_dir, 'boot/grub/*_default.cfg')) +
                      Dir.glob(File.join(extract_dir, 'boot/grub/*_options.cfg'))
@@ -553,6 +561,7 @@ module LiveUsb
           end
         end
       end
+
 
       # Create new ISO
       custom_iso = File.join(@tmpdir, "custom-#{metadata[:filename]}")
