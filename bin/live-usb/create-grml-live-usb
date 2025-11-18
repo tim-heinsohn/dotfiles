@@ -114,6 +114,7 @@ module LiveUsb
     DOWNLOAD_BASE = 'https://download.grml.org/iso/'.freeze
     SHA256_FILE = 'SHA256SUMS'.freeze
     SIG_FILE = 'SHA256SUMS.asc'.freeze
+    GRML_KEY_URL = 'https://download.grml.org/grml-release.gpg'.freeze
     DEFAULT_VARIANT = 'grml64-full'.freeze
     DD_ARGS = %w[bs=4M status=progress conv=fsync].freeze
     CRITICAL_MOUNTPOINTS = %w[/ /boot /boot/efi /home /var /usr /etc].freeze
@@ -121,10 +122,18 @@ module LiveUsb
     MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024 # 2 GiB
     CONNECT_TIMEOUT = 30
     DOWNLOAD_TIMEOUT = 900
+    VARIANT_REGEX = /\A[a-z0-9][a-z0-9._-]+\z/i
+
+    def self.validate_variant!(variant)
+      return if variant.nil?
+      return if VARIANT_REGEX.match?(variant)
+
+      raise Error, 'Variant may only contain letters, numbers, dots, dashes, and underscores.'
+    end
 
     def initialize(options = {})
-      validate_variant!(options[:variant]) if options[:variant]
-      @options = { variant: DEFAULT_VARIANT, force: false }.merge(options)
+      self.class.validate_variant!(options[:variant]) if options[:variant]
+      @options = { variant: DEFAULT_VARIANT, force: false, import_grml_key: false }.merge(options)
       @tmpdir = Dir.mktmpdir('grml-live-usb-')
       @use_sudo = !Process.euid.zero?
       @child_pid = nil
@@ -133,6 +142,7 @@ module LiveUsb
     def run
       install_signal_handlers
       ensure_tmp_space!
+      import_grml_key if options[:import_grml_key]
       device = resolve_device
       ensure_not_system_disk(device)
       @device_signature = capture_device_signature(device)
@@ -340,6 +350,16 @@ module LiveUsb
       destination
     end
 
+    def import_grml_key
+      gpg = which('gpg')
+      raise Error, 'gpg is required to import signing keys.' unless gpg
+
+      puts '\nImporting Grml signing key...'
+      key_path = File.join(@tmpdir, 'grml-release.gpg')
+      download_to(URI(GRML_KEY_URL), key_path, label: 'grml-release.gpg')
+      run_system!([gpg, '--import', key_path])
+    end
+
     def verify_signature(sha_path, sig_path)
       gpg = which('gpg')
       raise Error, 'gpg is required for signature verification.' unless gpg
@@ -347,7 +367,8 @@ module LiveUsb
       cmd = [gpg, '--verify', sig_path, sha_path]
       run_system!(cmd)
     rescue Error => e
-      raise Error, "GPG verification failed: #{e.message}. Import the Grml signing keys first."
+      hint = options[:import_grml_key] ? '' : ' Use --import-grml-key to download the official key automatically.'
+      raise Error, "GPG verification failed: #{e.message}. Import the Grml signing keys first.#{hint}"
     end
 
     def parse_sha_entries(body)
@@ -375,30 +396,49 @@ module LiveUsb
 
     def download_to(url, destination, label: File.basename(destination))
       puts "\nDownloading #{label}..."
+      temp_path = "#{destination}.part"
+      FileUtils.mkdir_p(File.dirname(destination))
+      existing_bytes = File.exist?(temp_path) ? File.size(temp_path) : 0
       if (curl = which('curl'))
-        cmd = [curl, '-fL', '--connect-timeout', CONNECT_TIMEOUT.to_s, '--max-time', DOWNLOAD_TIMEOUT.to_s, '-o', destination, url.to_s]
+        cmd = [
+          curl, '-fL',
+          '--connect-timeout', CONNECT_TIMEOUT.to_s,
+          '--max-time', DOWNLOAD_TIMEOUT.to_s,
+          '-C', '-',
+          '-o', temp_path,
+          url.to_s
+        ]
         run_system!(cmd, stream: true)
-        return
+      else
+        http_download_to(url, temp_path, resume_from: existing_bytes)
       end
 
-      http_download_to(url, destination)
+      FileUtils.rm_f(destination)
+      FileUtils.mv(temp_path, destination)
     end
 
-    def http_download_to(url, destination)
+    def http_download_to(url, destination, resume_from: 0)
       uri = url.is_a?(URI) ? url : URI(url.to_s)
       Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
         http.open_timeout = CONNECT_TIMEOUT
         http.read_timeout = DOWNLOAD_TIMEOUT
         request = Net::HTTP::Get.new(uri)
+        request['Range'] = "bytes=#{resume_from}-" if resume_from.positive?
         http.request(request) do |response|
-          unless response.is_a?(Net::HTTPSuccess)
+          case response
+          when Net::HTTPPartialContent
+            mode = resume_from.positive? ? 'ab' : 'wb'
+          when Net::HTTPSuccess
+            mode = 'wb'
+          when Net::HTTPRequestedRangeNotSatisfiable
+            FileUtils.rm_f(destination)
+            return http_download_to(uri, destination, resume_from: 0)
+          else
             raise Error, "Download failed: #{response.code} #{response.message}"
           end
 
-          File.open(destination, 'wb') do |file|
-            response.read_body do |chunk|
-              file.write(chunk)
-            end
+          File.open(destination, mode) do |file|
+            response.read_body { |chunk| file.write(chunk) }
           end
         end
       end
@@ -530,17 +570,10 @@ module LiveUsb
     rescue StandardError
       # ignore cleanup failures
     end
-
-    def validate_variant!(variant)
-      return if variant.nil?
-      return if variant.match?(/\A[a-z0-9][a-z0-9._-]+\z/i)
-
-      raise Error, 'Variant may only contain letters, numbers, dots, dashes, and underscores.'
-    end
   end
 end
 
-options = { variant: LiveUsb::Creator::DEFAULT_VARIANT }
+options = { variant: LiveUsb::Creator::DEFAULT_VARIANT, import_grml_key: false }
 
 parser = OptionParser.new do |opts|
   opts.banner = 'Usage: create-grml-live-usb [options]'
@@ -548,13 +581,14 @@ parser = OptionParser.new do |opts|
     options[:device] = path
   end
   opts.on('-v', '--variant NAME', 'Grml variant prefix (default: grml64-full)') do |variant|
-    if variant !~ /\A[a-z0-9][a-z0-9._-]+\z/i
-      raise LiveUsb::Error, 'Variant may only contain letters, numbers, dot, dash, underscore.'
-    end
+    LiveUsb::Creator.validate_variant!(variant)
     options[:variant] = variant
   end
   opts.on('--force', 'Override system disk detection.') do
     options[:force] = true
+  end
+  opts.on('--import-grml-key', 'Download and import the official Grml signing key before verification.') do
+    options[:import_grml_key] = true
   end
   opts.on('-h', '--help', 'Show this help message') do
     puts opts
