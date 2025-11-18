@@ -151,8 +151,20 @@ module LiveUsb
       iso_path = download_iso(iso_metadata)
       verify_checksum(iso_path, iso_metadata[:sha256])
 
-      # Customize ISO if boot parameters specified
-      if options[:boot_params] && !options[:boot_params].empty?
+      # Build combined boot parameters
+      combined_params = []
+      combined_params << options[:boot_params] if options[:boot_params] && !options[:boot_params].empty?
+
+      if options[:enable_ssh]
+        combined_params << "ssh=#{options[:ssh_password]}"
+        puts "\n🔐 SSH will be enabled with:"
+        puts "   Username: grml"
+        puts "   Password: #{options[:ssh_password]}"
+      end
+
+      # Customize ISO if any parameters specified
+      if combined_params.any?
+        options[:boot_params] = combined_params.join(' ')
         iso_path = customize_iso(iso_path, iso_metadata)
       end
 
@@ -722,14 +734,28 @@ parser = OptionParser.new do |opts|
   opts.on('--boot-params PARAMS', 'Custom boot parameters to add (e.g., "lang=fr fbcon=font:TER16x32")') do |params|
     options[:boot_params] = params
   end
+  opts.on('--ssh [PASSWORD]', 'Enable SSH with optional password (default: grml). Username is "grml".') do |password|
+    options[:enable_ssh] = true
+    options[:ssh_password] = password || 'grml'
+  end
   opts.on('-h', '--help', 'Show this help message') do
     puts opts
     puts "\nExamples:"
-    puts "  # Create USB with custom boot parameters for 4K display + French keyboard"
-    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --boot-params \"lang=fr fbcon=font:TER16x32\" --import-grml-key"
+    puts "  # Create USB with 4K display + French keyboard + SSH access"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda \\"
+    puts "    --boot-params \"lang=fr fbcon=font:TER16x32\" \\"
+    puts "    --ssh grml \\"
+    puts "    --import-grml-key"
+    puts ""
+    puts "  # USB with SSH using custom password"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --ssh mypassword --import-grml-key"
     puts ""
     puts "  # Standard USB without customization"
     puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --import-grml-key"
+    puts ""
+    puts "Security Note:"
+    puts "  SSH with simple passwords is convenient but less secure."
+    puts "  For production use, consider SSH keys instead."
     exit 0
   end
 end
