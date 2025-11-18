@@ -5,6 +5,11 @@ mkdir -p ~/bin
 
 # Loop through each file in $DOTFILES_DIR/bin
 for file in "$DOTFILES_DIR"/bin/*; do
+    # Skip directories - only symlink regular files
+    if [ -d "$file" ]; then
+        continue
+    fi
+
     # Get the base name of the file
     filename=$(basename "$file")
     echo "Symlinking $file in ~/bin"

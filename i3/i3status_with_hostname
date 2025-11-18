@@ -51,8 +51,16 @@ i3status | (
         layout_display=$(printf '%s' "$layout" | tr '[:lower:]' '[:upper:]')
         with_layout=$(echo "$with_caps" | jq --arg layout "$layout_display" '[{ "full_text": $layout, "name": "keyboard_layout" }] + .')
 
+        # Check if running kernel matches latest installed kernel package
+        running_kernel=$(uname -r)
+        installed_kernel=$(pacman -Q linux 2>/dev/null | awk '{print $2}' | sed 's/\.arch/-arch/')
+        with_reboot="$with_layout"
+        if [ -n "$installed_kernel" ] && [ "$running_kernel" != "$installed_kernel" ]; then
+            with_reboot=$(echo "$with_layout" | jq --arg text "REBOOT" --arg color "#FFA500" '[{ "full_text": $text, "name": "kernel_mismatch", "color": $color }] + .')
+        fi
+
         # Print the re-assembled line with the leading comma
-        echo "$leading_comma$with_layout"
+        echo "$leading_comma$with_reboot"
     done
 )
 

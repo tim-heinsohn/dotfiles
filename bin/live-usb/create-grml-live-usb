@@ -111,11 +111,12 @@ module LiveUsb
   end
 
   class Creator
-    DOWNLOAD_BASE = 'https://download.grml.org/iso/'.freeze
+    DOWNLOAD_BASE = 'https://download.grml.org/'.freeze
     SHA256_FILE = 'SHA256SUMS'.freeze
     SIG_FILE = 'SHA256SUMS.asc'.freeze
-    GRML_KEY_URL = 'https://download.grml.org/grml-release.gpg'.freeze
-    DEFAULT_VARIANT = 'grml64-full'.freeze
+    GRML_KEY_URL = 'https://download.grml.org/gnupg-michael-prokop.txt'.freeze
+    DEFAULT_VARIANT = 'grml-full'.freeze
+    DEFAULT_ARCH = 'amd64'.freeze
     DD_ARGS = %w[bs=4M status=progress conv=fsync].freeze
     CRITICAL_MOUNTPOINTS = %w[/ /boot /boot/efi /home /var /usr /etc].freeze
     SENSITIVE_FILESYSTEMS = %w[crypto_luks luks luks2 crypt lvm2_member swap].freeze
@@ -133,7 +134,7 @@ module LiveUsb
 
     def initialize(options = {})
       self.class.validate_variant!(options[:variant]) if options[:variant]
-      @options = { variant: DEFAULT_VARIANT, force: false, import_grml_key: false }.merge(options)
+      @options = { variant: DEFAULT_VARIANT, arch: DEFAULT_ARCH, force: false, import_grml_key: false }.merge(options)
       @tmpdir = Dir.mktmpdir('grml-live-usb-')
       @use_sudo = !Process.euid.zero?
       @child_pid = nil
@@ -330,14 +331,50 @@ module LiveUsb
       raise Error, 'Device signature changed after selection. Aborting to avoid wrong-disk overwrite.'
     end
 
+    def discover_sha_files
+      # Fetch directory listing using curl
+      curl = which('curl')
+      if curl
+        stdout, status = Open3.capture2(curl, '-sL', '--connect-timeout', CONNECT_TIMEOUT.to_s, '--max-time', DOWNLOAD_TIMEOUT.to_s, DOWNLOAD_BASE)
+        raise Error, "Failed to fetch directory listing (exit #{status.exitstatus})" unless status.success?
+        listing_body = stdout
+      else
+        # Fallback to Net::HTTP
+        uri = URI(DOWNLOAD_BASE)
+        response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https',
+                                    open_timeout: CONNECT_TIMEOUT, read_timeout: DOWNLOAD_TIMEOUT) do |http|
+          request = Net::HTTP::Get.new(uri)
+          http.request(request)
+        end
+        raise Error, "Failed to fetch directory listing: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+        listing_body = response.body
+      end
+
+      # Extract SHA256SUMS-YYYY.MM filenames
+      versions = listing_body.scan(/SHA256SUMS-(\d{4}\.\d{2})/).flatten.uniq.sort
+      raise Error, 'No SHA256SUMS files found in directory listing.' if versions.empty?
+
+      versions
+    end
+
     def fetch_latest_iso
-      sha_path = File.join(@tmpdir, SHA256_FILE)
-      sig_path = File.join(@tmpdir, SIG_FILE)
-      download_to(URI.join(DOWNLOAD_BASE, SHA256_FILE), sha_path, label: SHA256_FILE)
-      download_to(URI.join(DOWNLOAD_BASE, SIG_FILE), sig_path, label: SIG_FILE)
+      # Discover available SHA256SUMS files
+      sha_files = discover_sha_files
+      raise Error, 'No SHA256SUMS files found on server.' if sha_files.empty?
+
+      # Use the latest version
+      latest_sha_file = sha_files.max
+      sha_filename = "SHA256SUMS-#{latest_sha_file}"
+      sig_filename = "#{sha_filename}.gpg"
+
+      sha_path = File.join(@tmpdir, sha_filename)
+      sig_path = File.join(@tmpdir, sig_filename)
+
+      download_to(URI.join(DOWNLOAD_BASE, sha_filename), sha_path, label: sha_filename)
+      download_to(URI.join(DOWNLOAD_BASE, sig_filename), sig_path, label: sig_filename)
       verify_signature(sha_path, sig_path)
       entries = parse_sha_entries(File.read(sha_path))
-      raise Error, "No entries found for variant #{options[:variant]}" if entries.empty?
+      raise Error, "No entries found for variant #{options[:variant]} with arch #{options[:arch]}" if entries.empty?
 
       entry = entries.max_by { |e| e[:version_key] }
       entry.merge(path: nil)
@@ -355,8 +392,9 @@ module LiveUsb
       raise Error, 'gpg is required to import signing keys.' unless gpg
 
       puts '\nImporting Grml signing key...'
-      key_path = File.join(@tmpdir, 'grml-release.gpg')
-      download_to(URI(GRML_KEY_URL), key_path, label: 'grml-release.gpg')
+      key_filename = File.basename(URI(GRML_KEY_URL).path)
+      key_path = File.join(@tmpdir, key_filename)
+      download_to(URI(GRML_KEY_URL), key_path, label: key_filename)
       run_system!([gpg, '--import', key_path])
     end
 
@@ -372,16 +410,22 @@ module LiveUsb
     end
 
     def parse_sha_entries(body)
-      variant_prefix = "#{options[:variant]}_"
+      # New format: grml-full-2025.08-amd64.iso
+      variant = options[:variant]
+      arch = options[:arch]
+      pattern_prefix = "#{variant}-"
+      pattern_suffix = "-#{arch}.iso"
+
       body.each_line.filter_map do |line|
         next unless line =~ /^([0-9a-f]{64})\s+(.+)$/
 
         sha = Regexp.last_match(1)
         file = File.basename(Regexp.last_match(2))
-        next unless file.start_with?(variant_prefix)
-        next unless file.end_with?('.iso')
+        next unless file.start_with?(pattern_prefix)
+        next unless file.end_with?(pattern_suffix)
 
-        version = file.delete_prefix(variant_prefix).delete_suffix('.iso')
+        # Extract version from grml-full-2025.08-amd64.iso -> 2025.08
+        version = file.delete_prefix(pattern_prefix).delete_suffix(pattern_suffix)
         { filename: file, sha256: sha, version_key: version_key(version), url: URI.join(DOWNLOAD_BASE, file) }
       end
     end
@@ -573,16 +617,27 @@ module LiveUsb
   end
 end
 
-options = { variant: LiveUsb::Creator::DEFAULT_VARIANT, import_grml_key: false }
+options = {
+  variant: LiveUsb::Creator::DEFAULT_VARIANT,
+  arch: LiveUsb::Creator::DEFAULT_ARCH,
+  import_grml_key: false
+}
 
 parser = OptionParser.new do |opts|
   opts.banner = 'Usage: create-grml-live-usb [options]'
   opts.on('-d', '--device PATH', 'Explicit block device path (e.g., /dev/sdx)') do |path|
     options[:device] = path
   end
-  opts.on('-v', '--variant NAME', 'Grml variant prefix (default: grml64-full)') do |variant|
+  opts.on('-v', '--variant NAME', 'Grml variant (default: grml-full)') do |variant|
     LiveUsb::Creator.validate_variant!(variant)
+    # Map old variant names to new ones for backward compatibility
+    variant = 'grml-full' if variant == 'grml64-full'
+    variant = 'grml-small' if variant == 'grml64-small'
     options[:variant] = variant
+  end
+  opts.on('-a', '--arch ARCH', 'Architecture: amd64 or arm64 (default: amd64)') do |arch|
+    raise LiveUsb::Error, 'Architecture must be amd64 or arm64' unless %w[amd64 arm64].include?(arch)
+    options[:arch] = arch
   end
   opts.on('--force', 'Override system disk detection.') do
     options[:force] = true
