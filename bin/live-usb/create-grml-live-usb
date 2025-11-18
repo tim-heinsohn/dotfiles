@@ -1,0 +1,395 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'net/http'
+require 'open3'
+require 'digest'
+require 'fileutils'
+require 'optparse'
+require 'tempfile'
+require 'tmpdir'
+require 'uri'
+
+module LiveUsb
+  class Error < StandardError; end
+
+  class BlockDevice
+    attr_reader :raw
+
+    def initialize(raw)
+      @raw = raw
+    end
+
+    def name
+      value('name')
+    end
+
+    def path
+      value('path') || "/dev/#{name}"
+    end
+
+    def size
+      value('size')
+    end
+
+    def model
+      value('model') || value('vendor') || 'unknown'
+    end
+
+    def serial
+      value('serial')
+    end
+
+    def type
+      value('type')
+    end
+
+    def disk?
+      type == 'disk'
+    end
+
+    def partition?
+      type == 'part'
+    end
+
+    def usb?
+      value('tran') == 'usb'
+    end
+
+    def removable?
+      value('rm').to_i == 1 || value('hotplug').to_i == 1
+    end
+
+    def probable_usb?
+      usb? || removable?
+    end
+
+    def partitions
+      @partitions ||= Array(raw['children']).map { |child| BlockDevice.new(child) }.select(&:partition?)
+    end
+
+    def filesystem
+      value('fstype')
+    end
+
+    def mountpoints
+      points = []
+      mp = value('mountpoint')
+      points << mp if mp && !mp.empty? && mp != '[SWAP]'
+      mp_list = raw['mountpoints'] || raw['MOUNTPOINTS']
+      if mp_list.is_a?(Array)
+        mp_list.each do |entry|
+          next if entry.nil? || entry.empty? || entry == '[SWAP]'
+
+          points << entry
+        end
+      end
+      points.uniq
+    end
+
+    def mounted?
+      !mountpoints.empty?
+    end
+
+    def empty_or_unformatted?
+      partitions.empty? || partitions.all? { |part| part.filesystem.to_s.empty? }
+    end
+
+    def any_children_mounted?
+      partitions.any?(&:mounted?)
+    end
+
+    def description
+      pieces = [path, size, model]
+      pieces << "serial=#{serial}" if serial && !serial.empty?
+      pieces.join(' | ')
+    end
+
+    private
+
+    def value(key)
+      raw[key] || raw[key&.upcase]
+    end
+  end
+
+  class Creator
+    DOWNLOAD_BASE = 'https://download.grml.org/iso/'.freeze
+    SHA256_FILE = 'SHA256SUMS'.freeze
+    DEFAULT_VARIANT = 'grml64-full'.freeze
+    DD_ARGS = %w[bs=4M status=progress conv=fsync].freeze
+
+    def initialize(options = {})
+      @options = { variant: DEFAULT_VARIANT }.merge(options)
+      @tmpdir = Dir.mktmpdir('grml-live-usb-')
+    end
+
+    def run
+      ensure_root!
+      device = resolve_device
+      iso_info = fetch_latest_iso
+      iso_path = File.join(@tmpdir, iso_info[:filename])
+      download_iso(iso_info[:url], iso_path)
+      verify_checksum(iso_path, iso_info[:sha256])
+      ensure_device_unmounted(device)
+      flash_image(iso_path, device)
+      puts "\n✅ Finished writing #{iso_info[:filename]} to #{device.path}."
+    rescue Error => e
+      warn "Error: #{e.message}"
+      exit 1
+    ensure
+      cleanup_tmpdir
+    end
+
+    private
+
+    attr_reader :options
+
+    def ensure_root!
+      return if Process.euid.zero?
+
+      raise Error, 'This script must be run as root.'
+    end
+
+    def resolve_device
+      devices = block_devices
+      raise Error, 'No block devices were detected via lsblk.' if devices.empty?
+
+      if options[:device]
+        device = find_device(devices, options[:device])
+        raise Error, "Device #{options[:device]} not found." unless device
+
+        announce_selection(device, explicit: true)
+        confirm_device(device)
+        return device
+      end
+
+      candidates = devices.select(&:probable_usb?)
+
+      device =
+        if candidates.empty?
+          puts 'No removable USB devices detected automatically. Showing all disks:'
+          prompt_for_device(devices)
+        elsif candidates.one?
+          device = candidates.first
+          puts "Detected removable USB device: #{device.description}"
+          device
+        else
+          puts 'Multiple removable USB devices detected:'
+          prompt_for_device(candidates)
+        end
+
+      announce_selection(device)
+      confirm_device(device)
+      device
+    end
+
+    def announce_selection(device, explicit: false)
+      puts "\nSelected device: #{device.description}"
+      return if device.partitions.empty?
+
+      puts 'Existing partitions:'
+      device.partitions.each do |part|
+        mounts = part.mountpoints.any? ? " (mounted at #{part.mountpoints.join(', ')})" : ''
+        fs = part.filesystem.to_s.empty? ? 'unknown-fs' : part.filesystem
+        puts "  • #{part.path.ljust(12)} #{part.size.to_s.ljust(8)} #{fs}#{mounts}"
+      end
+
+      puts if explicit
+    end
+
+    def confirm_device(device)
+      return if device.empty_or_unformatted?
+
+      puts "\nWARNING: #{device.path} contains data and will be overwritten."
+      print "Type the device path (#{device.path}) to confirm: "
+      confirmation = $stdin.gets&.strip
+      raise Error, 'Aborted by user.' unless confirmation == device.path
+    end
+
+    def ensure_device_unmounted(device)
+      busy = device.partitions.select(&:mounted?)
+      return if busy.empty?
+
+      puts "\nThe following partitions are mounted and must be unmounted before continuing:"
+      busy.each do |part|
+        puts "  • #{part.path} -> #{part.mountpoints.join(', ')}"
+      end
+
+      print 'Unmount them automatically? [y/N]: '
+      answer = $stdin.gets&.strip&.downcase
+      if %w[y yes].include?(answer)
+        busy.each do |part|
+          run_system!(%W[umount #{part.path}])
+        end
+      else
+        raise Error, 'Please unmount the partitions and rerun the script.'
+      end
+    end
+
+    def flash_image(image_path, device)
+      puts "\nWriting image to #{device.path}..."
+      dd_cmd = ['dd', "if=#{image_path}", "of=#{device.path}"] + DD_ARGS
+      run_system!(dd_cmd, stream: true)
+      run_system!(%w[sync], stream: true)
+      if (partprobe = which('partprobe'))
+        run_system!([partprobe, device.path], stream: true)
+      end
+    end
+
+    def fetch_latest_iso
+      body = http_get(URI.join(DOWNLOAD_BASE, SHA256_FILE))
+      entries = parse_sha_entries(body)
+      raise Error, "Could not find #{options[:variant]} ISO entries in SHA256SUMS." if entries.empty?
+
+      entry = entries.max_by { |e| e[:version_key] }
+      {
+        filename: entry[:filename],
+        sha256: entry[:sha256],
+        url: URI.join(DOWNLOAD_BASE, entry[:filename])
+      }
+    end
+
+    def parse_sha_entries(body)
+      variant_prefix = "#{options[:variant]}_"
+      body.each_line.filter_map do |line|
+        next unless line =~ /^([0-9a-f]{64})\s+(.+)$/
+
+        sha = Regexp.last_match(1)
+        file = File.basename(Regexp.last_match(2))
+        next unless file.start_with?(variant_prefix)
+        next unless file.end_with?('.iso')
+
+        version = file.delete_prefix(variant_prefix).delete_suffix('.iso')
+        key = version_key(version)
+        { filename: file, sha256: sha, version_key: key }
+      end
+    end
+
+    def version_key(version)
+      if (match = version.match(/^(\d{4})\.(\d{2})(.*)$/))
+        [match[1].to_i, match[2].to_i, match[3].to_s]
+      else
+        [0, 0, version]
+      end
+    end
+
+    def download_iso(url, destination)
+      puts "\nDownloading #{File.basename(destination)}..."
+      if which('curl')
+        run_system!(['curl', '-fL', '--progress-bar', '-o', destination, url.to_s], stream: true)
+        return
+      end
+
+      http_download(url, destination)
+    end
+
+    def http_download(url, destination)
+      uri = url.is_a?(URI) ? url : URI(url.to_s)
+      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+        request = Net::HTTP::Get.new(uri)
+        http.request(request) do |response|
+          unless response.is_a?(Net::HTTPSuccess)
+            raise Error, "Download failed: #{response.code} #{response.message}"
+          end
+          File.open(destination, 'wb') do |file|
+            response.read_body { |chunk| file.write(chunk) }
+          end
+        end
+      end
+    end
+
+    def verify_checksum(path, expected)
+      print "\nVerifying SHA256 checksum... "
+      actual = Digest::SHA256.file(path).hexdigest
+      raise Error, 'Checksum mismatch! Aborting.' unless actual == expected
+
+      puts 'OK'
+    end
+
+    def block_devices
+      columns = %w[NAME PATH RM HOTPLUG TRAN SIZE MODEL SERIAL VENDOR TYPE FSTYPE LABEL MOUNTPOINT MOUNTPOINTS]
+      json = capture_json(['lsblk', '-J', '-o', columns.join(',')])
+      data = JSON.parse(json)
+      Array(data['blockdevices']).map { |entry| BlockDevice.new(entry) }.select(&:disk?)
+    end
+
+    def find_device(devices, identifier)
+      normalized = identifier.start_with?('/dev/') ? identifier : "/dev/#{identifier}"
+      devices.find { |device| device.path == normalized }
+    end
+
+    def prompt_for_device(devices)
+      devices.each_with_index do |device, index|
+        tag = format('%2d)', index + 1)
+        puts format('%s %-18s %-10s %s', tag, device.path, device.size, device.model)
+      end
+      print "Select device [1-#{devices.size}]: "
+      choice = Integer($stdin.gets.to_s.strip)
+      raise Error, 'Selection out of range.' unless choice.between?(1, devices.size)
+
+      devices[choice - 1]
+    rescue ArgumentError
+      raise Error, 'Invalid selection.'
+    end
+
+    def http_get(uri)
+      response = Net::HTTP.get_response(uri)
+      return response.body if response.is_a?(Net::HTTPSuccess)
+
+      raise Error, "Failed to download #{uri}: #{response.code} #{response.message}"
+    end
+
+    def capture_json(cmd)
+      stdout, status = Open3.capture2(*cmd)
+      raise Error, "Command failed: #{cmd.join(' ')}" unless status.success?
+
+      stdout
+    end
+
+    def run_system!(cmd, stream: false)
+      success = if stream
+                  system(*cmd)
+                else
+                  stdout, status = Open3.capture2e(*cmd)
+                  $stdout.print(stdout)
+                  status.success?
+                end
+      raise Error, "Command failed: #{cmd.join(' ')}" unless success
+    end
+
+    def which(name)
+      ENV.fetch('PATH', '').split(File::PATH_SEPARATOR).each do |dir|
+        candidate = File.join(dir, name)
+        return candidate if File.executable?(candidate) && !File.directory?(candidate)
+      end
+      nil
+    end
+
+    def cleanup_tmpdir
+      FileUtils.remove_entry(@tmpdir) if @tmpdir && Dir.exist?(@tmpdir)
+    rescue StandardError
+      # ignore cleanup failures
+    end
+  end
+end
+
+options = { variant: LiveUsb::Creator::DEFAULT_VARIANT }
+
+parser = OptionParser.new do |opts|
+  opts.banner = 'Usage: create-grml-live-usb [options]'
+  opts.on('-d', '--device PATH', 'Explicit block device path (e.g., /dev/sdx)') do |path|
+    options[:device] = path
+  end
+  opts.on('-v', '--variant NAME', 'Grml variant prefix (default: grml64-full)') do |variant|
+    options[:variant] = variant
+  end
+  opts.on('-h', '--help', 'Show this help message') do
+    puts opts
+    exit 0
+  end
+end
+
+parser.parse!(ARGV)
+
+LiveUsb::Creator.new(options).run
