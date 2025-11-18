@@ -49,6 +49,8 @@ core/sed
     GNU stream editor.
 core/sudo
     Give certain users the ability to run some commands as root.
+core/syslinux
+    Collection of boot loaders that boot from FAT, ext2/3/4 and btrfs filesystems, from CDs and via PXE.
 extra/acpid
     A flexible and extensible daemon for delivering ACPI events.
 extra/aichat
@@ -177,6 +179,8 @@ extra/libreoffice-fresh
     LibreOffice branch which contains new features and program enhancements.
 extra/lsof
     A utility to list open files.
+extra/libisoburn
+    Frontend for libraries libburn and libisofs.
 extra/lua-language-server
     A language server for Lua with features like auto-completion and go to definition.
 extra/magic-wormhole
