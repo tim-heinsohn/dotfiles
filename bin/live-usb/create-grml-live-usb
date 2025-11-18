@@ -150,6 +150,12 @@ module LiveUsb
       iso_metadata = fetch_latest_iso
       iso_path = download_iso(iso_metadata)
       verify_checksum(iso_path, iso_metadata[:sha256])
+
+      # Customize ISO if boot parameters specified
+      if options[:boot_params] && !options[:boot_params].empty?
+        iso_path = customize_iso(iso_path, iso_metadata)
+      end
+
       ensure_device_unmounted(device)
       ensure_signature_unchanged!(device)
       final_confirmation(device, iso_metadata)
@@ -496,6 +502,74 @@ module LiveUsb
       puts 'OK'
     end
 
+    def customize_iso(iso_path, metadata)
+      puts "\n📝 Customizing ISO with boot parameters..."
+
+      xorriso = which('xorriso')
+      raise Error, 'xorriso is required to customize ISO. Install with: sudo pacman -S libisoburn' unless xorriso
+
+      extract_dir = File.join(@tmpdir, 'iso-extract')
+      FileUtils.mkdir_p(extract_dir)
+
+      # Extract ISO
+      puts "Extracting ISO..."
+      cmd = [xorriso, '-osirrox', 'on', '-indev', iso_path, '-extract', '/', extract_dir]
+      run_system!(cmd)
+
+      # Find and modify grub configs
+      grub_configs = Dir.glob(File.join(extract_dir, 'boot/grub/*_default.cfg')) +
+                     Dir.glob(File.join(extract_dir, 'boot/grub/*_options.cfg'))
+
+      if grub_configs.empty?
+        warn "Warning: No grub config files found to modify"
+      else
+        puts "Modifying #{grub_configs.size} config file(s)..."
+        grub_configs.each do |config_path|
+          content = File.read(config_path)
+          modified = false
+
+          content.gsub!(/^(\s*linux\s+\S+\s+)(.+)$/) do
+            prefix = Regexp.last_match(1)
+            params = Regexp.last_match(2)
+            modified = true
+            "#{prefix}#{params} #{options[:boot_params]}"
+          end
+
+          if modified
+            File.write(config_path, content)
+            puts "  Modified: #{File.basename(config_path)}"
+          end
+        end
+      end
+
+      # Create new ISO
+      custom_iso = File.join(@tmpdir, "custom-#{metadata[:filename]}")
+      puts "Creating customized ISO..."
+
+      # Use xorriso to create bootable ISO
+      cmd = [
+        xorriso,
+        '-as', 'mkisofs',
+        '-o', custom_iso,
+        '-isohybrid-mbr', '/usr/lib/syslinux/bios/isohdpfx.bin',
+        '-c', 'boot/isolinux/boot.cat',
+        '-b', 'boot/isolinux/isolinux.bin',
+        '-no-emul-boot',
+        '-boot-load-size', '4',
+        '-boot-info-table',
+        '-eltorito-alt-boot',
+        '-e', 'boot/efi.img',
+        '-no-emul-boot',
+        '-isohybrid-gpt-basdat',
+        '-V', 'GRML',
+        extract_dir
+      ]
+      run_system!(cmd, stream: true)
+
+      puts "✅ Custom ISO created"
+      custom_iso
+    end
+
     def flash_image(image_path, device)
       ensure_signature_unchanged!(device)
       puts "\nWriting image to #{device.path}..."
@@ -645,8 +719,17 @@ parser = OptionParser.new do |opts|
   opts.on('--import-grml-key', 'Download and import the official Grml signing key before verification.') do
     options[:import_grml_key] = true
   end
+  opts.on('--boot-params PARAMS', 'Custom boot parameters to add (e.g., "lang=fr fbcon=font:TER16x32")') do |params|
+    options[:boot_params] = params
+  end
   opts.on('-h', '--help', 'Show this help message') do
     puts opts
+    puts "\nExamples:"
+    puts "  # Create USB with custom boot parameters for 4K display + French keyboard"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --boot-params \"lang=fr fbcon=font:TER16x32\" --import-grml-key"
+    puts ""
+    puts "  # Standard USB without customization"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --import-grml-key"
     exit 0
   end
 end

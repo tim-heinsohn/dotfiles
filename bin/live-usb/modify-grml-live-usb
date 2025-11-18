@@ -1,0 +1,482 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'open3'
+require 'fileutils'
+require 'optparse'
+require 'tmpdir'
+
+module LiveUsb
+  class Error < StandardError; end
+
+  class Modifier
+    GRUB_MAIN_PATHS = [
+      'boot/grub/grub.cfg',
+      'boot/grub2/grub.cfg',
+      'EFI/BOOT/grub.cfg'
+    ].freeze
+
+    GRUB_CONFIG_PATTERNS = [
+      'boot/grub/*_default.cfg',
+      'boot/grub/*_options.cfg'
+    ].freeze
+
+    FONT_SIZES = {
+      'small' => nil,      # Default kernel font
+      'medium' => 'TER16x32',
+      'large' => 'TER16x32',
+      '4k' => 'TER16x32'
+    }.freeze
+
+    KEYBOARD_LAYOUTS = %w[
+      us uk de fr es it pt ru jp cn
+      at ch de-neo
+    ].freeze
+
+    def initialize(options = {})
+      @options = options
+      @use_sudo = !Process.euid.zero?
+      @mount_point = nil
+      @device = nil
+    end
+
+    def run
+      @device = resolve_device
+      verify_grml_device(@device)
+
+      # Determine if we need write access
+      @read_only = options[:list]
+      mount_device(@device)
+
+      if options[:list]
+        list_current_config
+      elsif options[:restore]
+        backup_grub_config
+        restore_backup
+        puts "\n✅ Boot configuration restored successfully."
+      else
+        backup_grub_config
+        modify_grub_config
+        puts "\n✅ Boot configuration updated successfully."
+      end
+    rescue Error => e
+      warn "Error: #{e.message}"
+      exit 1
+    ensure
+      unmount_device if @mount_point
+    end
+
+    private
+
+    attr_reader :options
+
+    def resolve_device
+      if options[:device]
+        normalized = normalize_device_argument(options[:device])
+        raise Error, "Device #{normalized} is not a block device." unless File.blockdev?(normalized)
+        normalized
+      else
+        devices = list_usb_devices
+        raise Error, 'No USB devices detected.' if devices.empty?
+
+        puts 'Select USB device to modify:'
+        devices.each_with_index do |dev, idx|
+          puts format('%2d) %s', idx + 1, dev[:description])
+        end
+
+        choice = read_input("Select device [1-#{devices.size}]: ")
+        idx = Integer(choice)
+        raise Error, 'Selection out of range.' unless idx.between?(1, devices.size)
+
+        devices[idx - 1][:path]
+      end
+    rescue ArgumentError
+      raise Error, 'Invalid selection.'
+    end
+
+    def normalize_device_argument(arg)
+      arg.start_with?('/dev/') ? arg : "/dev/#{arg}"
+    end
+
+    def list_usb_devices
+      columns = %w[NAME PATH SIZE MODEL SERIAL TRAN RM HOTPLUG TYPE]
+      stdout, status = Open3.capture2('lsblk', '-J', '-o', columns.join(','))
+      raise Error, 'Failed to list block devices.' unless status.success?
+
+      data = JSON.parse(stdout)
+      Array(data['blockdevices']).select do |dev|
+        dev['TYPE'] == 'disk' && (dev['TRAN'] == 'usb' || dev['RM'] == '1' || dev['HOTPLUG'] == '1')
+      end.map do |dev|
+        {
+          path: dev['PATH'] || "/dev/#{dev['NAME']}",
+          description: "#{dev['PATH'] || dev['NAME']} | #{dev['SIZE']} | #{dev['MODEL'] || 'unknown'}"
+        }
+      end
+    end
+
+    def verify_grml_device(device)
+      # Check if any partition on this device contains Grml files
+      stdout, status = Open3.capture2('lsblk', '-J', '-o', 'NAME,PATH,TYPE', device)
+      return unless status.success?
+
+      data = JSON.parse(stdout)
+      partitions = []
+
+      Array(data['blockdevices']).each do |dev|
+        Array(dev['children']).each do |child|
+          partitions << child['path'] if child['type'] == 'part'
+        end
+      end
+
+      raise Error, 'No partitions found on device.' if partitions.empty?
+
+      # We'll verify it's Grml when we mount it
+      @first_partition = partitions.first
+    end
+
+    def mount_device(device)
+      @mount_point = Dir.mktmpdir('grml-usb-modify-')
+      partition = @first_partition || "#{device}1"
+
+      mount_opts = @read_only ? 'ro' : 'rw'
+      run_privileged!(['mount', '-o', mount_opts, partition, @mount_point])
+
+      # Verify write access if needed
+      unless @read_only
+        test_file = File.join(@mount_point, '.write_test')
+        begin
+          File.write(test_file, 'test')
+          File.delete(test_file)
+        rescue Errno::EROFS, Errno::EACCES
+          # Try remounting with rw
+          begin
+            run_privileged!(['mount', '-o', 'remount,rw', partition, @mount_point])
+            File.write(test_file, 'test')
+            File.delete(test_file)
+          rescue Errno::EROFS, Errno::EACCES, Error
+            raise Error, "USB device is read-only (ISO9660 filesystem from dd'ing an ISO).\n\n" \
+                         "This filesystem cannot be modified. To use custom boot parameters:\n\n" \
+                         "Option 1 - Boot-time editing (one-time use):\n" \
+                         "  1. At boot, press 'e' in GRUB menu to edit\n" \
+                         "  2. Find the 'linux' line and add at the end:\n" \
+                         "     lang=fr fbcon=font:TER16x32\n" \
+                         "  3. Press Ctrl+X or F10 to boot\n\n" \
+                         "Option 2 - Create writable USB with persistence:\n" \
+                         "  Use a tool like Ventoy or create a hybrid USB with a writable partition"
+          end
+        end
+      end
+
+      # Verify this is a Grml device
+      config_files = find_grml_configs
+      raise Error, 'This does not appear to be a Grml USB device (no GRUB config found).' if config_files.empty?
+
+      # Check if any config mentions grml
+      has_grml = config_files.any? { |path| File.read(path).match?(/grml/i) }
+      raise Error, 'This does not appear to be a Grml USB device (no grml entries found).' unless has_grml
+    rescue StandardError => e
+      cleanup_mount_point
+      raise e
+    end
+
+    def unmount_device
+      return unless @mount_point && Dir.exist?(@mount_point)
+
+      run_privileged!(['sync'])
+      run_privileged!(['umount', @mount_point])
+      cleanup_mount_point
+    rescue StandardError => e
+      warn "Warning: Failed to unmount: #{e.message}"
+    end
+
+    def cleanup_mount_point
+      FileUtils.remove_entry(@mount_point) if @mount_point && Dir.exist?(@mount_point)
+    rescue StandardError
+      # Ignore cleanup failures
+    end
+
+    def find_grub_config
+      GRUB_MAIN_PATHS.each do |path|
+        full_path = File.join(@mount_point, path)
+        return full_path if File.exist?(full_path)
+      end
+      nil
+    end
+
+    def find_grml_configs
+      configs = []
+
+      # Find modular config files (*_default.cfg, *_options.cfg)
+      GRUB_CONFIG_PATTERNS.each do |pattern|
+        full_pattern = File.join(@mount_point, pattern)
+        configs.concat(Dir.glob(full_pattern))
+      end
+
+      # Fallback to main grub.cfg if no modular configs found
+      if configs.empty?
+        main_config = find_grub_config
+        configs << main_config if main_config
+      end
+
+      configs
+    end
+
+    def backup_grub_config
+      config_files = find_grml_configs
+      return if config_files.empty?
+
+      config_files.each do |grub_path|
+        backup_path = "#{grub_path}.backup"
+        unless File.exist?(backup_path)
+          FileUtils.cp(grub_path, backup_path)
+          puts "Created backup: #{File.basename(backup_path)}"
+        end
+      end
+    end
+
+    def restore_backup
+      config_files = find_grml_configs
+      raise Error, 'GRUB config not found.' if config_files.empty?
+
+      restored = 0
+      config_files.each do |grub_path|
+        backup_path = "#{grub_path}.backup"
+        next unless File.exist?(backup_path)
+
+        FileUtils.cp(backup_path, grub_path)
+        puts "Restored: #{File.basename(grub_path)}"
+        restored += 1
+      end
+
+      raise Error, 'No backup files found.' if restored.zero?
+      puts "\nRestored #{restored} configuration file(s) from backup."
+    end
+
+    def list_current_config
+      config_files = find_grml_configs
+      raise Error, 'GRUB config not found.' if config_files.empty?
+
+      puts "\n=== Current Boot Configuration ==="
+
+      config_files.each do |grub_path|
+        puts "\n--- #{File.basename(grub_path)} ---"
+        content = File.read(grub_path)
+
+        # Extract linux boot lines
+        lines = content.scan(/^\s*linux\s+.*$/)
+        if lines.empty?
+          puts "  (no boot entries found)"
+          next
+        end
+
+        lines.first(3).each_with_index do |line, idx|
+          # Extract parameters after the kernel path
+          if line =~ %r{linux\s+\S+\s+(.+)$}
+            params = Regexp.last_match(1)
+            puts "\nEntry #{idx + 1} parameters:"
+            puts "  #{params}"
+
+            # Highlight known parameters
+            recognized = []
+            recognized << "Font: #{extract_param(params, 'fbcon')}" if params.include?('fbcon')
+            recognized << "Language: #{extract_param(params, 'lang')}" if params.include?('lang')
+            recognized << "Keyboard: #{extract_param(params, 'keyboard')}" if params.include?('keyboard')
+            recognized << "Timezone: #{extract_param(params, 'tz')}" if params.include?('tz')
+
+            if recognized.any?
+              puts "\n  Recognized settings:"
+              recognized.each { |r| puts "    - #{r}" }
+            end
+          end
+        end
+
+        puts "  ... (#{lines.size - 3} more entries)" if lines.size > 3
+      end
+    end
+
+    def extract_param(text, key)
+      text.match(/#{key}=([^\s]+)/)&.captures&.first || 'not set'
+    end
+
+    def modify_grub_config
+      config_files = find_grml_configs
+      raise Error, 'GRUB config not found.' if config_files.empty?
+
+      # Build parameter modifications
+      params_to_add = []
+      params_to_remove = []
+
+      if options[:font_size]
+        font = FONT_SIZES[options[:font_size].downcase]
+        if font
+          params_to_remove << /fbcon=font:\w+/
+          params_to_add << "fbcon=font:#{font}"
+        else
+          # Remove font parameter (use default)
+          params_to_remove << /fbcon=font:\w+/
+        end
+      end
+
+      if options[:keyboard]
+        params_to_remove << /keyboard=\S+/
+        params_to_add << "keyboard=#{options[:keyboard]}"
+      end
+
+      if options[:lang]
+        params_to_remove << /lang=\S+/
+        params_to_add << "lang=#{options[:lang]}"
+      end
+
+      if options[:timezone]
+        params_to_remove << /tz=\S+/
+        params_to_add << "tz=#{options[:timezone]}"
+      end
+
+      if options[:extra_params]
+        params_to_add.concat(options[:extra_params].split)
+      end
+
+      total_modified = 0
+
+      config_files.each do |grub_path|
+        content = File.read(grub_path)
+        modified = false
+
+        # Apply modifications to all linux boot lines
+        content.gsub!(/^(\s*linux\s+\S+\s+)(.+)$/) do
+          prefix = Regexp.last_match(1)
+          params = Regexp.last_match(2)
+
+          # Remove old parameters
+          params_to_remove.each do |pattern|
+            params.gsub!(pattern, '')
+          end
+
+          # Add new parameters
+          params = "#{params.strip} #{params_to_add.join(' ')}".strip
+
+          modified = true
+          "#{prefix}#{params}"
+        end
+
+        if modified
+          File.write(grub_path, content)
+          puts "\nModified: #{File.basename(grub_path)}"
+          total_modified += 1
+        end
+      end
+
+      if total_modified.positive?
+        puts "\nApplied changes:"
+        params_to_add.each { |p| puts "  + #{p}" }
+        params_to_remove.each { |p| puts "  - #{p}" } if params_to_remove.any?
+      else
+        puts "\nNo boot lines found to modify."
+      end
+    end
+
+    def read_input(prompt)
+      print prompt
+      $stdout.flush
+      input = $stdin.gets
+      raise Error, 'No input received.' if input.nil?
+
+      input.strip
+    end
+
+    def run_privileged!(cmd)
+      cmd = ['sudo', '--'] + cmd if @use_sudo
+      stdout, status = Open3.capture2e(*cmd)
+      raise Error, "Command failed (exit #{status.exitstatus}): #{cmd.join(' ')}\n#{stdout}" unless status.success?
+
+      stdout
+    end
+  end
+end
+
+options = {}
+
+parser = OptionParser.new do |opts|
+  opts.banner = 'Usage: modify-grml-live-usb [options]'
+  opts.separator ''
+  opts.separator 'Options:'
+
+  opts.on('-d', '--device PATH', 'USB device path (e.g., /dev/sda)') do |path|
+    options[:device] = path
+  end
+
+  opts.separator ''
+  opts.separator 'Display settings:'
+
+  opts.on('-f', '--font-size SIZE',
+          'Console font size: small (default), medium, large, 4k',
+          '  Recommended for 4K displays: large or 4k') do |size|
+    options[:font_size] = size
+  end
+
+  opts.separator ''
+  opts.separator 'Regional settings:'
+
+  opts.on('-k', '--keyboard LAYOUT',
+          'Keyboard layout (e.g., fr, de, us, uk, es, it)') do |layout|
+    options[:keyboard] = layout
+  end
+
+  opts.on('-l', '--lang LANGUAGE',
+          'Language setting (sets keyboard and locale)') do |lang|
+    options[:lang] = lang
+  end
+
+  opts.on('-t', '--timezone TZ',
+          'Timezone (e.g., Europe/Paris, America/New_York)') do |tz|
+    options[:timezone] = tz
+  end
+
+  opts.separator ''
+  opts.separator 'Advanced:'
+
+  opts.on('-p', '--params PARAMS',
+          'Additional boot parameters (space-separated)') do |params|
+    options[:extra_params] = params
+  end
+
+  opts.separator ''
+  opts.separator 'Information:'
+
+  opts.on('--list', 'Show current boot configuration') do
+    options[:list] = true
+  end
+
+  opts.on('--restore', 'Restore original configuration from backup') do
+    options[:restore] = true
+  end
+
+  opts.on('-h', '--help', 'Show this help message') do
+    puts opts
+    puts "\nExamples:"
+    puts "  # Set large font for 4K display and French keyboard"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --font-size 4k --keyboard fr"
+    puts ""
+    puts "  # Interactive device selection with French language"
+    puts "  #{File.basename($PROGRAM_NAME)} --lang fr"
+    puts ""
+    puts "  # Show current configuration"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --list"
+    puts ""
+    puts "  # Restore original configuration"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sda --restore"
+    exit 0
+  end
+end
+
+parser.parse!(ARGV)
+
+if !options[:list] && !options[:restore] &&
+   !options[:font_size] && !options[:keyboard] &&
+   !options[:lang] && !options[:timezone] && !options[:extra_params]
+  warn "Error: No modifications specified. Use --help for usage information."
+  exit 1
+end
+
+LiveUsb::Modifier.new(options).run
