@@ -1,0 +1,481 @@
+#!/bin/bash
+# Setup automated SSD/disk health monitoring with alerts
+
+set -e
+
+SCRIPT_NAME="$(basename "$0")"
+SYSTEMD_SERVICE="/etc/systemd/system/disk-health-check.service"
+SYSTEMD_TIMER="/etc/systemd/system/disk-health-check.timer"
+CHECK_SCRIPT="/usr/local/bin/disk-health-check"
+
+print_usage() {
+    cat <<EOF
+Usage: $SCRIPT_NAME [OPTIONS]
+
+Setup automated disk health monitoring with SMART alerts.
+
+OPTIONS:
+    --install       Install monitoring service (requires sudo)
+    --uninstall     Remove monitoring service (requires sudo)
+    --status        Show monitoring service status
+    --test          Run a test health check now
+    --help          Show this help message
+
+FEATURES:
+    - Daily SMART health checks for all drives
+    - Temperature monitoring (alerts if >60°C)
+    - Reallocated sectors tracking
+    - SSD wear level monitoring
+    - Available reserved space checks
+    - Notifications via systemd journal (check with: journalctl -u disk-health-check)
+
+DEPENDENCIES:
+    - smartmontools (install: sudo pacman -S smartmontools)
+    - nvme-cli for NVMe drives (install: sudo pacman -S nvme-cli)
+
+EOF
+}
+
+check_dependencies() {
+    local missing=()
+
+    if ! command -v smartctl >/dev/null 2>&1; then
+        missing+=("smartmontools")
+    fi
+
+    if ! command -v nvme >/dev/null 2>&1; then
+        echo "Warning: nvme-cli not found. NVMe-specific checks will be skipped."
+        echo "Install with: sudo pacman -S nvme-cli"
+    fi
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "Error: Missing required packages: ${missing[*]}"
+        echo "Install with: sudo pacman -S ${missing[*]}"
+        exit 1
+    fi
+}
+
+create_check_script() {
+    cat <<'CHECKSCRIPT' | sudo tee "$CHECK_SCRIPT" > /dev/null
+#!/bin/bash
+# Disk health check script - runs via systemd timer
+
+TEMP_THRESHOLD=60
+LOG_PREFIX="[Disk Health]"
+
+log_info() {
+    echo "$LOG_PREFIX INFO: $*"
+}
+
+log_warn() {
+    echo "$LOG_PREFIX WARNING: $*" >&2
+}
+
+log_error() {
+    echo "$LOG_PREFIX ERROR: $*" >&2
+}
+
+check_disk_smart() {
+    local disk="$1"
+    local disk_name=$(basename "$disk")
+
+    log_info "Checking $disk..."
+
+    # Check if SMART is available
+    if ! smartctl -i "$disk" >/dev/null 2>&1; then
+        log_info "$disk: SMART not available (may be USB or virtual device), skipping"
+        return 0
+    fi
+
+    # Overall health assessment
+    local health=$(smartctl -H "$disk" 2>/dev/null | grep -i "SMART overall-health" | awk '{print $NF}')
+    if [ "$health" = "PASSED" ]; then
+        log_info "$disk: Health check PASSED"
+    else
+        log_error "$disk: Health check FAILED or unknown status: $health"
+    fi
+
+    # Get SMART attributes
+    local smart_data=$(smartctl -A "$disk" 2>/dev/null)
+
+    # Check temperature
+    local temp=$(echo "$smart_data" | grep -i "Temperature" | head -1 | awk '{print $(NF-1)}')
+    if [ -n "$temp" ] && [ "$temp" -gt "$TEMP_THRESHOLD" ]; then
+        log_warn "$disk: High temperature: ${temp}°C (threshold: ${TEMP_THRESHOLD}°C)"
+    elif [ -n "$temp" ]; then
+        log_info "$disk: Temperature: ${temp}°C"
+    fi
+
+    # Check reallocated sectors
+    local realloc=$(echo "$smart_data" | grep -i "Reallocated_Sector" | awk '{print $10}')
+    if [ -n "$realloc" ] && [ "$realloc" -gt 0 ]; then
+        log_warn "$disk: Reallocated sectors detected: $realloc"
+    fi
+
+    # Check SSD-specific metrics
+    local wear=$(echo "$smart_data" | grep -i "Wear_Leveling_Count\|Media_Wearout_Indicator" | awk '{print $4}')
+    if [ -n "$wear" ]; then
+        log_info "$disk: Wear level: $wear"
+        if [ "$wear" -lt 10 ]; then
+            log_warn "$disk: Wear level critical: $wear (less than 10% remaining)"
+        fi
+    fi
+
+    local reserved=$(echo "$smart_data" | grep -i "Available_Reservd\|Unused_Rsvd_Blk_Cnt" | awk '{print $4}')
+    if [ -n "$reserved" ]; then
+        log_info "$disk: Available reserved space: $reserved"
+        if [ "$reserved" -lt 90 ]; then
+            log_warn "$disk: Available reserved space low: $reserved (threshold: 90)"
+        fi
+    fi
+
+    # Power-on hours
+    local hours=$(echo "$smart_data" | grep -i "Power_On_Hours" | awk '{print $10}')
+    if [ -n "$hours" ]; then
+        log_info "$disk: Power-on hours: $hours"
+    fi
+}
+
+check_nvme_smart() {
+    local disk="$1"
+
+    if ! command -v nvme >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_info "Checking NVMe device $disk..."
+
+    # Get SMART data
+    local smart_output=$(nvme smart-log "$disk" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        log_info "$disk: Not an NVMe device or not accessible, skipping"
+        return 0
+    fi
+
+    # Parse critical values
+    local temp=$(echo "$smart_output" | grep "^temperature" | awk '{print $3}')
+    local avail_spare=$(echo "$smart_output" | grep "^available_spare" | awk '{print $3}' | tr -d '%')
+    local percent_used=$(echo "$smart_output" | grep "^percentage_used" | awk '{print $3}' | tr -d '%')
+    local critical_warn=$(echo "$smart_output" | grep "^critical_warning" | awk '{print $3}')
+
+    if [ -n "$temp" ]; then
+        log_info "$disk: Temperature: ${temp}°C"
+        if [ "$temp" -gt "$TEMP_THRESHOLD" ]; then
+            log_warn "$disk: High temperature: ${temp}°C"
+        fi
+    fi
+
+    if [ -n "$avail_spare" ]; then
+        log_info "$disk: Available spare: ${avail_spare}%"
+        if [ "$avail_spare" -lt 10 ]; then
+            log_warn "$disk: Available spare critical: ${avail_spare}%"
+        fi
+    fi
+
+    if [ -n "$percent_used" ]; then
+        log_info "$disk: Percentage used: ${percent_used}%"
+        if [ "$percent_used" -gt 90 ]; then
+            log_warn "$disk: High wear: ${percent_used}% used"
+        fi
+    fi
+
+    if [ "$critical_warn" != "0x00" ] && [ -n "$critical_warn" ]; then
+        log_error "$disk: Critical warning flag set: $critical_warn"
+    fi
+}
+
+main() {
+    log_info "Starting disk health check"
+
+    # Find all block devices
+    local devices=$(lsblk -dnp -o NAME,TYPE | grep disk | awk '{print $1}')
+
+    if [ -z "$devices" ]; then
+        log_warn "No disk devices found"
+        exit 0
+    fi
+
+    for device in $devices; do
+        # Check if NVMe
+        if [[ "$device" =~ nvme ]]; then
+            check_nvme_smart "$device"
+        else
+            check_disk_smart "$device"
+        fi
+    done
+
+    log_info "Disk health check completed"
+}
+
+main
+CHECKSCRIPT
+
+    sudo chmod +x "$CHECK_SCRIPT"
+    echo "Created check script: $CHECK_SCRIPT"
+}
+
+create_systemd_service() {
+    cat <<EOF | sudo tee "$SYSTEMD_SERVICE" > /dev/null
+[Unit]
+Description=Disk Health Check
+Documentation=man:smartctl(8)
+
+[Service]
+Type=oneshot
+ExecStart=$CHECK_SCRIPT
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/
+ReadWritePaths=/var/log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    echo "Created systemd service: $SYSTEMD_SERVICE"
+}
+
+create_systemd_timer() {
+    cat <<EOF | sudo tee "$SYSTEMD_TIMER" > /dev/null
+[Unit]
+Description=Daily Disk Health Check
+Documentation=man:smartctl(8)
+
+[Timer]
+OnCalendar=daily
+OnBootSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    echo "Created systemd timer: $SYSTEMD_TIMER"
+}
+
+install_monitoring() {
+    check_dependencies
+
+    # Check if already installed
+    if [ -f "$SYSTEMD_TIMER" ] && systemctl is-enabled disk-health-check.timer >/dev/null 2>&1; then
+        echo "✅ Disk health monitoring is already installed and enabled"
+        echo ""
+        echo "Check status with:"
+        echo "  $SCRIPT_NAME --status"
+        echo ""
+        echo "Run test check with:"
+        echo "  $SCRIPT_NAME --test"
+        return 0
+    fi
+
+    echo "Installing disk health monitoring..."
+
+    create_check_script
+    create_systemd_service
+    create_systemd_timer
+
+    # Reload systemd
+    sudo systemctl daemon-reload
+
+    # Enable and start timer
+    sudo systemctl enable disk-health-check.timer
+    sudo systemctl start disk-health-check.timer
+
+    echo ""
+    echo "✅ Disk health monitoring installed successfully!"
+    echo ""
+    echo "The service will run:"
+    echo "  - Daily at midnight"
+    echo "  - 5 minutes after boot"
+    echo ""
+    echo "View logs with:"
+    echo "  journalctl -u disk-health-check -f"
+    echo ""
+    echo "Check status with:"
+    echo "  $SCRIPT_NAME --status"
+    echo ""
+    echo "Run test check with:"
+    echo "  $SCRIPT_NAME --test"
+}
+
+uninstall_monitoring() {
+    echo "Uninstalling disk health monitoring..."
+
+    # Stop and disable timer
+    sudo systemctl stop disk-health-check.timer 2>/dev/null || true
+    sudo systemctl disable disk-health-check.timer 2>/dev/null || true
+
+    # Remove files
+    sudo rm -f "$SYSTEMD_SERVICE" "$SYSTEMD_TIMER" "$CHECK_SCRIPT"
+
+    # Reload systemd
+    sudo systemctl daemon-reload
+
+    echo "✅ Disk health monitoring uninstalled"
+}
+
+show_status() {
+    echo "=== Disk Health Monitoring Status ==="
+    echo ""
+
+    if [ -f "$SYSTEMD_TIMER" ]; then
+        echo "Timer status:"
+        systemctl status disk-health-check.timer --no-pager || true
+        echo ""
+        echo "Next scheduled run:"
+        systemctl list-timers disk-health-check.timer --no-pager || true
+        echo ""
+        echo "Recent logs:"
+        journalctl -u disk-health-check -n 20 --no-pager || true
+    else
+        echo "Monitoring not installed. Run: $SCRIPT_NAME --install"
+    fi
+}
+
+run_test() {
+    check_dependencies
+
+    if [ -f "$CHECK_SCRIPT" ]; then
+        echo "Running installed health check script..."
+        sudo "$CHECK_SCRIPT"
+    else
+        echo "Check script not installed. Installing temporarily..."
+
+        # Create temporary script
+        local temp_script=$(mktemp)
+        cat <<'CHECKSCRIPT' > "$temp_script"
+#!/bin/bash
+# Temporary disk health check script
+
+TEMP_THRESHOLD=60
+LOG_PREFIX="[Disk Health]"
+
+log_info() {
+    echo "$LOG_PREFIX INFO: $*"
+}
+
+log_warn() {
+    echo "$LOG_PREFIX WARNING: $*" >&2
+}
+
+log_error() {
+    echo "$LOG_PREFIX ERROR: $*" >&2
+}
+
+check_disk_smart() {
+    local disk="$1"
+    local disk_name=$(basename "$disk")
+
+    log_info "Checking $disk..."
+
+    if ! smartctl -i "$disk" >/dev/null 2>&1; then
+        log_info "$disk: SMART not available, skipping"
+        return 0
+    fi
+
+    local health=$(smartctl -H "$disk" 2>/dev/null | grep -i "SMART overall-health" | awk '{print $NF}')
+    if [ "$health" = "PASSED" ]; then
+        log_info "$disk: Health check PASSED"
+    else
+        log_error "$disk: Health check FAILED or unknown: $health"
+    fi
+
+    local smart_data=$(smartctl -A "$disk" 2>/dev/null)
+
+    local temp=$(echo "$smart_data" | grep -i "Temperature" | head -1 | awk '{print $(NF-1)}')
+    if [ -n "$temp" ]; then
+        if [ "$temp" -gt "$TEMP_THRESHOLD" ]; then
+            log_warn "$disk: High temperature: ${temp}°C"
+        else
+            log_info "$disk: Temperature: ${temp}°C"
+        fi
+    fi
+
+    local realloc=$(echo "$smart_data" | grep -i "Reallocated_Sector" | awk '{print $10}')
+    if [ -n "$realloc" ] && [ "$realloc" -gt 0 ]; then
+        log_warn "$disk: Reallocated sectors: $realloc"
+    fi
+
+    local wear=$(echo "$smart_data" | grep -i "Wear_Leveling_Count\|Media_Wearout_Indicator" | awk '{print $4}')
+    if [ -n "$wear" ]; then
+        log_info "$disk: Wear level: $wear"
+    fi
+}
+
+check_nvme_smart() {
+    local disk="$1"
+
+    if ! command -v nvme >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_info "Checking NVMe device $disk..."
+
+    local smart_output=$(nvme smart-log "$disk" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        return 0
+    fi
+
+    local temp=$(echo "$smart_output" | grep "^temperature" | awk '{print $3}')
+    local percent_used=$(echo "$smart_output" | grep "^percentage_used" | awk '{print $3}' | tr -d '%')
+
+    if [ -n "$temp" ]; then
+        log_info "$disk: Temperature: ${temp}°C"
+    fi
+
+    if [ -n "$percent_used" ]; then
+        log_info "$disk: Percentage used: ${percent_used}%"
+    fi
+}
+
+main() {
+    log_info "Starting disk health check"
+
+    local devices=$(lsblk -dnp -o NAME,TYPE | grep disk | awk '{print $1}')
+
+    for device in $devices; do
+        if [[ "$device" =~ nvme ]]; then
+            check_nvme_smart "$device"
+        else
+            check_disk_smart "$device"
+        fi
+    done
+
+    log_info "Disk health check completed"
+}
+
+main
+CHECKSCRIPT
+
+        chmod +x "$temp_script"
+        sudo "$temp_script"
+        rm "$temp_script"
+    fi
+}
+
+# Main command processing
+case "${1:-}" in
+    --install)
+        install_monitoring
+        ;;
+    --uninstall)
+        uninstall_monitoring
+        ;;
+    --status)
+        show_status
+        ;;
+    --test)
+        run_test
+        ;;
+    --help)
+        print_usage
+        ;;
+    *)
+        print_usage
+        exit 1
+        ;;
+esac

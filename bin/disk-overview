@@ -1,0 +1,413 @@
+#!/bin/bash
+# Comprehensive overview of all block devices with health information
+
+set -e
+
+SCRIPT_NAME="$(basename "$0")"
+TEMP_THRESHOLD=60
+
+# Color codes
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+print_usage() {
+    cat <<EOF
+Usage: $SCRIPT_NAME [OPTIONS]
+
+Show comprehensive overview of all block devices with health information.
+
+OPTIONS:
+    -v, --verbose       Show detailed SMART attributes
+    -j, --json          Output in JSON format
+    -n, --no-color      Disable colored output
+    -h, --help          Show this help message
+
+FEATURES:
+    - Block device topology and sizes
+    - Filesystem information and mount points
+    - SMART health status
+    - Temperature monitoring
+    - SSD wear levels
+    - NVMe-specific metrics
+    - USB device detection
+
+DEPENDENCIES:
+    - smartmontools (optional, for SMART data)
+    - nvme-cli (optional, for NVMe details)
+    - lsblk, df (standard Linux utilities)
+
+EOF
+}
+
+# Parse arguments
+VERBOSE=0
+JSON_OUTPUT=0
+USE_COLOR=1
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -v|--verbose)
+            VERBOSE=1
+            shift
+            ;;
+        -j|--json)
+            JSON_OUTPUT=1
+            USE_COLOR=0
+            shift
+            ;;
+        -n|--no-color)
+            USE_COLOR=0
+            shift
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            print_usage
+            exit 1
+            ;;
+    esac
+done
+
+# Disable colors if requested
+if [ $USE_COLOR -eq 0 ]; then
+    RED=''
+    YELLOW=''
+    GREEN=''
+    BLUE=''
+    CYAN=''
+    BOLD=''
+    NC=''
+fi
+
+print_header() {
+    if [ $JSON_OUTPUT -eq 0 ]; then
+        echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BOLD}$1${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    fi
+}
+
+print_section() {
+    if [ $JSON_OUTPUT -eq 0 ]; then
+        echo -e "\n${BOLD}${CYAN}▸ $1${NC}"
+    fi
+}
+
+print_info() {
+    if [ $JSON_OUTPUT -eq 0 ]; then
+        echo -e "  $1"
+    fi
+}
+
+print_warning() {
+    if [ $JSON_OUTPUT -eq 0 ]; then
+        echo -e "  ${YELLOW}⚠${NC} $1"
+    fi
+}
+
+print_error() {
+    if [ $JSON_OUTPUT -eq 0 ]; then
+        echo -e "  ${RED}✗${NC} $1"
+    fi
+}
+
+print_success() {
+    if [ $JSON_OUTPUT -eq 0 ]; then
+        echo -e "  ${GREEN}✓${NC} $1"
+    fi
+}
+
+get_device_type() {
+    local device="$1"
+    local tran=$(lsblk -ndo TRAN "$device" 2>/dev/null)
+    local type=$(lsblk -ndo TYPE "$device" 2>/dev/null)
+
+    if [[ "$device" =~ nvme ]]; then
+        echo "NVMe"
+    elif [ "$tran" = "usb" ]; then
+        echo "USB"
+    elif [ "$type" = "disk" ]; then
+        if [ "$tran" = "sata" ]; then
+            echo "SATA"
+        else
+            echo "Disk"
+        fi
+    else
+        echo "$type"
+    fi
+}
+
+check_smart_health() {
+    local device="$1"
+
+    if ! command -v smartctl >/dev/null 2>&1; then
+        echo "N/A (smartctl not installed)"
+        return
+    fi
+
+    if ! sudo smartctl -i "$device" >/dev/null 2>&1; then
+        echo "N/A"
+        return
+    fi
+
+    local health=$(sudo smartctl -H "$device" 2>/dev/null | grep -i "SMART overall-health" | awk '{print $NF}')
+    echo "${health:-Unknown}"
+}
+
+get_smart_temp() {
+    local device="$1"
+
+    if ! command -v smartctl >/dev/null 2>&1; then
+        echo "N/A"
+        return
+    fi
+
+    local temp=$(sudo smartctl -A "$device" 2>/dev/null | grep -i "Temperature" | head -1 | awk '{print $(NF-1)}')
+    if [ -n "$temp" ]; then
+        echo "${temp}°C"
+    else
+        echo "N/A"
+    fi
+}
+
+get_nvme_info() {
+    local device="$1"
+
+    if ! command -v nvme >/dev/null 2>&1; then
+        echo "N/A"
+        return
+    fi
+
+    sudo nvme smart-log "$device" 2>/dev/null
+}
+
+get_smart_attributes() {
+    local device="$1"
+
+    if ! command -v smartctl >/dev/null 2>&1; then
+        return
+    fi
+
+    sudo smartctl -A "$device" 2>/dev/null
+}
+
+show_device_overview() {
+    local device="$1"
+    local device_name=$(basename "$device")
+
+    print_section "Device: $device"
+
+    # Basic information
+    local size=$(lsblk -ndo SIZE "$device" 2>/dev/null)
+    local model=$(lsblk -ndo MODEL "$device" 2>/dev/null | xargs)
+    local serial=$(lsblk -ndo SERIAL "$device" 2>/dev/null)
+    local vendor=$(lsblk -ndo VENDOR "$device" 2>/dev/null | xargs)
+    local dev_type=$(get_device_type "$device")
+    local rota=$(lsblk -ndo ROTA "$device" 2>/dev/null)
+
+    # Drive type (SSD/HDD)
+    local drive_type="Unknown"
+    if [ "$rota" = "0" ]; then
+        drive_type="SSD"
+    elif [ "$rota" = "1" ]; then
+        drive_type="HDD"
+    fi
+
+    print_info "${BOLD}Type:${NC} $dev_type ($drive_type)"
+    print_info "${BOLD}Size:${NC} $size"
+    if [ -n "$model" ] && [ "$model" != "" ]; then
+        print_info "${BOLD}Model:${NC} $model"
+    fi
+    if [ -n "$vendor" ] && [ "$vendor" != "" ]; then
+        print_info "${BOLD}Vendor:${NC} $vendor"
+    fi
+    if [ -n "$serial" ] && [ "$serial" != "" ]; then
+        print_info "${BOLD}Serial:${NC} $serial"
+    fi
+
+    # SMART health
+    local health=$(check_smart_health "$device")
+    if [ "$health" = "PASSED" ]; then
+        print_success "${BOLD}Health:${NC} $health"
+    elif [ "$health" = "N/A" ] || [ "$health" = "N/A (smartctl not installed)" ]; then
+        print_info "${BOLD}Health:${NC} $health"
+    else
+        print_error "${BOLD}Health:${NC} $health"
+    fi
+
+    # Temperature
+    local temp=$(get_smart_temp "$device")
+    if [ "$temp" != "N/A" ]; then
+        local temp_val=$(echo "$temp" | grep -oE '[0-9]+')
+        if [ -n "$temp_val" ] && [ "$temp_val" -gt "$TEMP_THRESHOLD" ]; then
+            print_warning "${BOLD}Temperature:${NC} $temp (High)"
+        else
+            print_info "${BOLD}Temperature:${NC} $temp"
+        fi
+    fi
+
+    # NVMe-specific information
+    if [[ "$device" =~ nvme ]]; then
+        if command -v nvme >/dev/null 2>&1; then
+            local nvme_info=$(get_nvme_info "$device")
+            if [ -n "$nvme_info" ]; then
+                local percent_used=$(echo "$nvme_info" | grep "^percentage_used" | awk '{print $3}')
+                local avail_spare=$(echo "$nvme_info" | grep "^available_spare" | awk '{print $3}')
+
+                if [ -n "$percent_used" ]; then
+                    print_info "${BOLD}Wear:${NC} ${percent_used} used"
+                fi
+                if [ -n "$avail_spare" ]; then
+                    print_info "${BOLD}Available Spare:${NC} ${avail_spare}"
+                fi
+            fi
+        fi
+    fi
+
+    # Partitions and mount points
+    local partitions=$(lsblk -nlo NAME,SIZE,FSTYPE,MOUNTPOINT "$device" | tail -n +2)
+    if [ -n "$partitions" ]; then
+        print_info ""
+        print_info "${BOLD}Partitions:${NC}"
+        while IFS= read -r line; do
+            if [ -n "$line" ]; then
+                local part_name=$(echo "$line" | awk '{print $1}')
+                local part_size=$(echo "$line" | awk '{print $2}')
+                local fstype=$(echo "$line" | awk '{print $3}')
+                local mountpoint=$(echo "$line" | awk '{$1=$2=$3=""; print $0}' | xargs)
+
+                if [ -n "$mountpoint" ]; then
+                    # Get usage info
+                    local usage=$(df -h "/dev/$part_name" 2>/dev/null | tail -1 | awk '{print $5}')
+                    print_info "  ├─ ${part_name}: ${part_size} (${fstype:-unknown}) → ${mountpoint} [${usage:-N/A} used]"
+                else
+                    print_info "  ├─ ${part_name}: ${part_size} (${fstype:-unknown})"
+                fi
+            fi
+        done <<< "$partitions"
+    fi
+
+    # Verbose SMART attributes
+    if [ $VERBOSE -eq 1 ]; then
+        if [[ "$device" =~ nvme ]]; then
+            if command -v nvme >/dev/null 2>&1; then
+                print_info ""
+                print_info "${BOLD}NVMe SMART Log:${NC}"
+                local nvme_log=$(get_nvme_info "$device")
+                if [ -n "$nvme_log" ]; then
+                    # Parse and format key metrics in tabular format
+                    echo "$nvme_log" | grep -v "^Smart Log" | grep -v "^$" | while IFS= read -r line; do
+                        if [[ "$line" =~ ^([^:]+):(.+)$ ]]; then
+                            local key="${BASH_REMATCH[1]}"
+                            local value="${BASH_REMATCH[2]}"
+                            # Clean up whitespace
+                            key=$(echo "$key" | xargs)
+                            value=$(echo "$value" | xargs)
+                            printf "  %-42s: %s\n" "$key" "$value"
+                        fi
+                    done
+                else
+                    print_info "  (unable to retrieve NVMe SMART data)"
+                fi
+            else
+                print_info ""
+                print_info "${BOLD}NVMe SMART Log:${NC}"
+                print_info "  (nvme-cli not installed - run: sudo pacman -S nvme-cli)"
+            fi
+        else
+            if command -v smartctl >/dev/null 2>&1; then
+                local smart_attrs=$(get_smart_attributes "$device")
+                if [ -n "$smart_attrs" ]; then
+                    print_info ""
+                    print_info "${BOLD}SMART Attributes:${NC}"
+                    # Show key attributes
+                    local key_attrs=$(echo "$smart_attrs" | grep -E "Reallocated_Sector|Power_On_Hours|Wear_Leveling|Available_Reserv|Temperature")
+                    if [ -n "$key_attrs" ]; then
+                        echo "$key_attrs" | while IFS= read -r line; do
+                            print_info "  $line"
+                        done
+                    else
+                        print_info "  (no key SMART attributes found)"
+                    fi
+                fi
+            else
+                print_info ""
+                print_info "${BOLD}SMART Attributes:${NC}"
+                print_info "  (smartmontools not installed - run: sudo pacman -S smartmontools)"
+            fi
+        fi
+    fi
+
+    echo ""
+}
+
+show_summary() {
+    print_header "DISK OVERVIEW - $(date '+%Y-%m-%d %H:%M:%S')"
+
+    # System summary
+    local total_disks=$(lsblk -ndo NAME,TYPE | grep disk | wc -l)
+    local mounted_fs=$(df -h --output=target | tail -n +2 | wc -l)
+
+    print_info "Total disks: ${BOLD}$total_disks${NC}"
+    print_info "Mounted filesystems: ${BOLD}$mounted_fs${NC}"
+
+    if ! command -v smartctl >/dev/null 2>&1; then
+        print_warning "smartmontools not installed - SMART data unavailable"
+        print_info "Install with: ${BOLD}sudo pacman -S smartmontools${NC}"
+    fi
+
+    if ! command -v nvme >/dev/null 2>&1; then
+        print_warning "nvme-cli not installed - NVMe details limited"
+        print_info "Install with: ${BOLD}sudo pacman -S nvme-cli${NC}"
+    fi
+
+    echo ""
+}
+
+main() {
+    if [ $JSON_OUTPUT -eq 1 ]; then
+        # JSON output - delegate to lsblk
+        lsblk -J -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,MODEL,SERIAL,VENDOR,TRAN,ROTA
+        exit 0
+    fi
+
+    show_summary
+
+    # Get all disk devices
+    local devices=$(lsblk -dnpo NAME,TYPE | grep disk | awk '{print $1}')
+
+    if [ -z "$devices" ]; then
+        print_error "No disk devices found"
+        exit 1
+    fi
+
+    # Show overview for each device
+    for device in $devices; do
+        show_device_overview "$device"
+    done
+
+    # Storage summary
+    print_header "STORAGE SUMMARY"
+    df -h --output=source,size,used,avail,pcent,target -x tmpfs -x devtmpfs 2>/dev/null | while IFS= read -r line; do
+        if [[ "$line" =~ ^Filesystem ]] || [[ "$line" =~ ^/dev ]]; then
+            print_info "$line"
+        fi
+    done
+
+    echo ""
+    if [ $VERBOSE -eq 0 ]; then
+        print_info "For detailed SMART attributes, run: ${BOLD}$SCRIPT_NAME --verbose${NC}"
+    fi
+    print_info "For automated monitoring, run: ${BOLD}disk-health-setup --install${NC}"
+    echo ""
+}
+
+main

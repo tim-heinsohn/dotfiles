@@ -61,6 +61,9 @@ sudo systemctl enable --now bluetooth &&
 sudo systemctl enable --now docker &&
 # sudo systemctl enable --now qotd &&
 
+# Setup disk health monitoring
+"${DOTFILES_DIR}/bin/disk-health-setup" --install &&
+
 # Switch to Java 17 for unciv compatibility (Java 25 causes build failures)
 sudo archlinux-java set java-17-openjdk &&
 

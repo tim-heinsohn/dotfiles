@@ -209,6 +209,8 @@ extra/ntfs-3g
     NTFS filesystem driver and utilities.
 extra/ntp
     Network Time Protocol reference implementation.
+extra/nvme-cli
+    NVMe management command line interface for NVMe SSD health monitoring and diagnostics.
 extra/obs-studio
     Free and open source software for video recording and live streaming.
 extra/p7zip
@@ -279,6 +281,8 @@ extra/sheldon-docs
     A fast and configurable shell plugin manager. (documentation)
 extra/signal-desktop
     A desktop client for the Signal private messenger.
+extra/smartmontools
+    Control and monitor storage systems using SMART for disk health monitoring and failure prediction.
 extra/speech-dispatcher
     A common interface to speech synthesis.
 extra/tealdeer
