@@ -167,6 +167,11 @@ module LiveUsb
         combined_params << "consolefont=ter-v32n"
       end
 
+      # Add WiFi auto-enable if requested
+      if options[:enable_wifi]
+        combined_params << "scripts=wifi-enable"
+      end
+
       # Customize ISO if any parameters specified
       if combined_params.any?
         options[:boot_params] = combined_params.join(' ')
@@ -536,6 +541,11 @@ module LiveUsb
       # Make extracted files writable
       run_system!(['chmod', '-R', 'u+w', extract_dir])
 
+      # Create WiFi enable script if requested
+      if options[:enable_wifi]
+        create_wifi_enable_script(extract_dir)
+      end
+
       # Find and modify grub configs
       grub_configs = Dir.glob(File.join(extract_dir, 'boot/grub/*_default.cfg')) +
                      Dir.glob(File.join(extract_dir, 'boot/grub/*_options.cfg'))
@@ -589,6 +599,36 @@ module LiveUsb
 
       puts "✅ Custom ISO created"
       custom_iso
+    end
+
+    def create_wifi_enable_script(extract_dir)
+      puts "Adding WiFi auto-enable script..."
+
+      # Create scripts directory
+      scripts_dir = File.join(extract_dir, 'boot/grub/scripts')
+      FileUtils.mkdir_p(scripts_dir)
+
+      # Create WiFi enable script
+      wifi_script = File.join(scripts_dir, 'wifi-enable')
+      script_content = <<~'SCRIPT'
+        #!/bin/sh
+        # Auto-enable WiFi on boot
+        if command -v rfkill >/dev/null 2>&1; then
+          rfkill unblock all
+        fi
+
+        # Find and bring up wireless interfaces
+        for iface in /sys/class/net/wl*; do
+          if [ -e "$iface" ]; then
+            ifname=$(basename "$iface")
+            ip link set "$ifname" up 2>/dev/null || true
+          fi
+        done
+      SCRIPT
+
+      File.write(wifi_script, script_content)
+      File.chmod(0o755, wifi_script)
+      puts "  Added WiFi auto-enable script"
     end
 
     def flash_image(image_path, device)
@@ -746,6 +786,9 @@ parser = OptionParser.new do |opts|
   opts.on('--ssh [PASSWORD]', 'Enable SSH with optional password (default: grml). Username is "grml".') do |password|
     options[:enable_ssh] = true
     options[:ssh_password] = password || 'grml'
+  end
+  opts.on('--wifi', 'Auto-enable WiFi (rfkill unblock and bring interface up)') do
+    options[:enable_wifi] = true
   end
   opts.on('-h', '--help', 'Show this help message') do
     puts opts
