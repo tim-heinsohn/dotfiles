@@ -39,6 +39,10 @@ aur/zsh-theme-powerlevel10k
     A theme for Zsh. It emphasizes speed, flexibility and out-of-the-box experience.
 core/base-devel
     A meta-package that installs all packages required for building from source.
+core/curl
+    command line tool and library for transferring data with URLs.
+core/diffutils
+    Utility programs used for creating patch files.
 core/gnupg
     A complete and free implementation of the OpenPGP standard (RFC4880).
 core/openssh
