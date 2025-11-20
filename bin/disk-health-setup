@@ -7,6 +7,7 @@ SCRIPT_NAME="$(basename "$0")"
 SYSTEMD_SERVICE="/etc/systemd/system/disk-health-check.service"
 SYSTEMD_TIMER="/etc/systemd/system/disk-health-check.timer"
 CHECK_SCRIPT="/usr/local/bin/disk-health-check"
+ALERT_STATE_FILE="/var/lib/disk-health-alerts"
 
 print_usage() {
     cat <<EOF
@@ -19,6 +20,7 @@ OPTIONS:
     --uninstall     Remove monitoring service (requires sudo)
     --status        Show monitoring service status
     --test          Run a test health check now
+    --test-alert    Simulate a disk alert to test notifications
     --help          Show this help message
 
 FEATURES:
@@ -55,6 +57,67 @@ check_dependencies() {
     fi
 }
 
+create_notification_lib() {
+    cat <<'NOTIFYLIB' | sudo tee /usr/local/lib/disk-health-notify.sh > /dev/null
+#!/bin/bash
+# Shared notification library for disk health monitoring
+
+ALERT_STATE_FILE="/var/lib/disk-health-alerts"
+ALERT_FLAG_FILE="/tmp/disk-health-alert"
+
+send_desktop_notification() {
+    local level="$1"
+    local message="$2"
+    local urgency="normal"
+    local icon="dialog-warning"
+
+    if [ "$level" = "ERROR" ]; then
+        urgency="critical"
+        icon="dialog-error"
+    fi
+
+    # Find all active user sessions and send notifications
+    for user_session in /run/user/*/; do
+        if [ -d "$user_session" ]; then
+            local uid=$(basename "$user_session")
+            local user=$(id -nu "$uid" 2>/dev/null)
+            local display=$(sudo -u "$user" env | grep "^DISPLAY=" | cut -d= -f2 2>/dev/null)
+            local dbus=$(ls "$user_session"dbus-* 2>/dev/null | head -1)
+
+            if [ -n "$display" ] && [ -n "$dbus" ]; then
+                sudo -u "$user" DISPLAY="$display" DBUS_SESSION_BUS_ADDRESS="unix:path=$dbus" \
+                    notify-send -u "$urgency" -i "$icon" "Disk Health Alert" "$message" 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
+record_alert() {
+    local level="$1"
+    shift
+    local message="$*"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    # Append to state file
+    echo "$timestamp|$level|$message" | sudo tee -a "$ALERT_STATE_FILE" > /dev/null
+
+    # Set flag for i3status
+    echo "$level" | sudo tee "$ALERT_FLAG_FILE" > /dev/null
+    sudo chmod 644 "$ALERT_FLAG_FILE"
+
+    # Send desktop notification
+    send_desktop_notification "$level" "$message"
+}
+
+clear_alert_flag() {
+    if [ -f "$ALERT_FLAG_FILE" ]; then
+        sudo rm -f "$ALERT_FLAG_FILE"
+    fi
+}
+NOTIFYLIB
+    sudo chmod 644 /usr/local/lib/disk-health-notify.sh
+}
+
 create_check_script() {
     cat <<'CHECKSCRIPT' | sudo tee "$CHECK_SCRIPT" > /dev/null
 #!/bin/bash
@@ -63,16 +126,21 @@ create_check_script() {
 TEMP_THRESHOLD=60
 LOG_PREFIX="[Disk Health]"
 
+# Source notification library
+source /usr/local/lib/disk-health-notify.sh
+
 log_info() {
     echo "$LOG_PREFIX INFO: $*"
 }
 
 log_warn() {
     echo "$LOG_PREFIX WARNING: $*" >&2
+    record_alert "WARN" "$*"
 }
 
 log_error() {
     echo "$LOG_PREFIX ERROR: $*" >&2
+    record_alert "ERROR" "$*"
 }
 
 check_disk_smart() {
@@ -152,11 +220,11 @@ check_nvme_smart() {
         return 0
     fi
 
-    # Parse critical values
-    local temp=$(echo "$smart_output" | grep "^temperature" | awk '{print $3}')
-    local avail_spare=$(echo "$smart_output" | grep "^available_spare" | awk '{print $3}' | tr -d '%')
-    local percent_used=$(echo "$smart_output" | grep "^percentage_used" | awk '{print $3}' | tr -d '%')
-    local critical_warn=$(echo "$smart_output" | grep "^critical_warning" | awk '{print $3}')
+    # Parse critical values - use grep with exact field names to avoid matching threshold lines
+    local temp=$(echo "$smart_output" | grep "^temperature[[:space:]]*:" | awk '{print $3}')
+    local avail_spare=$(echo "$smart_output" | grep "^available_spare[[:space:]]*:" | grep -v threshold | awk '{print $3}' | tr -d '%')
+    local percent_used=$(echo "$smart_output" | grep "^percentage_used[[:space:]]*:" | awk '{print $3}' | tr -d '%')
+    local critical_warn=$(echo "$smart_output" | grep "^critical_warning[[:space:]]*:" | awk '{print $3}')
 
     if [ -n "$temp" ]; then
         log_info "$disk: Temperature: ${temp}°C"
@@ -179,13 +247,23 @@ check_nvme_smart() {
         fi
     fi
 
-    if [ "$critical_warn" != "0x00" ] && [ -n "$critical_warn" ]; then
+    # Critical warning: 0 or 0x00 means OK, anything else is an error
+    if [ -n "$critical_warn" ] && [ "$critical_warn" != "0" ] && [ "$critical_warn" != "0x00" ]; then
         log_error "$disk: Critical warning flag set: $critical_warn"
     fi
 }
 
+
 main() {
     log_info "Starting disk health check"
+
+    # Track if any alerts occurred during this run
+    local alert_count_before=0
+    local alert_count_after=0
+
+    if [ -f "$ALERT_STATE_FILE" ]; then
+        alert_count_before=$(wc -l < "$ALERT_STATE_FILE")
+    fi
 
     # Find all block devices
     local devices=$(lsblk -dnp -o NAME,TYPE | grep disk | awk '{print $1}')
@@ -203,6 +281,16 @@ main() {
             check_disk_smart "$device"
         fi
     done
+
+    # Check if any new alerts were added
+    if [ -f "$ALERT_STATE_FILE" ]; then
+        alert_count_after=$(wc -l < "$ALERT_STATE_FILE")
+    fi
+
+    # If no new alerts, clear the flag
+    if [ "$alert_count_after" -eq "$alert_count_before" ]; then
+        clear_alert_flag
+    fi
 
     log_info "Disk health check completed"
 }
@@ -274,6 +362,7 @@ install_monitoring() {
 
     echo "Installing disk health monitoring..."
 
+    create_notification_lib
     create_check_script
     create_systemd_service
     create_systemd_timer
@@ -311,6 +400,8 @@ uninstall_monitoring() {
 
     # Remove files
     sudo rm -f "$SYSTEMD_SERVICE" "$SYSTEMD_TIMER" "$CHECK_SCRIPT"
+    sudo rm -f /usr/local/lib/disk-health-notify.sh
+    sudo rm -f /tmp/disk-health-alert
 
     # Reload systemd
     sudo systemctl daemon-reload
@@ -457,6 +548,43 @@ CHECKSCRIPT
     fi
 }
 
+test_alert() {
+    local alert_type="${1:-WARN}"
+
+    if [ "$alert_type" != "WARN" ] && [ "$alert_type" != "ERROR" ]; then
+        alert_type="WARN"
+    fi
+
+    echo "Simulating $alert_type disk health alert..."
+
+    # Check if notification library exists
+    if [ ! -f /usr/local/lib/disk-health-notify.sh ]; then
+        echo "Error: Notification library not installed. Run: $SCRIPT_NAME --install"
+        exit 1
+    fi
+
+    # Source the library and trigger alert
+    source /usr/local/lib/disk-health-notify.sh
+    record_alert "$alert_type" "Test alert triggered manually: /dev/test"
+
+    echo ""
+    echo "✅ Test alert created!"
+    echo ""
+    echo "You should see:"
+    echo "  - Desktop notification popup"
+    if [ "$alert_type" = "ERROR" ]; then
+        echo "  - Red 'DISK!' indicator in i3 statusbar"
+    else
+        echo "  - Orange 'DISK' indicator in i3 statusbar"
+    fi
+    echo ""
+    echo "To clear the alert:"
+    echo "  sudo rm /tmp/disk-health-alert"
+    echo ""
+    echo "Or run a health check that passes:"
+    echo "  $SCRIPT_NAME --test"
+}
+
 # Main command processing
 case "${1:-}" in
     --install)
@@ -470,6 +598,10 @@ case "${1:-}" in
         ;;
     --test)
         run_test
+        ;;
+    --test-alert)
+        shift
+        test_alert "$@"
         ;;
     --help)
         print_usage

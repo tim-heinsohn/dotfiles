@@ -59,8 +59,19 @@ i3status | (
             with_reboot=$(echo "$with_layout" | jq --arg text "REBOOT" --arg color "#FFA500" '[{ "full_text": $text, "name": "kernel_mismatch", "color": $color }] + .')
         fi
 
+        # Check for disk health alerts
+        with_disk="$with_reboot"
+        if [ -f /tmp/disk-health-alert ]; then
+            alert_level=$(cat /tmp/disk-health-alert 2>/dev/null | head -1)
+            if [ "$alert_level" = "ERROR" ]; then
+                with_disk=$(echo "$with_reboot" | jq --arg text "DISK!" --arg color "#FF0000" '[{ "full_text": $text, "name": "disk_alert", "color": $color }] + .')
+            elif [ "$alert_level" = "WARN" ]; then
+                with_disk=$(echo "$with_reboot" | jq --arg text "DISK" --arg color "#FFA500" '[{ "full_text": $text, "name": "disk_warning", "color": $color }] + .')
+            fi
+        fi
+
         # Print the re-assembled line with the leading comma
-        echo "$leading_comma$with_reboot"
+        echo "$leading_comma$with_disk"
     done
 )
 
