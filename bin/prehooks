@@ -18,14 +18,23 @@ mkdir -p \
 WRAPPER_SOURCE="$HOME/dotfiles/gpg/pinentry-wrapper"
 WRAPPER_TARGET="/usr/local/bin/pinentry-wrapper"
 
-if [ -f "$WRAPPER_SOURCE" ] && [ -t 0 ]; then
-  if ! sudo cmp -s "$WRAPPER_SOURCE" "$WRAPPER_TARGET" 2>/dev/null; then
-    echo "Updating pinentry wrapper"
-    sudo cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
-    sudo chmod +x "$WRAPPER_TARGET"
+if [ -f "$WRAPPER_SOURCE" ]; then
+  # Check if target differs (read access usually allowed)
+  if ! cmp -s "$WRAPPER_SOURCE" "$WRAPPER_TARGET" 2>/dev/null; then
+    # Try passwordless/cached sudo first
+    if sudo -n true 2>/dev/null; then
+      echo "Updating pinentry wrapper (cached sudo)"
+      sudo cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
+      sudo chmod +x "$WRAPPER_TARGET"
+    elif [ -t 0 ]; then
+      # Interactive: try prompting
+      echo "Updating pinentry wrapper (sudo may prompt)"
+      sudo cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
+      sudo chmod +x "$WRAPPER_TARGET"
+    else
+      echo "Skipping pinentry wrapper update (sudo required, non-interactive)"
+    fi
   fi
-elif [ -f "$WRAPPER_SOURCE" ]; then
-  echo "Skipping pinentry wrapper update (non-interactive session)"
 fi
 
 rm -rf ~/dotfiles/.dots/claude-code/agents/*

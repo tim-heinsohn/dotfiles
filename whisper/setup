@@ -1,0 +1,36 @@
+#!/bin/bash
+# Installer for OpenAI Whisper CLI using preferred package managers
+set -euo pipefail
+
+echo "Installing OpenAI Whisper (speech-to-text)..."
+
+if command -v pacman >/dev/null 2>&1; then
+    echo "Ensuring Arch dependencies (ffmpeg, pipx)..."
+    sudo pacman -S --needed --noconfirm ffmpeg python-pipx
+fi
+
+if command -v uv >/dev/null 2>&1; then
+    echo "Using uv tool to install openai-whisper..."
+    uv tool install openai-whisper --force
+    installed_with="uv"
+elif command -v pipx >/dev/null 2>&1; then
+    echo "Using pipx to install openai-whisper..."
+    pipx install openai-whisper --force
+    pipx ensurepath >/dev/null 2>&1 || true
+    installed_with="pipx"
+elif command -v pip >/dev/null 2>&1; then
+    echo "pipx not found; falling back to user-level pip install..."
+    pip install --user --upgrade openai-whisper
+    installed_with="pip"
+else
+    echo "Error: uv, pipx, or pip is required to install Whisper." >&2
+    exit 1
+fi
+
+cat <<EOF
+Whisper installed via ${installed_with}. Example usage:
+  whisper sample.wav --model small --language en
+Models download automatically on first run and are cached in ~/.cache/whisper.
+EOF
+
+echo "OpenAI Whisper installation complete."

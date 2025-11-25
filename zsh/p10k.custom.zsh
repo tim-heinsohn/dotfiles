@@ -4,11 +4,12 @@
 __project_code() {
   local code
   if [[ -f "$HOME/.projects" ]]; then
-    source "$HOME/.projects"
     if [[ -f "/tmp/project_secondary_on" ]]; then
-      code="$SECONDARY_PROJECT_CODE"
+      # Extract SECONDARY_PROJECT_CODE without sourcing (avoids gopass calls)
+      code=$(grep -E '^export SECONDARY_PROJECT_CODE=' "$HOME/.projects" | cut -d'"' -f2)
     else
-      code="$PRIMARY_PROJECT_CODE"
+      # Extract PRIMARY_PROJECT_CODE without sourcing
+      code=$(grep -E '^export PRIMARY_PROJECT_CODE=' "$HOME/.projects" | cut -d'"' -f2)
     fi
   fi
   echo "${code:-PRJ}"
@@ -17,11 +18,12 @@ __project_code() {
 __project_color() {
   local color
   if [[ -f "$HOME/.projects" ]]; then
-    source "$HOME/.projects"
     if [[ -f "/tmp/project_secondary_on" ]]; then
-      color="$SECONDARY_PROJECT_PROMPT_COLOR"
+      # Extract SECONDARY_PROJECT_PROMPT_COLOR without sourcing
+      color=$(grep -E '^export SECONDARY_PROJECT_PROMPT_COLOR=' "$HOME/.projects" | cut -d'"' -f2)
     else
-      color="$PRIMARY_PROJECT_PROMPT_COLOR"
+      # Extract PRIMARY_PROJECT_PROMPT_COLOR without sourcing
+      color=$(grep -E '^export PRIMARY_PROJECT_PROMPT_COLOR=' "$HOME/.projects" | cut -d'"' -f2)
     fi
   fi
   echo "${color:-172}"

@@ -3,6 +3,35 @@
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 
+print_help() {
+    cat <<'EOF'
+Usage: setup-system [-h|--help]
+
+Provisions an Arch system with this dotfiles repo, installs core packages,
+configures services, and links Bombadil-managed files.
+
+Environment variables:
+  DOTFILES_REPO   Source Git repository (default: https://github.com/tim-heinsohn/dotfiles.git)
+  DOTFILES_DIR    Destination directory for the clone (default: ~/dotfiles)
+
+Run the script without arguments after ensuring sudo access.
+EOF
+}
+
+if [[ $# -gt 0 ]]; then
+    case "$1" in
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            print_help >&2
+            exit 1
+            ;;
+    esac
+fi
+
 sudo pacman -Suy --needed --noconfirm git &&
 # Restart gpg daemons to use updated versions after system update
 gpgconf --kill all 2>/dev/null || true &&
@@ -16,6 +45,7 @@ cd "${DOTFILES_DIR}" &&
 "${DOTFILES_DIR}/docker/docker-group-setup" &&
 "${DOTFILES_DIR}/ruby/rvm-setup" &&
 "${DOTFILES_DIR}/vundle-install" &&
+"${DOTFILES_DIR}/whisper/setup" &&
 bombadil link &&
 sheldeon lock &&
 

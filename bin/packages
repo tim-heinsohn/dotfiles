@@ -2,6 +2,8 @@ aur/acli-bin
     Software to interact with Atlassian Cloud from the terminal. Supports Bitbucket, Jira, Confluence, Bamboo, and other Atlassian services.
 aur/acpilight
     A backward-compatible xbacklight replacement with ACPI kernel support.
+aur/antigravity-bin
+    Google Antigravity - Agentic Development Platform (Pre-built Binary)
     A small command-line utility to show and change EXIF information in JPEG files.
 aur/bruno-bin
     Opensource API Client for Exploring and Testing APIs.
