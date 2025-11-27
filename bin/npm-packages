@@ -47,11 +47,58 @@ check_nvm_node() {
     fi
 }
 
+cleanup_stale_npm_dirs() {
+    local package="$1"
+    local root
+    if ! root="$(npm root -g 2>/dev/null)"; then
+        log "⚠ Unable to determine npm root; skipping cleanup for $package"
+        return
+    fi
+
+    local pattern install_dir
+    if [[ "$package" == @*/* ]]; then
+        local scope="${package%%/*}"
+        local name="${package#*/}"
+        pattern="$root/$scope/.${name}-*"
+        install_dir="$root/$scope/$name"
+    else
+        pattern="$root/.${package}-*"
+        install_dir="$root/$package"
+    fi
+
+    shopt -s nullglob 2>/dev/null || true
+    for dir in $pattern; do
+        log "Removing stale npm temp directory $dir"
+        rm -rf "$dir" || log "⚠ Failed to remove $dir"
+    done
+    shopt -u nullglob 2>/dev/null || true
+
+    printf '%s\n' "$install_dir"
+}
+
+retry_clean_install() {
+    local package="$1"
+    local install_dir
+    install_dir="$(cleanup_stale_npm_dirs "$package")"
+
+    if [ -n "$install_dir" ] && [ -d "$install_dir" ]; then
+        log "Removing existing $package directory for clean reinstall"
+        rm -rf "$install_dir" || log "⚠ Failed to remove $install_dir"
+    fi
+
+    if npm install -g "$package"; then
+        log "✓ Successfully reinstalled $package after cleanup"
+    else
+        log "✗ Clean reinstall of $package failed"
+    fi
+}
+
 install_packages() {
     log "Installing global npm packages..."
     
     for package in "${NPM_PACKAGES[@]}"; do
         log "Installing $package..."
+        cleanup_stale_npm_dirs "$package" >/dev/null
         if npm install -g "$package"; then
             log "✓ Successfully installed $package"
         else
@@ -66,10 +113,12 @@ update_packages() {
     for package in "${NPM_PACKAGES[@]}"; do
         log "Updating $package..."
         if npm list -g "$package" >/dev/null 2>&1; then
+            cleanup_stale_npm_dirs "$package" >/dev/null
             if npm update -g "$package"; then
                 log "✓ Successfully updated $package"
             else
-                log "✗ Failed to update $package"
+                log "⚠ Update failed; retrying $package with clean reinstall"
+                retry_clean_install "$package"
             fi
         else
             log "⚠ $package not installed, installing..."
@@ -88,13 +137,16 @@ install_or_update_packages() {
     for package in "${NPM_PACKAGES[@]}"; do
         if npm list -g "$package" >/dev/null 2>&1; then
             log "Updating $package..."
+            cleanup_stale_npm_dirs "$package" >/dev/null
             if npm update -g "$package"; then
                 log "✓ Successfully updated $package"
             else
-                log "✗ Failed to update $package"
+                log "⚠ Update failed; retrying $package with clean reinstall"
+                retry_clean_install "$package"
             fi
         else
             log "Installing $package..."
+            cleanup_stale_npm_dirs "$package" >/dev/null
             if npm install -g "$package"; then
                 log "✓ Successfully installed $package"
             else
