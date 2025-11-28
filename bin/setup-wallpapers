@@ -54,6 +54,21 @@ ensure_cron() {
   log "Cron entry installed"
 }
 
+apply_wallpaper_now() {
+  if ! command -v feh >/dev/null 2>&1; then
+    log "feh command not available; skipping immediate wallpaper setup"
+    return
+  fi
+
+  if [[ ! -d "$WALLPAPERS_DIR" ]] || [[ -z "$(ls -A "$WALLPAPERS_DIR" 2>/dev/null)" ]]; then
+    log "No wallpapers found in $WALLPAPERS_DIR; skipping immediate setup"
+    return
+  fi
+
+  log "Applying wallpaper now"
+  feh --bg-fill --randomize --no-fehbg "$WALLPAPERS_DIR" "$WALLPAPERS_DIR"
+}
+
 main() {
   if [[ -z "${WALLPAPERS_DIR:-}" ]]; then
     log "WALLPAPERS_DIR not set; skipping"
@@ -64,6 +79,7 @@ main() {
   [[ -n "${WALLPAPERS_REPO:-}" ]] || mkdir -p "$WALLPAPERS_DIR"
   ensure_repo
   ensure_cron
+  apply_wallpaper_now
 }
 
 main "$@"
