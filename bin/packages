@@ -89,6 +89,8 @@ extra/brightnessctl
     A program to read and control device brightness.
 extra/caddy
     A powerful, enterprise-ready, open source web server with automatic HTTPS.
+extra/calibre 8.7.0-4 (34.7 MiB 116.2 MiB)
+    Ebook management application.
 extra/chromium
     An open-source browser project for a safer, faster, and more stable web.
 extra/cocogitto
