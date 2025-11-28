@@ -17,8 +17,10 @@ declare -a NPM_PACKAGES=(
     "@spotlightjs/spotlight"
     "@usebruno/cli"
     "bash-language-server"
+    "backlog.md"
     "codebuff"
     "dockerfile-language-server-nodejs"
+    "happy-coder"
     "vscode-langservers-extracted"
 )
 

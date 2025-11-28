@@ -1,1 +1,1 @@
-- [ ] Non-interactive environment toggle, alias-wrapped around 'gemini' & Co., e. g. with GIT_PAGER=cat vs. GIT_PAGER=auto to prevent hanging waiting for 'q' to quit large diffs being displayed
+- [ ] Non-interactive environment toggle, alias-wrapped around 'gemini' & Co., e. g. with GIT_PAGER=cat vs. GIT_PAGER=auto; also: GIT_EDITOR=true to prevent hanging waiting for 'q' to quit large diffs being displayed or for waiting for a commit message via external EDITOR
