@@ -261,6 +261,8 @@ extra/qt5-base
     A cross-platform application and UI framework.
 extra/ranger
     Simple, vim-like file manager.
+extra/rapid-photo-downloader
+    Photo and video downloader.
 extra/rclone
     A command line program to sync files and directories to and from cloud storage.
 extra/recode
