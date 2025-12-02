@@ -61,6 +61,8 @@ extra/acpid
     A flexible and extensible daemon for delivering ACPI events.
 extra/aichat
     A command-line tool for interacting with large language models.
+extra/alsa-utils
+    Advanced Linux Sound Architecture - Utilities.
 extra/ansible
     A simple IT automation engine for cloud provisioning, config management, etc.
 extra/ansible-lint
@@ -69,8 +71,8 @@ extra/arandr
     Provide a simple visual front end for XRandR 1.2.
 extra/asciinema
     Record and share terminal sessions.
-extra/alsa-utils
-    Advanced Linux Sound Architecture - Utilities.
+extra/at
+    AT and batch delayed command scheduling utility and daemon.
 extra/audacity
     A program that lets you manipulate digital audio waveforms.
 extra/aws-cli
