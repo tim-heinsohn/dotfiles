@@ -1,17 +1,17 @@
 #!/bin/bash
 
-# Brother HL-L2310D Printer Installation Script
+# Brother HL-2030 Printer Installation Script
 # For Arch Linux with USB connection
 
 set -e
 
-echo "=== Brother HL-L2310D Printer Installation ==="
-echo "This script will set up your Brother HL-L2310D printer on Arch Linux"
+echo "=== Brother HL-2030 Printer Installation ==="
+echo "This script will set up your Brother HL-2030 printer on Arch Linux"
 echo
 
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
-   echo "This script should not be run as root" 
+   echo "This script should not be run as root"
    exit 1
 fi
 
@@ -60,11 +60,13 @@ if ! command -v yay &> /dev/null && ! command -v paru &> /dev/null; then
     makepkg -si --noconfirm
 fi
 
-echo "Installing Brother HL-L2310D drivers..."
+echo "Installing Brother HL-2030 drivers..."
+# The HL-2030 uses the brgenml1 driver (generic Brother laser driver)
+# which supports HL-2030, HL-2035, HL-2040, and similar models
 if command -v yay &> /dev/null; then
-    yay -S --noconfirm brother-hll2310d
+    yay -S --noconfirm brother-brgenml1
 elif command -v paru &> /dev/null; then
-    paru -S --noconfirm brother-hll2310d
+    paru -S --noconfirm brother-brgenml1
 else
     echo "Please install an AUR helper (yay or paru) to continue"
     exit 1
@@ -75,25 +77,20 @@ echo "Waiting for CUPS to be ready..."
 sleep 3
 
 # Try to auto-detect and add printer
-if lpstat -p | grep -i "HL-L2310D" >/dev/null 2>&1; then
-    echo "✓ Brother HL-L2310D already configured"
+if lpstat -p | grep -i "HL-2030" >/dev/null 2>&1; then
+    echo "✓ Brother HL-2030 already configured"
 else
     echo "Detecting printer URI..."
-    PRINTER_URI=$(lpinfo -v 2>/dev/null | grep -i "usb://Brother/HL-L2310D" | awk '{print $2}' | head -1)
+    PRINTER_URI=$(lpinfo -v 2>/dev/null | grep -i "usb://Brother/HL-2030" | awk '{print $2}' | head -1)
 
     if [ -n "$PRINTER_URI" ]; then
         echo "Found printer at: $PRINTER_URI"
-        # Find the appropriate PPD
-        PPD_FILE=$(lpinfo -m 2>/dev/null | grep -i "HL-L2310D\|HLL2310D" | awk '{print $1}' | head -1)
-        if [ -z "$PPD_FILE" ]; then
-            PPD_FILE="brother-HLL2310D-cups-en.ppd"
-        fi
-        echo "Adding printer to CUPS with driver: $PPD_FILE"
-        sudo lpadmin -p HL-L2310D -E \
+        echo "Adding printer to CUPS..."
+        sudo lpadmin -p HL-2030 -E \
             -v "$PRINTER_URI" \
-            -m "$PPD_FILE" \
+            -m brother-BrGenML1-cups-en.ppd \
             -L "USB" \
-            -D "Brother HL-L2310D"
+            -D "Brother HL-2030"
         echo "✓ Printer added to CUPS"
     else
         echo "⚠ Could not detect printer URI"
@@ -104,24 +101,24 @@ fi
 echo "5. Testing printer setup..."
 
 # Check if printer is now available
-if lpstat -p | grep -i "HL-L2310D" >/dev/null 2>&1; then
+if lpstat -p | grep -i "HL-2030" >/dev/null 2>&1; then
     echo "✓ Brother printer successfully configured"
     lpstat -p
-    
+
     echo "6. Setting as default printer (optional)..."
-    read -p "Set Brother HL-L2310D as default printer? (y/N): " -n 1 -r
+    read -p "Set Brother HL-2030 as default printer? (y/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        sudo lpadmin -d "HL-L2310D"
-        echo "✓ Set HL-L2310D as default printer"
+        sudo lpadmin -d "HL-2030"
+        echo "✓ Set HL-2030 as default printer"
     fi
 
     echo "7. Test print..."
     read -p "Print a test page? (y/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Printing test page to HL-L2310D..."
-        lp -d "HL-L2310D" /usr/share/cups/data/testprint
+        echo "Printing test page to HL-2030..."
+        lp -d "HL-2030" /usr/share/cups/data/testprint
         echo "✓ Test page sent to printer"
     fi
 else
@@ -135,5 +132,5 @@ echo "Printer management commands:"
 echo "- Check status: lpstat -p -d"
 echo "- List printers: lpstat -a"
 echo "- CUPS web interface: http://localhost:631"
-echo "- Cancel jobs: cancel -a" 
+echo "- Cancel jobs: cancel -a"
 echo "- Add printer: sudo lpadmin -p PRINTER_NAME -E -v DEVICE_URI -m PPD_FILE"
