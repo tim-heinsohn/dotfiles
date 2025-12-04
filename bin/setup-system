@@ -3,6 +3,33 @@
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
 
+ensure_dotfiles_repo() {
+    if [ -d "${DOTFILES_DIR}/.git" ]; then
+        if ! git -C "${DOTFILES_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "Error: ${DOTFILES_DIR} exists but is not a valid Git repository." >&2
+            echo "Remove or move it, or set DOTFILES_DIR to a different path before rerunning." >&2
+            return 1
+        fi
+
+        local current_branch
+        current_branch=$(git -C "${DOTFILES_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+        if git -C "${DOTFILES_DIR}" rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+            echo "Updating dotfiles repository on branch ${current_branch}..."
+            git -C "${DOTFILES_DIR}" pull --ff-only
+        else
+            echo "Dotfiles repository already present at ${DOTFILES_DIR}." >&2
+            echo "Current branch '${current_branch}' has no upstream; skipping git pull." >&2
+            echo "Set a tracking branch (git branch --set-upstream-to origin/<branch>) if you want automatic pulls." >&2
+        fi
+    elif [ -e "${DOTFILES_DIR}" ]; then
+        echo "Error: ${DOTFILES_DIR} exists but is not a Git repository (and is not empty)." >&2
+        echo "Move it out of the way or set DOTFILES_DIR to a new location, then rerun." >&2
+        return 1
+    else
+        git clone "${DOTFILES_REPO}" "${DOTFILES_DIR}"
+    fi
+}
+
 print_help() {
     cat <<'EOF'
 Usage: setup-system [-h|--help]
@@ -35,7 +62,7 @@ fi
 sudo pacman -Suy --needed --noconfirm git &&
 # Restart gpg daemons to use updated versions after system update
 gpgconf --kill all 2>/dev/null || true &&
-git -C "${DOTFILES_DIR}" pull || git clone "${DOTFILES_REPO}" "${DOTFILES_DIR}" &&
+ensure_dotfiles_repo &&
 ln -sf "${DOTFILES_DIR}/bombadil.toml" "$HOME/.config/bombadil.toml" &&
 cd "${DOTFILES_DIR}" &&
 "${DOTFILES_DIR}/bin/setup-wallpapers" &&

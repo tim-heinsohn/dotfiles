@@ -9,6 +9,28 @@ SYSTEMD_TIMER="/etc/systemd/system/disk-health-check.timer"
 CHECK_SCRIPT="/usr/local/bin/disk-health-check"
 ALERT_STATE_FILE="/var/lib/disk-health-alerts"
 
+install_packages_if_possible() {
+    local packages=("$@")
+
+    if [ ${#packages[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    if ! command -v pacman >/dev/null 2>&1; then
+        echo "pacman not available; unable to auto-install: ${packages[*]}" >&2
+        return 1
+    fi
+
+    echo "Attempting to install missing packages: ${packages[*]}"
+    if sudo pacman -S --needed --noconfirm "${packages[@]}"; then
+        echo "Successfully installed: ${packages[*]}"
+        return 0
+    fi
+
+    echo "Failed to auto-install: ${packages[*]}" >&2
+    return 1
+}
+
 print_usage() {
     cat <<EOF
 Usage: $SCRIPT_NAME [OPTIONS]
@@ -45,15 +67,31 @@ check_dependencies() {
         missing+=("smartmontools")
     fi
 
-    if ! command -v nvme >/dev/null 2>&1; then
-        echo "Warning: nvme-cli not found. NVMe-specific checks will be skipped."
-        echo "Install with: sudo pacman -S nvme-cli"
+    if [ ${#missing[@]} -gt 0 ]; then
+        if install_packages_if_possible "${missing[@]}"; then
+            missing=()
+            if ! command -v smartctl >/dev/null 2>&1; then
+                missing+=("smartmontools")
+            fi
+        fi
+
+        if [ ${#missing[@]} -gt 0 ]; then
+            echo "Error: Missing required packages: ${missing[*]}"
+            echo "Install with: sudo pacman -S ${missing[*]}"
+            exit 1
+        fi
     fi
 
-    if [ ${#missing[@]} -gt 0 ]; then
-        echo "Error: Missing required packages: ${missing[*]}"
-        echo "Install with: sudo pacman -S ${missing[*]}"
-        exit 1
+    if ! command -v nvme >/dev/null 2>&1; then
+        echo "Warning: nvme-cli not found. NVMe-specific checks will be skipped."
+        if install_packages_if_possible "nvme-cli"; then
+            if command -v nvme >/dev/null 2>&1; then
+                echo "nvme-cli installed; NVMe checks are now enabled."
+            fi
+        fi
+        if ! command -v nvme >/dev/null 2>&1; then
+            echo "Install with: sudo pacman -S nvme-cli"
+        fi
     fi
 }
 
