@@ -1,0 +1,801 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'digest'
+require 'fileutils'
+require 'json'
+require 'net/http'
+require 'openssl'
+require 'open3'
+require 'optparse'
+require 'tmpdir'
+require 'uri'
+
+module LiveUsb
+  class Error < StandardError; end
+
+  class BlockDevice
+    attr_reader :raw
+
+    def initialize(raw)
+      raise Error, 'Invalid block device data.' unless raw.is_a?(Hash)
+
+      @raw = raw
+    end
+
+    def name
+      value('name')
+    end
+
+    def path
+      value('path') || "/dev/#{name}"
+    end
+
+    def size
+      value('size')
+    end
+
+    def model
+      value('model') || value('vendor') || 'unknown'
+    end
+
+    def serial
+      value('serial')
+    end
+
+    def type
+      value('type')
+    end
+
+    def disk?
+      type == 'disk'
+    end
+
+    def partition?
+      type == 'part'
+    end
+
+    def usb?
+      value('tran') == 'usb'
+    end
+
+    def removable?
+      value('rm').to_i == 1 || value('hotplug').to_i == 1
+    end
+
+    def probable_usb?
+      usb? || removable?
+    end
+
+    def partitions
+      @partitions ||= children.select(&:partition?)
+    end
+
+    def filesystem
+      value('fstype')
+    end
+
+    def mountpoints
+      points = []
+      mp = value('mountpoint')
+      points << mp if present_mount?(mp)
+      list = raw['mountpoints'] || raw['MOUNTPOINTS']
+      if list.is_a?(Array)
+        list.each do |entry|
+          points << entry if present_mount?(entry)
+        end
+      end
+      points.uniq
+    end
+
+    def mounted?
+      !mountpoints.empty?
+    end
+
+    def description
+      pieces = [path, size, model]
+      pieces << "serial=#{serial}" if serial && !serial.empty?
+      pieces.join(' | ')
+    end
+
+    private
+
+    def children
+      Array(raw['children']).map { |child| BlockDevice.new(child) }
+    end
+
+    def value(key)
+      raw[key] || raw[key&.upcase]
+    end
+
+    def present_mount?(value)
+      value && !value.empty? && value != '[SWAP]'
+    end
+  end
+
+  class ArchCreator
+    DEFAULT_BASE_URL = 'https://geo.mirror.pkgbuild.com/iso/latest/'.freeze
+    SHA256SUMS_FILE = 'sha256sums.txt'.freeze
+    DEFAULT_ARCH = 'x86_64'.freeze
+    DEFAULT_KEYMAP = 'fr'.freeze
+    DD_ARGS = %w[bs=4M status=progress conv=fsync].freeze
+    CRITICAL_MOUNTPOINTS = %w[/ /boot /boot/efi /home /var /usr /etc].freeze
+    SENSITIVE_FILESYSTEMS = %w[crypto_luks luks luks2 crypt lvm2_member swap].freeze
+    MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024 # 2 GiB
+    CONNECT_TIMEOUT = 30
+    DOWNLOAD_TIMEOUT = 1800
+    EXIT_ERROR = 1
+    EXIT_SIGNAL = 130
+    HTTP_RANGE_NOT_SATISFIABLE = 416
+    MAX_REDIRECTS = 5
+    SUDO_CANDIDATES = %w[/usr/bin/sudo /bin/sudo].freeze
+
+    ISO_DATED_REGEX = /\Aarchlinux-(\d{4}\.\d{2}\.\d{2})-x86_64\.iso\z/.freeze
+    ISO_ALIAS = "archlinux-#{DEFAULT_ARCH}.iso".freeze
+
+    def initialize(options = {})
+      @options = {
+        base_url: DEFAULT_BASE_URL,
+        arch: DEFAULT_ARCH,
+        force: false,
+        skip_verify: false,
+        keymap: DEFAULT_KEYMAP
+      }.merge(options)
+
+      @tmpdir = Dir.mktmpdir('archlinux-live-usb-')
+      @use_sudo = !Process.euid.zero?
+      @child_pid = nil
+      @device_signature = nil
+      @sudo_binary = nil
+      @block_devices_cache = nil
+      @block_devices_cache_at = nil
+    end
+
+    def run
+      install_signal_handlers
+      ensure_tmp_space!
+
+      device = resolve_device
+      ensure_not_system_disk(device)
+      @device_signature = capture_device_signature(device)
+
+      iso_metadata = fetch_latest_iso
+      iso_path = download_iso(iso_metadata)
+      verify_checksum(iso_path, iso_metadata[:sha256])
+
+      iso_path = apply_keymap_boot_param(iso_path) if options[:keymap] && !options[:keymap].to_s.empty?
+
+      ensure_device_unmounted(device)
+      ensure_signature_unchanged!(device)
+      final_confirmation(device, iso_metadata)
+
+      flash_image(iso_path, device)
+      verify_written_image(iso_path, device) unless options[:skip_verify]
+
+      release = iso_metadata[:release] ? " (release #{iso_metadata[:release]})" : ''
+      puts "\nFinished writing #{iso_metadata[:filename]}#{release} to #{device.path}."
+      print_post_boot_notes(options[:keymap])
+    rescue Error => e
+      warn "Error: #{e.message}"
+      exit EXIT_ERROR
+    ensure
+      cleanup_tmpdir
+      restore_signal_handlers
+    end
+
+    private
+
+    attr_reader :options
+
+    def install_signal_handlers
+      @previous_handlers = {}
+      %w[INT TERM].each do |sig|
+        @previous_handlers[sig] = Signal.trap(sig) { handle_signal(sig) }
+      end
+    end
+
+    def restore_signal_handlers
+      return unless @previous_handlers
+
+      @previous_handlers.each do |sig, handler|
+        Signal.trap(sig, handler)
+      end
+    end
+
+    def handle_signal(signal)
+      warn "\nReceived #{signal}, stopping..."
+      safe_kill(signal, @child_pid)
+      cleanup_tmpdir
+      exit EXIT_SIGNAL
+    end
+
+    def ensure_tmp_space!
+      stats = filesystem_stats(@tmpdir)
+      available = stats[:available_bytes]
+      return if available.nil? || available >= MIN_FREE_BYTES
+
+      raise Error, format('Need at least %<need>d bytes free in %<dir>s, only %<have>d available.', need: MIN_FREE_BYTES, dir: @tmpdir, have: available)
+    end
+
+    def filesystem_stats(path)
+      stdout, status = Open3.capture2('df', '-B1', path)
+      return {} unless status.success?
+
+      lines = stdout.split("\n")
+      return {} if lines.size < 2
+
+      parts = lines[1].split
+      return {} if parts.size < 4
+
+      { available_bytes: parts[3].to_i }
+    rescue StandardError
+      {}
+    end
+
+    def resolve_device
+      devices = block_devices
+      raise Error, 'No block devices detected via lsblk.' if devices.empty?
+
+      if options[:device]
+        normalized = normalize_device_argument(options[:device])
+        device = find_device(devices, normalized)
+        raise Error, "Device #{normalized} not found." unless device
+
+        validate_device_path!(device.path)
+        describe_device(device)
+        confirm_device_selection(device)
+        return device
+      end
+
+      candidates = devices.select(&:probable_usb?)
+      device =
+        if candidates.empty?
+          puts 'No removable USB devices detected automatically. Showing all disks:'
+          prompt_for_device(devices)
+        else
+          puts 'Select the USB device to overwrite:'
+          prompt_for_device(candidates)
+        end
+
+      describe_device(device)
+      confirm_device_selection(device)
+      validate_device_path!(device.path)
+      device
+    end
+
+    def describe_device(device)
+      puts "\nSelected device: #{device.description}"
+      partitions = device.partitions
+      return if partitions.empty?
+
+      puts 'Existing partitions:'
+      partitions.each do |part|
+        mount_info = part.mountpoints.empty? ? '' : " (mounted at #{part.mountpoints.join(', ')})"
+        fs = part.filesystem.to_s.empty? ? 'unknown-fs' : part.filesystem
+        puts format('  • %-10s %-10s %s%s', part.path, part.size.to_s, fs, mount_info)
+      end
+    end
+
+    def confirm_device_selection(device)
+      input = read_input("Type the device path (\"#{device.path}\") to confirm selection: ")
+      raise Error, 'Device confirmation failed.' unless input == device.path
+    end
+
+    def ensure_not_system_disk(device)
+      return if options[:force]
+
+      if system_disk?(device)
+        raise Error, "#{device.path} appears to host system or encrypted partitions. Use --force if you are absolutely sure."
+      end
+    end
+
+    def system_disk?(device)
+      device_mounts = device.mountpoints
+      return true if (device_mounts & CRITICAL_MOUNTPOINTS).any?
+
+      device.partitions.any? do |part|
+        mounts = part.mountpoints
+        fs = part.filesystem.to_s.downcase
+        (mounts & CRITICAL_MOUNTPOINTS).any? || SENSITIVE_FILESYSTEMS.include?(fs)
+      end
+    end
+
+    def ensure_device_unmounted(device)
+      device = reload_device(device)
+      busy = device.partitions.select(&:mounted?)
+      return if busy.empty?
+
+      puts "\nThe following partitions are mounted:"
+      busy.each do |part|
+        puts format('  • %-10s -> %s', part.path, part.mountpoints.join(', '))
+      end
+
+      answer = read_input('Unmount them automatically? [y/N]: ').to_s.strip.downcase
+      raise Error, 'Abort: partitions remain mounted.' unless %w[y yes].include?(answer)
+
+      busy.each do |part|
+        run_privileged!(%W[umount #{part.path}])
+      end
+
+      run_privileged!(%w[udevadm settle]) if which('udevadm')
+    end
+
+    def capture_device_signature(device)
+      stat = File.stat(device.path)
+      { rdev: stat.rdev, serial: device.serial, size: device.size }
+    rescue Errno::ENOENT
+      raise Error, "Device #{device.path} disappeared."
+    end
+
+    def ensure_signature_unchanged!(device)
+      latest = capture_device_signature(device)
+      return if latest == @device_signature
+
+      raise Error, 'Device signature changed after selection. Aborting to avoid wrong-disk overwrite.'
+    end
+
+    def normalized_base_url
+      base = options.fetch(:base_url)
+      base = "#{base}/" unless base.end_with?('/')
+      base
+    end
+
+    def fetch_latest_iso
+      sha_uri = URI.join(normalized_base_url, SHA256SUMS_FILE)
+      sha_path = File.join(@tmpdir, SHA256SUMS_FILE)
+      download_to(sha_uri, sha_path, label: SHA256SUMS_FILE)
+
+      entries = parse_sha256sums(File.read(sha_path))
+      iso_entries = entries.select { |e| e[:filename].end_with?('.iso') }
+      raise Error, "No .iso entries found in #{SHA256SUMS_FILE}." if iso_entries.empty?
+
+      dated = iso_entries.select { |e| ISO_DATED_REGEX.match?(e[:filename]) }
+      picked =
+        if dated.any?
+          dated.max_by { |e| version_key(e[:release]) }
+        else
+          iso_entries.find { |e| e[:filename] == ISO_ALIAS } || iso_entries.first
+        end
+
+      raise Error, 'Could not determine latest Arch Linux ISO from checksum file.' unless picked
+
+      picked.merge(url: URI.join(normalized_base_url, picked[:filename]))
+    end
+
+    def parse_sha256sums(body)
+      body.scan(/([0-9a-f]{64})\s+(\S+)/i).map do |sha, file|
+        file = File.basename(file)
+        release = nil
+        if (match = ISO_DATED_REGEX.match(file))
+          release = match[1]
+        end
+        { filename: file, sha256: sha.downcase, release: release }
+      end
+    end
+
+    def version_key(version)
+      return [0, 0, 0] if version.nil?
+
+      parts = version.split('.').map(&:to_i)
+      [parts[0] || 0, parts[1] || 0, parts[2] || 0]
+    end
+
+    def download_iso(metadata)
+      destination = File.join(@tmpdir, metadata[:filename])
+      download_to(metadata[:url], destination, label: metadata[:filename])
+      metadata[:path] = destination
+      destination
+    end
+
+    def verify_checksum(path, expected)
+      print "\nVerifying SHA256 checksum... "
+      actual = Digest::SHA256.file(path).hexdigest
+      raise Error, "Checksum mismatch: expected #{expected}, got #{actual}." unless actual == expected
+
+      puts 'OK'
+    end
+
+    def apply_keymap_boot_param(iso_path)
+      keymap = options[:keymap].to_s.strip
+      return iso_path if keymap.empty?
+
+      param = "vconsole.keymap=#{keymap}"
+      puts "\nCustomizing ISO to add boot parameter: #{param}"
+
+      xorriso = which('xorriso')
+      unless xorriso
+        warn "Warning: xorriso is not installed, cannot embed #{param} into the ISO."
+        warn "         You can still set it manually after boot: loadkeys #{keymap}"
+        return iso_path
+      end
+
+      extract_dir = File.join(@tmpdir, 'iso-extract')
+      FileUtils.mkdir_p(extract_dir)
+
+      run_system!([xorriso, '-osirrox', 'on', '-indev', iso_path, '-extract', '/', extract_dir])
+      run_system!(['chmod', '-R', 'u+w', extract_dir])
+
+      changed = inject_boot_param!(extract_dir, param)
+      unless changed
+        warn "Warning: could not find known boot config locations to inject #{param}."
+        warn "         You can still set it manually after boot: loadkeys #{keymap}"
+        return iso_path
+      end
+
+      custom_iso = File.join(@tmpdir, "custom-#{File.basename(iso_path)}")
+      run_system!([xorriso, '-indev', iso_path, '-outdev', custom_iso, '-map', extract_dir, '/', '-boot_image', 'any', 'replay'], stream: true)
+      custom_iso
+    end
+
+    def inject_boot_param!(extract_dir, param)
+      changed = false
+
+      # systemd-boot entries
+      Dir.glob(File.join(extract_dir, 'loader/entries/*.conf')).each do |entry|
+        body = File.read(entry)
+        next if body.include?(param)
+
+        new_body = body.gsub(/^options\s+(.+)$/) do
+          opts = Regexp.last_match(1)
+          next Regexp.last_match(0) if opts.split.include?(param)
+
+          changed = true
+          "options #{opts} #{param}"
+        end
+
+        File.write(entry, new_body) if new_body != body
+      end
+
+      # syslinux/isolinux configs (append only to APPEND lines that look like ArchISO)
+      Dir.glob(File.join(extract_dir, '{syslinux,isolinux}/**/*.cfg')).each do |cfg|
+        body = File.read(cfg)
+        next if body.include?(param)
+
+        new_body = body.gsub(/^APPEND\s+(.+)$/) do
+          args = Regexp.last_match(1)
+          looks_like_archiso = args.include?('archisobasedir=') || args.include?('archisolabel=') || args.include?('archiso_http_srv=')
+          next Regexp.last_match(0) unless looks_like_archiso
+          next Regexp.last_match(0) if args.split.include?(param)
+
+          changed = true
+          "APPEND #{args} #{param}"
+        end
+
+        File.write(cfg, new_body) if new_body != body
+      end
+
+      # grub configs (best-effort)
+      Dir.glob(File.join(extract_dir, '{boot/grub,EFI/BOOT}/**/*{.cfg,grub.cfg}')).each do |cfg|
+        next unless File.file?(cfg)
+
+        body = File.read(cfg)
+        next if body.include?(param)
+
+        new_body = body.gsub(/^(?<prefix>\s*linux(?:efi)?\s+\S+\s+)(?<args>.+)$/) do
+          args = Regexp.last_match(:args)
+          looks_like_archiso = args.include?('archisobasedir=') || args.include?('archisolabel=') || args.include?('archiso_http_srv=')
+          next Regexp.last_match(0) unless looks_like_archiso
+          next Regexp.last_match(0) if args.split.include?(param)
+
+          changed = true
+          "#{Regexp.last_match(:prefix)}#{args} #{param}"
+        end
+
+        File.write(cfg, new_body) if new_body != body
+      end
+
+      changed
+    rescue StandardError => e
+      warn "Warning: failed to inject boot parameter: #{e.message}"
+      false
+    end
+
+    def print_post_boot_notes(keymap)
+      puts "\nNotes for after boot:"
+      puts "  - Keymap: should be set via vconsole.keymap=#{keymap} (otherwise run: loadkeys #{keymap})" if keymap && !keymap.to_s.empty?
+      puts '  - Wi-Fi (rfkill):'
+      puts '      rfkill list'
+      puts '      sudo rfkill unblock all'
+      puts '      ip link'
+      puts '      sudo ip link set <wifi-iface> up'
+      puts '      iwctl   # if installed on the live ISO'
+    end
+
+    def final_confirmation(device, iso)
+      puts "\nAbout to write #{iso[:filename]} (#{human_size(File.size(iso[:path]))}) to #{device.path}."
+      puts 'This will irreversibly destroy all data on the selected device.'
+      input = read_input("Type \"WRITE #{device.path}\" to continue: ")
+      raise Error, 'Final confirmation failed.' unless input == "WRITE #{device.path}"
+    end
+
+    def human_size(bytes)
+      units = %w[B KiB MiB GiB TiB]
+      idx = 0
+      value = bytes.to_f
+      while value >= 1024 && idx < units.length - 1
+        value /= 1024
+        idx += 1
+      end
+      format('%.2f %s', value, units[idx])
+    end
+
+    def flash_image(image_path, device)
+      ensure_signature_unchanged!(device)
+      puts "\nWriting image to #{device.path}..."
+      dd_cmd = ['dd', "if=#{image_path}", "of=#{device.path}"] + DD_ARGS
+      run_privileged!(dd_cmd, stream: true)
+      run_privileged!(%w[sync], stream: true)
+      if (partprobe = which('partprobe'))
+        run_privileged!([partprobe, device.path])
+      end
+    end
+
+    def verify_written_image(image_path, device)
+      cmp = which('cmp')
+      raise Error, 'cmp (from coreutils) is required for verification.' unless cmp
+
+      puts "\nVerifying written data matches source image..."
+      bytes = File.size(image_path)
+      cmd = [cmp, "--bytes=#{bytes}", image_path, device.path]
+      run_privileged!(cmd, stream: true)
+    rescue Error => e
+      raise Error, "Post-write verification failed: #{e.message}"
+    end
+
+    def block_devices(force: false)
+      return @block_devices_cache if !force && @block_devices_cache
+
+      columns = %w[NAME PATH RM HOTPLUG TRAN SIZE MODEL SERIAL VENDOR TYPE FSTYPE LABEL MOUNTPOINT MOUNTPOINTS]
+      json = capture_json(['lsblk', '-J', '-o', columns.join(',')])
+      data = JSON.parse(json)
+      @block_devices_cache = Array(data['blockdevices']).map { |entry| BlockDevice.new(entry) }.select(&:disk?)
+      @block_devices_cache_at = Time.now
+      @block_devices_cache
+    end
+
+    def capture_json(cmd)
+      stdout, status = Open3.capture2(*cmd)
+      raise Error, "Command failed (exit #{status.exitstatus}): #{cmd.join(' ')}" unless status.success?
+
+      stdout
+    end
+
+    def find_device(devices, path)
+      devices.find { |device| device.path == path }
+    end
+
+    def reload_device(device)
+      refreshed = find_device(block_devices(force: true), device.path)
+      raise Error, "Device #{device.path} disappeared." unless refreshed
+
+      refreshed
+    end
+
+    def prompt_for_device(devices)
+      devices.each_with_index do |device, index|
+        puts format('%2d) %-15s %-10s %s', index + 1, device.path, device.size, device.model)
+      end
+      choice = read_input("Select device [1-#{devices.size}]: ")
+      idx = Integer(choice)
+      raise Error, 'Selection out of range.' unless idx.between?(1, devices.size)
+
+      devices[idx - 1]
+    rescue ArgumentError
+      raise Error, 'Invalid selection.'
+    end
+
+    def normalize_device_argument(arg)
+      path = arg.start_with?('/dev/') ? arg : "/dev/#{arg}"
+      raise Error, "#{path} is not a block device." unless File.blockdev?(path)
+
+      path
+    end
+
+    def validate_device_path!(path)
+      raise Error, 'Invalid device path.' unless path.is_a?(String) && path.start_with?('/dev/')
+      raise Error, 'Invalid device path.' unless path.match?(/\A\/dev\/[A-Za-z0-9_\/.\-]+\z/)
+      raise Error, "Device #{path} is not a block device." unless File.blockdev?(path)
+
+      path
+    end
+
+    def read_input(prompt)
+      print prompt
+      $stdout.flush
+      input = $stdin.gets
+      raise Error, 'No input received.' if input.nil?
+
+      input.strip
+    end
+
+    def download_to(url, destination, label: File.basename(destination))
+      puts "\nDownloading #{label}..."
+      temp_path = "#{destination}.part"
+      FileUtils.mkdir_p(File.dirname(destination))
+      existing_bytes = File.exist?(temp_path) ? File.size(temp_path) : 0
+
+      if (curl = which('curl'))
+        cmd = [
+          curl, '-fL',
+          '--connect-timeout', CONNECT_TIMEOUT.to_s,
+          '--max-time', DOWNLOAD_TIMEOUT.to_s,
+          '-C', '-',
+          '-o', temp_path,
+          url.to_s
+        ]
+        run_system!(cmd, stream: true)
+      else
+        http_download_to(url, temp_path, resume_from: existing_bytes)
+      end
+
+      FileUtils.rm_f(destination)
+      FileUtils.mv(temp_path, destination)
+    end
+
+    def http_download_to(url, destination, resume_from: 0, redirects_left: MAX_REDIRECTS)
+      uri = url.is_a?(URI) ? url : URI(url.to_s)
+
+      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+        http.open_timeout = CONNECT_TIMEOUT
+        http.read_timeout = DOWNLOAD_TIMEOUT
+        if uri.scheme == 'https'
+          http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+          store = OpenSSL::X509::Store.new
+          store.set_default_paths
+          http.cert_store = store
+        end
+
+        request = Net::HTTP::Get.new(uri)
+        request['Range'] = "bytes=#{resume_from}-" if resume_from.positive?
+        http.request(request) do |response|
+          case response
+          when Net::HTTPRedirection
+            location = response['location']
+            raise Error, "Download redirect missing Location header (HTTP #{response.code})." if location.nil? || location.empty?
+            raise Error, "Too many redirects while downloading #{uri}." if redirects_left <= 0
+
+            next_uri = URI.join(uri.to_s, location)
+            return http_download_to(next_uri, destination, resume_from: resume_from, redirects_left: redirects_left - 1)
+          when Net::HTTPPartialContent
+            mode = resume_from.positive? ? 'ab' : 'wb'
+          when Net::HTTPSuccess
+            mode = 'wb'
+          else
+            if response.code.to_i == HTTP_RANGE_NOT_SATISFIABLE
+              FileUtils.rm_f(destination)
+              return http_download_to(uri, destination, resume_from: 0, redirects_left: redirects_left)
+            end
+
+            raise Error, "Download failed: HTTP #{response.code} #{response.message}"
+          end
+
+          File.open(destination, mode) do |file|
+            response.read_body { |chunk| file.write(chunk) }
+          end
+        end
+      end
+    end
+
+    def safe_kill(signal, pid)
+      return if pid.nil?
+
+      Process.kill(signal, pid)
+    rescue Errno::ESRCH
+      nil
+    end
+
+    def which(name)
+      ENV.fetch('PATH', '').split(File::PATH_SEPARATOR).each do |dir|
+        candidate = File.join(dir, name)
+        return candidate if File.executable?(candidate) && !File.directory?(candidate)
+      end
+      nil
+    end
+
+    def run_privileged!(cmd, stream: false)
+      run_system!(wrap_if_needed(cmd), stream: stream)
+    end
+
+    def wrap_if_needed(cmd)
+      return cmd unless @use_sudo
+
+      [sudo_binary, '--'] + cmd
+    end
+
+    def sudo_binary
+      return @sudo_binary if @sudo_binary
+      validate_sudo_binary!
+      @sudo_binary ||= resolve_sudo_binary
+    end
+
+    def resolve_sudo_binary
+      SUDO_CANDIDATES.each do |candidate|
+        return candidate if File.exist?(candidate) && File.executable?(candidate)
+      end
+      which('sudo')
+    end
+
+    def validate_sudo_binary!
+      sudo_path = resolve_sudo_binary
+      raise Error, 'sudo is required to write to block devices.' if sudo_path.nil?
+
+      real = File.realpath(sudo_path) rescue sudo_path
+      stat = File.stat(real)
+      raise Error, "Unexpected sudo binary location: #{sudo_path}" unless SUDO_CANDIDATES.include?(real)
+      raise Error, "sudo binary is not owned by root: #{real}" unless stat.uid.zero?
+      raise Error, "sudo binary is group/other-writable: #{real}" if (stat.mode & 0o022) != 0
+
+      true
+    end
+
+    def run_system!(cmd, stream: false)
+      if stream
+        @child_pid = spawn(*cmd)
+        _, status = Process.wait2(@child_pid)
+        @child_pid = nil
+        raise Error, "Command failed (exit #{status.exitstatus}): #{cmd.join(' ')}" unless status.success?
+      else
+        stdout, status = Open3.capture2e(*cmd)
+        raise Error, "Command failed (exit #{status.exitstatus}): #{cmd.join(' ')}\n#{stdout}" unless status.success?
+      end
+    ensure
+      @child_pid = nil if stream
+    end
+
+    def cleanup_tmpdir
+      FileUtils.remove_entry(@tmpdir) if @tmpdir && Dir.exist?(@tmpdir)
+    rescue StandardError
+      # ignore cleanup failures
+    end
+
+  end
+end
+
+options = {
+  base_url: LiveUsb::ArchCreator::DEFAULT_BASE_URL
+}
+
+parser = OptionParser.new do |opts|
+  opts.banner = 'Usage: create-archlinux-live-usb [options]'
+
+  opts.on('-d', '--device PATH', 'Explicit block device path (e.g., /dev/sdx)') do |path|
+    options[:device] = path
+  end
+
+  opts.on('--base-url URL', "Base URL for Arch ISO 'latest/' directory (default: #{LiveUsb::ArchCreator::DEFAULT_BASE_URL})") do |url|
+    options[:base_url] = url
+  end
+
+  opts.on('--force', 'Override system disk detection.') do
+    options[:force] = true
+  end
+
+  opts.on('--skip-verify', "Skip post-write verification (still verifies ISO's SHA256).") do
+    options[:skip_verify] = true
+  end
+
+  opts.on('--keymap KEYMAP', 'Set console keymap via boot param vconsole.keymap (default: fr). Use --keymap "" to disable.') do |keymap|
+    options[:keymap] = keymap
+  end
+
+  opts.on('-h', '--help', 'Show this help message') do
+    puts opts
+    puts "\nExamples:"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sdb"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sdb --base-url https://mirror.rackspace.com/archlinux/iso/latest/"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sdb --skip-verify"
+    puts "  #{File.basename($PROGRAM_NAME)} -d /dev/sdb --keymap fr"
+    puts "\nNotes:"
+    puts '  - Requires ~2 GiB free space in /tmp for downloads.'
+    puts '  - If any USB partitions are mounted, it can unmount them automatically.'
+    puts "  - Downloads can resume from partial '.part' files."
+    puts '  - Embedding vconsole.keymap into the ISO requires xorriso (libisoburn).'
+    exit 0
+  end
+end
+
+parser.parse!(ARGV)
+
+LiveUsb::ArchCreator.new(options).run
+
+# vi: ft=ruby
