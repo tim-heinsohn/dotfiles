@@ -44,6 +44,21 @@ prompt() {
   printf '%s' "$answer"
 }
 
+prompt_secret() {
+  local message="$1"
+  local answer=""
+
+  have_tty || die "Need a TTY for secret input: $message"
+
+  printf '%s: ' "$message" >"$TTY"
+  stty -echo <"$TTY" 2>/dev/null || true
+  IFS= read -r answer <"$TTY" || true
+  stty echo <"$TTY" 2>/dev/null || true
+  printf '\n' >"$TTY"
+
+  printf '%s' "$answer"
+}
+
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
@@ -56,6 +71,38 @@ partition_path() {
   else
     printf '%s%s' "$disk" "$number"
   fi
+}
+
+wait_for_block_device() {
+  local path="$1"
+  local attempts="${2:-30}"
+  local delay_s="${3:-0.2}"
+
+  for ((i = 0; i < attempts; i++)); do
+    if [ -b "$path" ]; then
+      return 0
+    fi
+    udevadm settle 2>/dev/null || true
+    sleep "$delay_s"
+  done
+
+  return 1
+}
+
+ensure_mapper_ready() {
+  local name="$1"
+  local path="/dev/mapper/${name}"
+
+  if wait_for_block_device "$path"; then
+    return 0
+  fi
+
+  say ""
+  say "Device-mapper node did not appear: $path"
+  say "Diagnostics:"
+  ls -la /dev/mapper >&2 || true
+  cryptsetup status "$name" >&2 || true
+  die "Unable to continue without $path. Try rebooting the live system and re-running stage1."
 }
 
 usage() {
@@ -108,6 +155,9 @@ need_cmd mount
 need_cmd umount
 need_cmd pacstrap
 need_cmd genfstab
+need_cmd awk
+need_cmd sleep
+need_cmd stty
 
 if [ ! -d /run/archiso ]; then
   die "Refusing to run: /run/archiso not found. This script is intended for the ArchISO live environment."
@@ -142,8 +192,16 @@ say ""
 say "Wiping and partitioning..."
 swapoff -a 2>/dev/null || true
 umount -R /mnt 2>/dev/null || true
-cryptsetup close swap 2>/dev/null || true
-cryptsetup close root 2>/dev/null || true
+
+# Close any dm-crypt mappings that originate from the target disk (including
+# leftovers from previous manual attempts like /dev/mapper/cryptroot).
+mapfile -t crypt_mappers < <(lsblk -nr -o NAME,TYPE,PKNAME "$DISK" | awk '$2=="crypt" {print $1}' || true)
+if [ "${#crypt_mappers[@]}" -gt 0 ]; then
+  say "Closing dm-crypt mappings on $DISK: ${crypt_mappers[*]}"
+  for name in "${crypt_mappers[@]}"; do
+    cryptsetup close "$name" 2>/dev/null || true
+  done
+fi
 
 wipefs -af "$DISK"
 sgdisk --zap-all "$DISK"
@@ -152,11 +210,27 @@ sgdisk -n 1:0:+"${EFI_SIZE_MIB}"MiB -t 1:ef00 -c 1:EFI "$DISK"
 sgdisk -n 2:0:+"${SWAP_SIZE_GIB}"GiB -t 2:8200 -c 2:SWAP "$DISK"
 sgdisk -n 3:0:0 -t 3:8300 -c 3:ROOT "$DISK"
 
+if command -v blockdev >/dev/null 2>&1; then
+  blockdev --rereadpt "$DISK" 2>/dev/null || true
+fi
 partprobe "$DISK"
 udevadm settle
 
+if [ ! -b "$EFI_PART" ] || [ ! -b "$SWAP_PART" ] || [ ! -b "$ROOT_PART" ]; then
+  say "Warning: new partition nodes are not visible yet:"
+  lsblk "$DISK" >&2 || true
+  die "Kernel did not pick up the new partition table. Reboot the live system and run stage1 again."
+fi
+
 say "Created partitions:"
 lsblk "$DISK" >&2
+
+say ""
+say "Enter LUKS passphrase to use for swap+root (typed on this console, not from stdin)."
+luks_pass_1="$(prompt_secret "LUKS passphrase")"
+luks_pass_2="$(prompt_secret "Repeat LUKS passphrase")"
+[ -n "$luks_pass_1" ] || die "Empty passphrase not allowed."
+[ "$luks_pass_1" = "$luks_pass_2" ] || die "Passphrases do not match."
 
 say ""
 say "Formatting EFI partition..."
@@ -164,17 +238,23 @@ mkfs.fat -F32 -n EFI "$EFI_PART"
 
 say ""
 say "Creating LUKS swap on $SWAP_PART"
-cryptsetup luksFormat --type luks2 "$SWAP_PART"
-cryptsetup open "$SWAP_PART" swap
+wipefs -af "$SWAP_PART" || true
+cryptsetup luksFormat --type luks2 --batch-mode --key-file <(printf '%s' "$luks_pass_1") "$SWAP_PART"
+cryptsetup open --key-file <(printf '%s' "$luks_pass_1") "$SWAP_PART" swap
+ensure_mapper_ready swap
 
 say ""
 say "Creating LUKS root on $ROOT_PART"
-cryptsetup luksFormat --type luks2 "$ROOT_PART"
-cryptsetup open "$ROOT_PART" root
+wipefs -af "$ROOT_PART" || true
+cryptsetup luksFormat --type luks2 --batch-mode --key-file <(printf '%s' "$luks_pass_1") "$ROOT_PART"
+cryptsetup open --key-file <(printf '%s' "$luks_pass_1") "$ROOT_PART" root
+ensure_mapper_ready root
 
 say ""
 say "Formatting root filesystem..."
 mkfs.ext4 -F -L ROOT /dev/mapper/root
+
+unset luks_pass_1 luks_pass_2 || true
 
 say ""
 say "Setting up swap..."
@@ -189,7 +269,7 @@ mount "$EFI_PART" /mnt/boot
 
 say ""
 say "Installing base system (pacstrap)..."
-pacstrap -K /mnt base linux linux-firmware grub efibootmgr cryptsetup
+pacstrap -K /mnt base linux linux-firmware grub efibootmgr cryptsetup networkmanager sudo
 
 say ""
 say "Generating fstab..."

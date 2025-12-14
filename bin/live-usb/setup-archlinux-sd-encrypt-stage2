@@ -37,6 +37,21 @@ prompt() {
   printf '%s' "$answer"
 }
 
+prompt_secret() {
+  local message="$1"
+  local answer=""
+
+  have_tty || die "Need a TTY for secret input: $message"
+
+  printf '%s: ' "$message" >"$TTY"
+  stty -echo <"$TTY" 2>/dev/null || true
+  IFS= read -r answer <"$TTY" || true
+  stty echo <"$TTY" 2>/dev/null || true
+  printf '\n' >"$TTY"
+
+  printf '%s' "$answer"
+}
+
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
@@ -80,9 +95,17 @@ need_cmd umount
 need_cmd cp
 need_cmd mkdir
 need_cmd date
+need_cmd chmod
+need_cmd stty
 need_cmd sed
 need_cmd awk
 need_cmd cryptsetup
+need_cmd pacman
+need_cmd useradd
+need_cmd passwd
+need_cmd chpasswd
+need_cmd id
+need_cmd systemctl
 
 if [ ! -e /proc/1/root/. ]; then
   die "Refusing to run: cannot validate chroot context. Run via: arch-chroot /mnt bash -s --"
@@ -132,6 +155,47 @@ sanitize_grub_default_file() {
   fi
 
   rm -f "$tmp"
+}
+
+pacman_install() {
+  local -a pkgs
+  pkgs=("$@")
+  [ "${#pkgs[@]}" -gt 0 ] || return 0
+
+  # Fresh installs may not have sync DBs yet.
+  if [ ! -d /var/lib/pacman/sync ] || ! ls /var/lib/pacman/sync/*.db >/dev/null 2>&1; then
+    say "Pacman sync DB missing; running: pacman -Sy"
+    pacman -Sy --noconfirm || return 1
+  fi
+
+  pacman -S --needed --noconfirm "${pkgs[@]}"
+}
+
+enable_unit() {
+  local unit="$1"
+  systemctl enable "$unit" >/dev/null 2>&1 && return 0
+  SYSTEMD_OFFLINE=1 systemctl --root=/ enable "$unit"
+}
+
+setup_wheel_sudoers() {
+  local path=/etc/sudoers.d/10-wheel
+  mkdir -p /etc/sudoers.d
+  printf '%%wheel ALL=(ALL:ALL) ALL\n' >"$path"
+  chmod 0440 "$path"
+
+  if command -v visudo >/dev/null 2>&1; then
+    visudo -cf /etc/sudoers
+    visudo -cf "$path"
+  fi
+}
+
+prompt_username() {
+  local username=""
+  username="$(prompt "Non-root username" "t")"
+  if ! [[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    die "Invalid username: $username"
+  fi
+  printf '%s' "$username"
 }
 
 detect_efi_directory() {
@@ -391,13 +455,36 @@ sanitize_grub_default_file "$GRUB_DEFAULT_FILE"
 NEEDED_PARAMS=(
   "rd.luks.name=${ROOT_LUKS_UUID}=root"
   "rd.luks.name=${SWAP_LUKS_UUID}=swap"
+  "root=/dev/mapper/root"
   "resume=/dev/mapper/swap"
 )
+
+filter_grub_cmdline_linux() {
+  local cmdline="$1"
+  local -a tokens filtered
+  read -r -a tokens <<<"$cmdline"
+  for token in "${tokens[@]}"; do
+    case "$token" in
+      cryptdevice=*|cryptkey=*|cryptroot=*|root=*|resume=*|rd.luks.name=*|rd.luks.uuid=*|rd.luks.key=*|rd.luks.options=*)
+        ;;
+      *)
+        filtered+=("$token")
+        ;;
+    esac
+  done
+  printf '%s' "${filtered[*]}"
+}
 
 backup_file "$GRUB_DEFAULT_FILE"
 current_cmdline="$(awk -F= '/^GRUB_CMDLINE_LINUX=/{print $2}' "$GRUB_DEFAULT_FILE" | sed -e 's/^"//' -e 's/"$//' || true)"
 
-new_cmdline="$current_cmdline"
+filtered_cmdline="$(filter_grub_cmdline_linux "$current_cmdline")"
+new_cmdline="$filtered_cmdline"
+
+if [ "$current_cmdline" != "$filtered_cmdline" ]; then
+  say "Note: removed conflicting kernel parameters from GRUB_CMDLINE_LINUX (cryptdevice/root/rd.luks/resume)."
+fi
+
 for p in "${NEEDED_PARAMS[@]}"; do
   if ! grep -Fq -- "$p" <<<"$new_cmdline"; then
     new_cmdline="${new_cmdline} ${p}"
@@ -479,12 +566,55 @@ say "UEFI boot entries (check that 'GRUB' is first and points to this disk):"
 efibootmgr -v >&2 || true
 
 say ""
+say "Ensuring NetworkManager is installed and enabled..."
+if pacman_install networkmanager; then
+  say "Installed (or already present): networkmanager"
+else
+  say "Warning: failed to install networkmanager (check network/mirrors)."
+fi
+
+if [ -f /usr/lib/systemd/system/NetworkManager.service ]; then
+  if enable_unit NetworkManager.service; then
+    say "Enabled: NetworkManager.service"
+  else
+    say "Warning: failed to enable NetworkManager.service."
+  fi
+else
+  say "Warning: NetworkManager.service not found."
+fi
+
+say ""
+say "Ensuring sudo is installed and wheel has sudo rights..."
+if pacman_install sudo; then
+  say "Installed (or already present): sudo"
+else
+  say "Warning: failed to install sudo."
+fi
+setup_wheel_sudoers || true
+
+say ""
+say "Creating a non-root user..."
+username="$(prompt_username)"
+if id "$username" >/dev/null 2>&1; then
+  say "User already exists: $username"
+else
+  useradd -m -G wheel -s /bin/bash "$username"
+  say "Created user: $username (groups: wheel)"
+fi
+say "Set password for user: $username"
+user_pass_1="$(prompt_secret "Password for ${username}")"
+user_pass_2="$(prompt_secret "Repeat password for ${username}")"
+[ -n "$user_pass_1" ] || die "Empty password not allowed."
+[ "$user_pass_1" = "$user_pass_2" ] || die "Passwords do not match."
+printf '%s:%s\n' "$username" "$user_pass_1" | chpasswd
+unset user_pass_1 user_pass_2 || true
+
+say ""
 say "Stage2 complete."
 say "Backups: files are copied to *.bak (and *.bak.<timestamp> on reruns)."
 say ""
 say "Next steps (typical):"
-say "  passwd"
-say "  systemctl enable NetworkManager"
+say "  passwd   # set root password (recommended)"
 say "  exit"
 say "  umount -R /mnt"
 say "  reboot"
