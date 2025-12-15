@@ -1,13 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Serve setup scripts
-The system SHALL provide a local HTTP server command that prints Wi‑Fi enabling instructions and one-liners to run both setup stages from an ArchISO live environment.
+The system SHALL provide a local HTTP server command that prints Wi‑Fi enabling instructions and one-liners to run both setup stages from an ArchISO live environment, and a one-liner to run dotfiles provisioning after first boot.
 
 #### Scenario: User runs serve command
 - **WHEN** the user runs the serve command on their workstation
 - **THEN** it prints the local URL(s) to the stage1 and stage2 scripts
 - **AND** it prints a one-liner to run stage1 via `curl | bash -s -- <disk>`
 - **AND** it prints a one-liner to run stage2 via `arch-chroot /mnt ...`
+- **AND** it prints a one-liner to run dotfiles provisioning via `curl | bash`
 
 ### Requirement: Stage 1 partition and install guidance
 The system SHALL provide a stage1 script that takes a target disk (e.g. `/dev/sda`) and guides the user through a UEFI GPT layout with EFI + encrypted swap + encrypted root, then installs a minimal Arch base and generates fstab under `/mnt`.

@@ -21,3 +21,9 @@ curl http://<HOST>:8000/arch1 | bash -s -- /dev/sdX
 ```bash
 curl http://<HOST>:8000/arch2 | arch-chroot /mnt bash -s --
 ```
+
+4) After first boot into the installed system: provision dotfiles
+
+```bash
+curl http://<HOST>:8000/setup-system | bash -s --
+```
