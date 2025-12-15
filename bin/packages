@@ -11,6 +11,8 @@ aur/google-chrome
     A browser that combines a minimal design with sophisticated technology.
 aur/goose-desktop
     An open-source, extensible AI agent that goes beyond code suggestions (with UI)
+aur/hey-bin
+    HTTP load generator, ApacheBench (ab) replacement.
 aur/html2md
     A command-line tool to convert HTML to Markdown.
 aur/neovim-remote
@@ -327,6 +329,8 @@ extra/tcpdump
     Powerful command-line packet analyzer.
 extra/tidy
     A tool to tidy down your HTML code to a clean style.
+extra/tinyxxd
+    Standalone version of the hex dump utility that comes with ViM.
 extra/typst
     A markup-based typesetting system for the sciences.
 extra/tig
