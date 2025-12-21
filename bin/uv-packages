@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# uv-packages - Install and update uv tools
+# Usage: ./uv-packages [install|update|auto]
+
+set -euo pipefail
+
+# List of uv tools to manage
+declare -a UV_TOOLS=(
+    "llm"
+)
+
+# List of llm plugins to install after llm
+declare -a LLM_PLUGINS=(
+    "llm-perplexity"
+)
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+check_uv() {
+    if ! command -v uv >/dev/null 2>&1; then
+        log "ERROR: uv is not installed or not in PATH"
+        log "Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        exit 1
+    fi
+}
+
+install_tools() {
+    log "Installing uv tools..."
+
+    for tool in "${UV_TOOLS[@]}"; do
+        log "Installing $tool..."
+        if uv tool install "$tool"; then
+            log "✓ Successfully installed $tool"
+        else
+            log "✗ Failed to install $tool"
+        fi
+    done
+
+    install_llm_plugins
+}
+
+update_tools() {
+    log "Updating uv tools..."
+
+    for tool in "${UV_TOOLS[@]}"; do
+        log "Updating $tool..."
+        if uv tool upgrade "$tool" 2>/dev/null; then
+            log "✓ Successfully updated $tool"
+        else
+            log "⚠ $tool not installed, installing..."
+            if uv tool install "$tool"; then
+                log "✓ Successfully installed $tool"
+            else
+                log "✗ Failed to install $tool"
+            fi
+        fi
+    done
+
+    install_llm_plugins
+}
+
+install_llm_plugins() {
+    if ! command -v llm >/dev/null 2>&1; then
+        log "⚠ llm not found, skipping plugin installation"
+        return 0
+    fi
+
+    log "Installing llm plugins..."
+
+    for plugin in "${LLM_PLUGINS[@]}"; do
+        log "Installing $plugin..."
+        if llm install "$plugin"; then
+            log "✓ Successfully installed $plugin"
+        else
+            log "✗ Failed to install $plugin"
+        fi
+    done
+}
+
+install_or_update_tools() {
+    log "Installing/updating uv tools..."
+
+    for tool in "${UV_TOOLS[@]}"; do
+        if uv tool list 2>/dev/null | grep -q "^$tool "; then
+            log "Updating $tool..."
+            if uv tool upgrade "$tool"; then
+                log "✓ Successfully updated $tool"
+            else
+                log "✗ Failed to update $tool"
+            fi
+        else
+            log "Installing $tool..."
+            if uv tool install "$tool"; then
+                log "✓ Successfully installed $tool"
+            else
+                log "✗ Failed to install $tool"
+            fi
+        fi
+    done
+
+    install_llm_plugins
+}
+
+show_usage() {
+    echo "Usage: $0 [install|update|auto]"
+    echo ""
+    echo "Commands:"
+    echo "  install  - Install all tools (skip if already installed)"
+    echo "  update   - Update existing tools (install if missing)"
+    echo "  auto     - Install missing tools, update existing ones (default)"
+    echo ""
+    echo "Managed uv tools:"
+    for tool in "${UV_TOOLS[@]}"; do
+        echo "  - $tool"
+    done
+    echo ""
+    echo "Managed llm plugins:"
+    for plugin in "${LLM_PLUGINS[@]}"; do
+        echo "  - $plugin"
+    done
+}
+
+main() {
+    local command="${1:-auto}"
+
+    case "$command" in
+        install)
+            check_uv
+            install_tools
+            ;;
+        update)
+            check_uv
+            update_tools
+            ;;
+        auto)
+            check_uv
+            install_or_update_tools
+            ;;
+        -h|--help|help)
+            show_usage
+            exit 0
+            ;;
+        *)
+            log "ERROR: Unknown command '$command'"
+            show_usage
+            exit 1
+            ;;
+    esac
+
+    log "uv packages management completed"
+}
+
+main "$@"
