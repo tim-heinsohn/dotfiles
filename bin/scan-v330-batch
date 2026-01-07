@@ -14,6 +14,7 @@ FORMAT="png"
 OUTPUT_DIR="$HOME/Scans/batch_$(date +%Y%m%d_%H%M%S)"
 PREFIX="scan"
 START_COUNT=1
+CREATE_PDF=true
 
 # Colors
 GREEN='\033[0;32m'
@@ -35,6 +36,7 @@ OPTIONS:
     -d, --directory DIR     Output directory (default: ~/Scans/batch_TIMESTAMP)
     -p, --prefix PREFIX     Filename prefix (default: scan)
     -s, --start NUM         Starting number (default: 1)
+    --no-pdf                Skip combined PDF generation
     -h, --help              Show this help
 
 CONTROLS:
@@ -64,6 +66,44 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+create_combined_pdf() {
+    if [[ "$CREATE_PDF" != "true" ]]; then
+        return
+    fi
+
+    local pdf_file="$OUTPUT_DIR/${PREFIX}_combined.pdf"
+    local image_files=()
+
+    # Collect all scanned images in order
+    while IFS= read -r -d '' file; do
+        image_files+=("$file")
+    done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0 | sort -z)
+
+    if [[ ${#image_files[@]} -eq 0 ]]; then
+        log_warn "No images found to combine into PDF"
+        return
+    fi
+
+    log_info "Creating combined PDF with ${#image_files[@]} pages..."
+
+    if command -v img2pdf &> /dev/null; then
+        if img2pdf --output "$pdf_file" "${image_files[@]}"; then
+            log_info "✓ Created: $pdf_file"
+        else
+            log_error "Failed to create PDF with img2pdf"
+        fi
+    elif command -v convert &> /dev/null; then
+        if convert "${image_files[@]}" "$pdf_file"; then
+            log_info "✓ Created: $pdf_file"
+        else
+            log_error "Failed to create PDF with ImageMagick"
+        fi
+    else
+        log_error "Neither img2pdf nor ImageMagick available for PDF creation"
+        log_info "Install with: yay -S img2pdf"
+    fi
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -90,6 +130,10 @@ while [[ $# -gt 0 ]]; do
         -s|--start)
             START_COUNT="$2"
             shift 2
+            ;;
+        --no-pdf)
+            CREATE_PDF=false
+            shift
             ;;
         -h|--help)
             usage
@@ -190,6 +234,7 @@ while true; do
             ;;
         q|Q)
             # Quit
+            create_combined_pdf
             log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
             echo
             echo "Summary:"
@@ -205,6 +250,7 @@ while true; do
     esac
 done
 
+create_combined_pdf
 log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
 echo
 echo "Summary:"

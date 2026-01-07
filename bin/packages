@@ -177,6 +177,8 @@ extra/i3-wm
     A tiling window manager, completely written from scratch.
 extra/imagemagick
     An image viewing/manipulation program.
+extra/img2pdf
+    Losslessly convert raster images to PDF.
 extra/intel-ucode
     Microcode update files for Intel CPUs.
 extra/jq

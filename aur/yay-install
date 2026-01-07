@@ -7,9 +7,14 @@ set -euo pipefail
 
 # Check if yay is already installed and functional
 if command -v yay &> /dev/null; then
-    echo "yay is already installed at $(which yay)"
-    echo "Version: $(yay --version | head -1)"
-    exit 0
+    if yay --version &> /dev/null; then
+        echo "yay is already installed at $(which yay)"
+        echo "Version: $(yay --version | head -1)"
+        exit 0
+    else
+        echo "yay is installed but broken (likely needs rebuild after pacman upgrade)"
+        echo "Rebuilding yay..."
+    fi
 fi
 
 echo "Installing yay AUR helper..."
@@ -21,7 +26,7 @@ cd "$DOWNLOADS_DIR"
 
 # Install dependencies
 echo "Installing dependencies..."
-sudo pacman -Suy --needed --noconfirm git base-devel
+sudo pacman -S --needed --noconfirm git base-devel
 
 # Handle existing yay directory
 YAY_DIR="$DOWNLOADS_DIR/yay"
@@ -36,7 +41,7 @@ git clone https://aur.archlinux.org/yay.git
 
 echo "Building and installing yay..."
 cd yay
-makepkg -si --noconfirm
+makepkg -si --noconfirm --force
 
 # Verify installation
 if command -v yay &> /dev/null; then
