@@ -21,6 +21,7 @@ declare -a NPM_PACKAGES=(
     "codebuff"
     "dockerfile-language-server-nodejs"
     "happy-coder"
+    "markmap-cli"
     "vscode-langservers-extracted"
 )
 
