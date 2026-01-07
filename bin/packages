@@ -271,6 +271,8 @@ extra/redis
     An in-memory data structure store, used as a database, cache and message broker.
 extra/repgrep
     A recursive search and replace tool.
+extra/rust
+    Systems programming language focused on safety, speed and concurrency.
 extra/ripgrep
     A search tool that combines the usability of ag with the raw speed of grep.
 extra/rofi
