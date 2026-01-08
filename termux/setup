@@ -13,14 +13,25 @@
 # Exit on any error
 set -e
 
+# Ensure package operations never prompt for user input (important when this
+# script is piped into bash and stdin is not a TTY).
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+
+APT_GET_ARGS=(-y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold")
+
+apt_noninteractive() {
+    apt-get "${APT_GET_ARGS[@]}" "$@"
+}
+
 echo "Setting up Termux for SSH access..."
 
-# Update package list and upgrade existing packages
-pkg update -y
-pkg upgrade -y
+# Update package list and upgrade existing packages without interactive prompts
+apt-get update
+apt_noninteractive upgrade
 
 # Install required packages
-pkg install -y openssh net-tools rsync ranger
+apt_noninteractive install openssh net-tools rsync ranger
 
 # Generate SSH host keys if they don't exist
 if [ ! -f "$HOME/.ssh/id_rsa" ]; then

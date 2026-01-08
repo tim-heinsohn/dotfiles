@@ -1,0 +1,96 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'socket'
+require 'webrick'
+
+def read_local_ip
+  Socket.ip_address_list.detect do |addr|
+    addr.ipv4? && !addr.ipv4_loopback?
+  end&.ip_address || '127.0.0.1'
+end
+
+port = 8000
+local_ip = read_local_ip
+document_root = File.expand_path('../..', __dir__)
+
+stage1_file = File.expand_path('setup-archlinux-sd-encrypt-stage1', __dir__)
+stage2_file = File.expand_path('setup-archlinux-sd-encrypt-stage2', __dir__)
+setup_system_file = File.expand_path(File.join(document_root, 'bin/setup-system'))
+
+arch1_path = '/arch1'
+arch2_path = '/arch2'
+setup_system_path = '/setup-system'
+
+server = WEBrick::HTTPServer.new(
+  Port: port,
+  DocumentRoot: document_root
+)
+
+server.mount_proc(arch1_path) do |req, res|
+  unless req.request_method == 'GET'
+    res.status = 405
+    res.body = "Method not allowed\n"
+    next
+  end
+
+  res['Content-Type'] = 'text/plain; charset=utf-8'
+  res.body = File.read(stage1_file)
+end
+
+server.mount_proc(arch2_path) do |req, res|
+  unless req.request_method == 'GET'
+    res.status = 405
+    res.body = "Method not allowed\n"
+    next
+  end
+
+  res['Content-Type'] = 'text/plain; charset=utf-8'
+  res.body = File.read(stage2_file)
+end
+
+server.mount_proc(setup_system_path) do |req, res|
+  unless req.request_method == 'GET'
+    res.status = 405
+    res.body = "Method not allowed\n"
+    next
+  end
+
+  unless File.exist?(setup_system_file)
+    res.status = 404
+    res['Content-Type'] = 'text/plain; charset=utf-8'
+    res.body = "Not found: #{setup_system_file}\n"
+    next
+  end
+
+  res['Content-Type'] = 'text/plain; charset=utf-8'
+  res.body = File.read(setup_system_file)
+end
+
+puts "\nArchISO Wi-Fi quickstart (manual):"
+puts "  ip link"
+puts "  rfkill list"
+puts "  sudo rfkill unblock all"
+puts "  iwctl"
+puts "    device list"
+puts "    station <wifi-iface> scan"
+puts "    station <wifi-iface> get-networks"
+puts "    station <wifi-iface> connect <ssid>"
+puts "\nServing Arch install setup scripts at:"
+puts "  http://#{local_ip}:#{port}#{arch1_path}  (stage1)"
+puts "  http://#{local_ip}:#{port}#{arch2_path}  (stage2)"
+puts "  http://#{local_ip}:#{port}#{setup_system_path}  (dotfiles provisioning)"
+puts "\nOn the ArchISO live system, run:"
+puts "  curl http://#{local_ip}:#{port}#{arch1_path} | bash -s -- /dev/sdX"
+puts "\nAfter stage1 finished, run stage2 via:"
+puts "  curl http://#{local_ip}:#{port}#{arch2_path} | arch-chroot /mnt bash -s --"
+puts "\nOr, if you are already inside the chroot:"
+puts "  curl http://#{local_ip}:#{port}#{arch2_path} | bash -s --"
+puts "\nAfter booting into the installed system, run:"
+puts "  curl http://#{local_ip}:#{port}#{setup_system_path} | bash -s --"
+puts "\nPress Ctrl+C to stop the server\n"
+
+trap('INT') { server.shutdown }
+server.start
+
+# vi: ft=ruby

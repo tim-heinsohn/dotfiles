@@ -1,0 +1,622 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# setup-archlinux-sd-encrypt-stage2 - Configure mkinitcpio + GRUB (sd-encrypt)
+#
+# Usage (inside chroot):
+#   setup-archlinux-sd-encrypt-stage2
+#
+# Typical one-liner from ArchISO:
+#   curl http://<HOST>:8000/bin/live-usb/setup-archlinux-sd-encrypt-stage2 | arch-chroot /mnt bash -s --
+
+TTY=/dev/tty
+
+say() { printf '%s\n' "$*" >&2; }
+die() { say "Error: $*"; exit 1; }
+
+have_tty() { [ -r "$TTY" ] && [ -w "$TTY" ]; }
+
+prompt() {
+  local message="$1"
+  local default="${2:-}"
+  local answer=""
+
+  if have_tty; then
+    if [ -n "$default" ]; then
+      printf '%s [%s]: ' "$message" "$default" >"$TTY"
+    else
+      printf '%s: ' "$message" >"$TTY"
+    fi
+    IFS= read -r answer <"$TTY" || true
+  fi
+
+  if [ -z "$answer" ] && [ -n "$default" ]; then
+    answer="$default"
+  fi
+
+  printf '%s' "$answer"
+}
+
+prompt_secret() {
+  local message="$1"
+  local answer=""
+
+  have_tty || die "Need a TTY for secret input: $message"
+
+  printf '%s: ' "$message" >"$TTY"
+  stty -echo <"$TTY" 2>/dev/null || true
+  IFS= read -r answer <"$TTY" || true
+  stty echo <"$TTY" 2>/dev/null || true
+  printf '\n' >"$TTY"
+
+  printf '%s' "$answer"
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: setup-archlinux-sd-encrypt-stage2
+
+Configures:
+  - /etc/vconsole.conf (KEYMAP)
+  - /etc/mkinitcpio.conf HOOKS for systemd + sd-encrypt (+ sd-vconsole)
+  - /etc/default/grub to include rd.luks.name=... and resume=...
+  - grub-install + grub-mkconfig
+
+Dry-run checklist:
+  - Confirm you are inside the target install: cat /etc/os-release
+  - Confirm EFI is mounted at /boot and has an EFI directory: ls /boot/EFI || ls /boot/efi/EFI
+  - Confirm you have root/swap LUKS UUIDs: blkid | rg crypto_LUKS
+
+Reads state from:
+  /root/.archlinux-sd-encrypt-setup.env (written by stage1), if present.
+If the state file is missing, the script will prompt for the required UUIDs.
+USAGE
+}
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+need_cmd mkinitcpio
+need_cmd grub-install
+need_cmd grub-mkconfig
+need_cmd lsblk
+need_cmd findmnt
+need_cmd mountpoint
+need_cmd efibootmgr
+need_cmd cmp
+need_cmd mount
+need_cmd umount
+need_cmd cp
+need_cmd mkdir
+need_cmd date
+need_cmd chmod
+need_cmd stty
+need_cmd sed
+need_cmd awk
+need_cmd cryptsetup
+need_cmd pacman
+need_cmd useradd
+need_cmd passwd
+need_cmd chpasswd
+need_cmd id
+need_cmd systemctl
+
+if [ ! -e /proc/1/root/. ]; then
+  die "Refusing to run: cannot validate chroot context. Run via: arch-chroot /mnt bash -s --"
+fi
+
+root_id="$(stat -c '%d:%i' / 2>/dev/null || true)"
+pid1_root_id="$(stat -c '%d:%i' /proc/1/root/. 2>/dev/null || true)"
+if [ -n "$root_id" ] && [ -n "$pid1_root_id" ] && [ "$root_id" = "$pid1_root_id" ]; then
+  die "Refusing to run on host system. Run via: arch-chroot /mnt bash -s --"
+fi
+
+backup_file() {
+  local path="$1"
+  local ts
+  [ -e "$path" ] || return 0
+
+  if [ ! -e "${path}.bak" ]; then
+    cp -a -- "$path" "${path}.bak"
+    return 0
+  fi
+
+  ts="$(date +%Y%m%d%H%M%S 2>/dev/null || true)"
+  if [ -n "$ts" ]; then
+    cp -a -- "$path" "${path}.bak.${ts}"
+  else
+    cp -a -- "$path" "${path}.bak.1"
+  fi
+}
+
+sanitize_grub_default_file() {
+  local path="$1"
+  [ -f "$path" ] || return 0
+
+  # /etc/default/grub is sourced by grub-mkconfig; stray blkid/device listing
+  # lines can break with "No such file or directory" errors. Comment them out.
+  local tmp
+  tmp="$(mktemp)"
+
+  awk '{
+    if ($0 ~ /^\/dev\//) { print "# " $0 } else { print $0 }
+  }' "$path" >"$tmp"
+
+  if ! cmp -s "$path" "$tmp"; then
+    backup_file "$path"
+    cat "$tmp" >"$path"
+    say "Sanitized $path (commented stray /dev/* lines)."
+  fi
+
+  rm -f "$tmp"
+}
+
+pacman_install() {
+  local -a pkgs
+  pkgs=("$@")
+  [ "${#pkgs[@]}" -gt 0 ] || return 0
+
+  # Fresh installs may not have sync DBs yet.
+  if [ ! -d /var/lib/pacman/sync ] || ! ls /var/lib/pacman/sync/*.db >/dev/null 2>&1; then
+    say "Pacman sync DB missing; running: pacman -Sy"
+    pacman -Sy --noconfirm || return 1
+  fi
+
+  pacman -S --needed --noconfirm "${pkgs[@]}"
+}
+
+enable_unit() {
+  local unit="$1"
+  systemctl enable "$unit" >/dev/null 2>&1 && return 0
+  SYSTEMD_OFFLINE=1 systemctl --root=/ enable "$unit"
+}
+
+setup_wheel_sudoers() {
+  local path=/etc/sudoers.d/10-wheel
+  mkdir -p /etc/sudoers.d
+  printf '%%wheel ALL=(ALL:ALL) ALL\n' >"$path"
+  chmod 0440 "$path"
+
+  if command -v visudo >/dev/null 2>&1; then
+    visudo -cf /etc/sudoers
+    visudo -cf "$path"
+  fi
+}
+
+prompt_username() {
+  local username=""
+  username="$(prompt "Non-root username" "t")"
+  if ! [[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    die "Invalid username: $username"
+  fi
+  printf '%s' "$username"
+}
+
+detect_efi_directory() {
+  local fst=""
+  if mountpoint -q /boot; then
+    fst="$(findmnt -n -o FSTYPE /boot 2>/dev/null || true)"
+    if [ "$fst" = "vfat" ] || [ "$fst" = "fat" ] || [ "$fst" = "msdos" ]; then
+      printf '%s' "/boot"
+      return 0
+    fi
+  fi
+
+  if mountpoint -q /boot/efi; then
+    fst="$(findmnt -n -o FSTYPE /boot/efi 2>/dev/null || true)"
+    if [ "$fst" = "vfat" ] || [ "$fst" = "fat" ] || [ "$fst" = "msdos" ]; then
+      printf '%s' "/boot/efi"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+ensure_esp_mounted_at_boot() {
+  local fstype=""
+  local esp_source=""
+  local backup_dir=""
+  local ts=""
+
+  if mountpoint -q /boot; then
+    fstype="$(findmnt -n -o FSTYPE /boot 2>/dev/null || true)"
+    if [ "$fstype" = "vfat" ] || [ "$fstype" = "fat" ] || [ "$fstype" = "msdos" ]; then
+      printf '%s' "/boot"
+      return 0
+    fi
+    die "/boot is mounted but not as FAT/vfat (fstype=#{fstype}). For this setup, mount the ESP at /boot."
+  fi
+
+  if mountpoint -q /boot/efi; then
+    fstype="$(findmnt -n -o FSTYPE /boot/efi 2>/dev/null || true)"
+    if [ "$fstype" != "vfat" ] && [ "$fstype" != "fat" ] && [ "$fstype" != "msdos" ]; then
+      die "/boot/efi is mounted but not as FAT/vfat (fstype=#{fstype})."
+    fi
+
+    esp_source="$(findmnt -n -o SOURCE /boot/efi 2>/dev/null || true)"
+    [ -n "$esp_source" ] || die "Cannot determine ESP source device for /boot/efi."
+
+    say ""
+    say "Detected ESP mounted at /boot/efi."
+    say "For this setup, GRUB must NOT read kernel/initramfs from the encrypted root."
+    say "That is easiest if the ESP is mounted at /boot (so /boot/vmlinuz-linux lives on the ESP)."
+    say ""
+    say "ESP source: $esp_source"
+    say "Current /boot contents (on root fs):"
+    ls -la /boot >&2 || true
+    say ""
+
+    local confirm=""
+    confirm="$(prompt "Migrate ESP mountpoint from /boot/efi to /boot now? Type \"MIGRATE\" to proceed" "NO")"
+    [ "$confirm" = "MIGRATE" ] || die "Refusing to proceed without ESP mounted at /boot."
+
+    ts="$(date +%Y%m%d%H%M%S 2>/dev/null || true)"
+    backup_dir="/root/boot-rootfs-backup${ts:+-$ts}"
+    mkdir -p "$backup_dir"
+
+    # Move existing /boot contents aside, but keep /boot/efi mountpoint intact.
+    shopt -s dotglob nullglob
+    for entry in /boot/*; do
+      [ "$(basename "$entry")" = "efi" ] && continue
+      mv -- "$entry" "$backup_dir/"
+    done
+    shopt -u dotglob nullglob
+
+    umount /boot/efi
+    mount "$esp_source" /boot
+
+    say "ESP mounted at /boot. Restoring /boot contents onto the ESP..."
+    cp -a -- "$backup_dir/." /boot/ || true
+
+    say "Updating /etc/fstab to mount ESP at /boot..."
+    backup_file /etc/fstab
+    # Replace an existing /boot/efi mountpoint with /boot.
+    sed -i 's|[[:space:]]/boot/efi[[:space:]]| /boot |' /etc/fstab || true
+
+    mkdir -p /boot/efi
+    printf '%s' "/boot"
+    return 0
+  fi
+
+  die "EFI system partition not detected. Mount ESP at /boot (preferred) before running stage2."
+}
+
+efi_dir="$(ensure_esp_mounted_at_boot 2>/dev/null || true)"
+if [ -z "$efi_dir" ]; then
+  die "EFI system partition not detected/mounted correctly. Mount ESP at /boot (FAT/vfat), then re-run."
+fi
+
+say ""
+say "ESP check:"
+say "  Using EFI directory: $efi_dir"
+say "  /boot mount:"
+findmnt /boot 2>/dev/null >&2 || true
+say "  /boot source:"
+findmnt -n -o SOURCE /boot 2>/dev/null >&2 || true
+
+partition_path() {
+  local disk="$1"
+  local number="$2"
+  if [[ "$disk" =~ [0-9]$ ]]; then
+    printf '%sp%s' "$disk" "$number"
+  else
+    printf '%s%s' "$disk" "$number"
+  fi
+}
+
+disk_from_partition() {
+  local part="$1"
+  if [[ "$part" =~ ^(/dev/.+?)p[0-9]+$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$part" =~ ^(/dev/.+?)[0-9]+$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+detect_root_mapper_name() {
+  local source=""
+  if command -v findmnt >/dev/null 2>&1; then
+    source="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+  fi
+  if [[ "$source" =~ ^/dev/mapper/ ]]; then
+    printf '%s' "${source##*/}"
+    return 0
+  fi
+  if [ -e /dev/mapper/root ]; then
+    printf '%s' "root"
+    return 0
+  fi
+  return 1
+}
+
+crypt_underlying_device() {
+  local mapper_name="$1"
+  cryptsetup status "$mapper_name" 2>/dev/null | awk '/^\s*device:\s*/ {print $2; exit}'
+}
+
+autodetect_uuids() {
+  local root_mapper=""
+  local root_part=""
+  local disk=""
+  local swap_part=""
+
+  root_mapper="$(detect_root_mapper_name 2>/dev/null || true)"
+  [ -n "$root_mapper" ] || return 1
+
+  root_part="$(crypt_underlying_device "$root_mapper")"
+  [ -n "$root_part" ] || return 1
+
+  disk="$(disk_from_partition "$root_part" 2>/dev/null || true)"
+  [ -n "$disk" ] || return 1
+
+  swap_part="$(partition_path "$disk" 2)"
+
+  ROOT_LUKS_UUID="$(cryptsetup luksUUID "$root_part" 2>/dev/null || true)"
+  SWAP_LUKS_UUID="$(cryptsetup luksUUID "$swap_part" 2>/dev/null || true)"
+
+  [ -n "$ROOT_LUKS_UUID" ] || return 1
+  [ -n "$SWAP_LUKS_UUID" ] || return 1
+
+  say ""
+  say "Auto-detected target disk and LUKS UUIDs:"
+  say "  Disk:            $disk"
+  say "  Root LUKS part:  $root_part"
+  say "  Root LUKS UUID:  $ROOT_LUKS_UUID"
+  say "  Swap LUKS part:  $swap_part"
+  say "  Swap LUKS UUID:  $SWAP_LUKS_UUID"
+  say ""
+  lsblk "$disk" >&2 || true
+  say ""
+
+  local confirm=""
+  confirm="$(prompt "Type \"YES\" to use these values" "NO")"
+  [ "$confirm" = "YES" ] || return 1
+
+  export ROOT_LUKS_UUID SWAP_LUKS_UUID
+  return 0
+}
+
+STATE_FILE="/root/.archlinux-sd-encrypt-setup.env"
+if [ -f "$STATE_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$STATE_FILE"
+fi
+
+KEYMAP="${KEYMAP:-fr}"
+ROOT_LUKS_UUID="${ROOT_LUKS_UUID:-}"
+SWAP_LUKS_UUID="${SWAP_LUKS_UUID:-}"
+
+if [ -z "$ROOT_LUKS_UUID" ] || [ -z "$SWAP_LUKS_UUID" ]; then
+  autodetect_uuids || true
+fi
+
+if [ -z "$ROOT_LUKS_UUID" ]; then
+  say ""
+  say "Unable to auto-detect root LUKS UUID."
+  say "Hint: run: blkid | rg crypto_LUKS"
+  ROOT_LUKS_UUID="$(prompt "Enter LUKS UUID for root (TYPE=crypto_LUKS UUID from blkid)" "")"
+fi
+if [ -z "$SWAP_LUKS_UUID" ]; then
+  say ""
+  say "Unable to auto-detect swap LUKS UUID."
+  say "Hint: run: blkid | rg crypto_LUKS"
+  SWAP_LUKS_UUID="$(prompt "Enter LUKS UUID for swap (TYPE=crypto_LUKS UUID from blkid)" "")"
+fi
+
+[ -n "$ROOT_LUKS_UUID" ] || die "Missing ROOT_LUKS_UUID"
+[ -n "$SWAP_LUKS_UUID" ] || die "Missing SWAP_LUKS_UUID"
+
+KEYMAP="$(prompt "Console keymap" "$KEYMAP")"
+
+say ""
+say "Configuring vconsole keymap..."
+backup_file /etc/vconsole.conf
+cat >/etc/vconsole.conf <<EOF
+KEYMAP=${KEYMAP}
+XKBLAYOUT=${KEYMAP}
+EOF
+
+say ""
+say "Configuring mkinitcpio hooks for systemd + sd-encrypt..."
+HOOKS_LINE='HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block sd-encrypt resume filesystems fsck)'
+
+if [ ! -f /etc/mkinitcpio.conf ]; then
+  die "/etc/mkinitcpio.conf not found (are you in the target arch-chroot?)"
+fi
+
+backup_file /etc/mkinitcpio.conf
+if grep -q '^HOOKS=' /etc/mkinitcpio.conf; then
+  sed -i "s/^HOOKS=.*/${HOOKS_LINE}/" /etc/mkinitcpio.conf
+else
+  printf '\n%s\n' "$HOOKS_LINE" >>/etc/mkinitcpio.conf
+fi
+
+say "Running mkinitcpio..."
+mkinitcpio -P
+
+say ""
+say "Configuring GRUB kernel parameters (rd.luks.name + resume)..."
+GRUB_DEFAULT_FILE=/etc/default/grub
+[ -f "$GRUB_DEFAULT_FILE" ] || die "Missing $GRUB_DEFAULT_FILE"
+
+sanitize_grub_default_file "$GRUB_DEFAULT_FILE"
+
+NEEDED_PARAMS=(
+  "rd.luks.name=${ROOT_LUKS_UUID}=root"
+  "rd.luks.name=${SWAP_LUKS_UUID}=swap"
+  "root=/dev/mapper/root"
+  "resume=/dev/mapper/swap"
+)
+
+filter_grub_cmdline_linux() {
+  local cmdline="$1"
+  local -a tokens filtered
+  read -r -a tokens <<<"$cmdline"
+  for token in "${tokens[@]}"; do
+    case "$token" in
+      cryptdevice=*|cryptkey=*|cryptroot=*|root=*|resume=*|rd.luks.name=*|rd.luks.uuid=*|rd.luks.key=*|rd.luks.options=*)
+        ;;
+      *)
+        filtered+=("$token")
+        ;;
+    esac
+  done
+  printf '%s' "${filtered[*]}"
+}
+
+backup_file "$GRUB_DEFAULT_FILE"
+current_cmdline="$(awk -F= '/^GRUB_CMDLINE_LINUX=/{print $2}' "$GRUB_DEFAULT_FILE" | sed -e 's/^"//' -e 's/"$//' || true)"
+
+filtered_cmdline="$(filter_grub_cmdline_linux "$current_cmdline")"
+new_cmdline="$filtered_cmdline"
+
+if [ "$current_cmdline" != "$filtered_cmdline" ]; then
+  say "Note: removed conflicting kernel parameters from GRUB_CMDLINE_LINUX (cryptdevice/root/rd.luks/resume)."
+fi
+
+for p in "${NEEDED_PARAMS[@]}"; do
+  if ! grep -Fq -- "$p" <<<"$new_cmdline"; then
+    new_cmdline="${new_cmdline} ${p}"
+  fi
+done
+new_cmdline="$(echo "$new_cmdline" | awk '{$1=$1;print}')"
+
+if grep -q '^GRUB_CMDLINE_LINUX=' "$GRUB_DEFAULT_FILE"; then
+  sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"${new_cmdline}\"|" "$GRUB_DEFAULT_FILE"
+else
+  printf '\nGRUB_CMDLINE_LINUX="%s"\n' "$new_cmdline" >>"$GRUB_DEFAULT_FILE"
+fi
+
+say ""
+say "Ensuring GRUB does not prompt for LUKS at boot (GRUB_ENABLE_CRYPTODISK=n)..."
+if grep -q '^GRUB_ENABLE_CRYPTODISK=' "$GRUB_DEFAULT_FILE"; then
+  sed -i 's/^GRUB_ENABLE_CRYPTODISK=.*/GRUB_ENABLE_CRYPTODISK=n/' "$GRUB_DEFAULT_FILE"
+else
+  printf '\nGRUB_ENABLE_CRYPTODISK=n\n' >>"$GRUB_DEFAULT_FILE"
+fi
+
+say ""
+say "Resulting GRUB defaults:"
+grep -nE '^(GRUB_CMDLINE_LINUX|GRUB_CMDLINE_LINUX_DEFAULT|GRUB_ENABLE_CRYPTODISK)=' "$GRUB_DEFAULT_FILE" >&2 || true
+
+say ""
+say "Installing GRUB (UEFI)..."
+say "Using EFI directory: $efi_dir"
+ls -la "$efi_dir" >&2 || true
+say "Mount info:"
+findmnt /boot /boot/efi 2>/dev/null >&2 || true
+say "EFI directory source device:"
+findmnt -n -o SOURCE "$efi_dir" 2>/dev/null >&2 || true
+
+boot_dir="$efi_dir"
+
+mkdir -p "$boot_dir/grub"
+backup_file "$boot_dir/grub/grub.cfg"
+say "Running grub-install (this should install modules/config under $boot_dir/grub and EFI binary under $efi_dir/EFI/GRUB/)..."
+grub-install --target=x86_64-efi --efi-directory="$efi_dir" --boot-directory="$boot_dir" --bootloader-id=GRUB
+grub-mkconfig -o "$boot_dir/grub/grub.cfg"
+
+say ""
+say "Writing EFI-local GRUB stub config (helps some firmware/GRUB builds find the right grub.cfg without scanning disks)..."
+stub_dir="$efi_dir/EFI/GRUB"
+stub_cfg="$stub_dir/grub.cfg"
+mkdir -p "$stub_dir"
+backup_file "$stub_cfg"
+cat >"$stub_cfg" <<'EOF'
+# GRUB stub config on ESP (generated by setup-archlinux-sd-encrypt-stage2)
+search --file --set=boot /grub/grub.cfg
+set prefix=($boot)/grub
+configfile ($boot)/grub/grub.cfg
+EOF
+
+say ""
+say "GRUB artifacts:"
+say "  grub.cfg: $boot_dir/grub/grub.cfg"
+ls -la "$boot_dir/grub/grub.cfg" >&2 || true
+say "  EFI binary dir: $efi_dir/EFI/GRUB"
+ls -la "$efi_dir/EFI/GRUB" >&2 || true
+if grep -nE 'cryptomount|insmod (cryptodisk|luks|luks2)' "$boot_dir/grub/grub.cfg" >/dev/null 2>&1; then
+  say "Warning: grub.cfg contains crypt/dm-crypt directives (GRUB may prompt for passphrase):"
+  grep -nE 'cryptomount|insmod (cryptodisk|luks|luks2)' "$boot_dir/grub/grub.cfg" >&2 || true
+  if grep -nE 'set root=.cryptouuid/|cryptouuid/' "$boot_dir/grub/grub.cfg" >/dev/null 2>&1; then
+    say "Hint: this usually means GRUB thinks /boot is on the encrypted root. Ensure ESP is mounted at /boot when running stage2."
+    grep -nE 'set root=.cryptouuid/|cryptouuid/' "$boot_dir/grub/grub.cfg" >&2 || true
+  fi
+  if grep -nE '^\s*(linux|linuxefi)\s+/boot/' "$boot_dir/grub/grub.cfg" >/dev/null 2>&1; then
+    say "Hint: kernel paths contain '/boot/...', which typically indicates /boot was not a separate mount when grub.cfg was generated."
+    grep -nE '^\s*(linux|linuxefi)\s+/boot/' "$boot_dir/grub/grub.cfg" >&2 || true
+  fi
+else
+  say "OK: grub.cfg does not reference cryptomount/cryptodisk."
+fi
+
+say ""
+say "UEFI boot entries (check that 'GRUB' is first and points to this disk):"
+efibootmgr -v >&2 || true
+
+say ""
+say "Ensuring NetworkManager is installed and enabled..."
+if pacman_install networkmanager; then
+  say "Installed (or already present): networkmanager"
+else
+  say "Warning: failed to install networkmanager (check network/mirrors)."
+fi
+
+if [ -f /usr/lib/systemd/system/NetworkManager.service ]; then
+  if enable_unit NetworkManager.service; then
+    say "Enabled: NetworkManager.service"
+  else
+    say "Warning: failed to enable NetworkManager.service."
+  fi
+else
+  say "Warning: NetworkManager.service not found."
+fi
+
+say ""
+say "Ensuring sudo is installed and wheel has sudo rights..."
+if pacman_install sudo; then
+  say "Installed (or already present): sudo"
+else
+  say "Warning: failed to install sudo."
+fi
+setup_wheel_sudoers || true
+
+say ""
+say "Creating a non-root user..."
+username="$(prompt_username)"
+if id "$username" >/dev/null 2>&1; then
+  say "User already exists: $username"
+else
+  useradd -m -G wheel -s /bin/bash "$username"
+  say "Created user: $username (groups: wheel)"
+fi
+say "Set password for user: $username"
+user_pass_1="$(prompt_secret "Password for ${username}")"
+user_pass_2="$(prompt_secret "Repeat password for ${username}")"
+[ -n "$user_pass_1" ] || die "Empty password not allowed."
+[ "$user_pass_1" = "$user_pass_2" ] || die "Passwords do not match."
+printf '%s:%s\n' "$username" "$user_pass_1" | chpasswd
+unset user_pass_1 user_pass_2 || true
+
+say ""
+say "Stage2 complete."
+say "Backups: files are copied to *.bak (and *.bak.<timestamp> on reruns)."
+say ""
+say "Next steps (typical):"
+say "  passwd   # set root password (recommended)"
+say "  exit"
+say "  umount -R /mnt"
+say "  reboot"
+
+# vi: ft=bash

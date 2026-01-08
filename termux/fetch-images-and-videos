@@ -1,0 +1,117 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'optparse'
+require 'fileutils'
+require 'shellwords'
+
+OPTIONS = {
+  quiet: false
+}.freeze
+
+SOURCES = [
+  { remote: '/data/data/com.termux/files/home/storage/dcim', subdir: 'dcim' },
+  { remote: '/data/data/com.termux/files/home/storage/pictures', subdir: 'pictures' }
+].freeze
+
+MEDIA_EXTENSIONS = %w[
+  jpg jpeg png gif bmp webp heic heif arw cr2 raf nef orf sr2 pef dng
+  mp4 mov m4v mpeg mpg mkv avi webm 3gp 3gpp mts hevc
+].freeze
+
+DEFAULT_DESTINATION = '/srv/termux/storage'
+SSH_TARGET = ENV.fetch('TERMUX_SSH_TARGET', 'termux')
+DESTINATION_BASE = ENV.fetch('TERMUX_STORAGE_DEST', DEFAULT_DESTINATION)
+RETENTION_DAYS = Integer(ENV.fetch('TERMUX_RETENTION_DAYS', '365'))
+
+def parse_options
+  options = OPTIONS.dup
+
+  OptionParser.new do |opts|
+    opts.banner = 'Usage: termux/fetch-images-and-videos [options]'
+
+    opts.on('-q', '--quiet', 'Suppress all non-error output (suitable for cron)') do
+      options[:quiet] = true
+    end
+
+    opts.on('-h', '--help', 'Show this help message') do
+      puts opts
+      exit 0
+    end
+  end.parse!(ARGV)
+
+  options
+end
+
+def say(message, quiet:)
+  puts(message) unless quiet
+end
+
+def warn_unreachable(quiet:)
+  warn("Warning: Unable to reach SSH host '#{SSH_TARGET}'. Skipping sync.") unless quiet
+end
+
+def ensure_termux_reachable?(quiet:)
+  ssh_args = %w[ssh -o BatchMode=yes -o ConnectTimeout=10]
+  reachable = system(*ssh_args, SSH_TARGET, 'true')
+  warn_unreachable(quiet: quiet) unless reachable
+  reachable
+end
+
+def sync_directories(quiet:)
+  SOURCES.each do |source|
+    destination = File.join(DESTINATION_BASE, source[:subdir])
+    FileUtils.mkdir_p(destination)
+
+    say("Syncing #{source[:remote]} → #{destination}", quiet: quiet)
+
+    rsync_cmd = [
+      'rsync', '-avz',
+      "#{SSH_TARGET}:#{source[:remote].delete_suffix('/')}/",
+      File.join(destination, '')
+    ]
+
+    system(*rsync_cmd) || abort("rsync failed for #{source[:remote]}")
+  end
+end
+
+def confirm_deletion?(quiet:)
+  return false if quiet
+  return false unless STDIN.tty?
+
+  print "Delete remote images/videos older than #{RETENTION_DAYS} days? [y/N]: "
+  STDOUT.flush
+  answer = STDIN.gets
+  return false unless answer
+
+  %w[y yes].include?(answer.strip.downcase)
+end
+
+def delete_old_media
+  source_paths = SOURCES.map { |source| Shellwords.escape(source[:remote]) }.join(' ')
+  pattern = MEDIA_EXTENSIONS
+            .map { |ext| "-iname #{Shellwords.escape("*.#{ext}")}" }
+            .join(' -o ')
+  remote_cmd = <<~CMD.tr("\n", ' ')
+    find #{source_paths} -type f \( #{pattern} \) -mtime +#{RETENTION_DAYS}
+    -print -delete
+  CMD
+
+  system('ssh', SSH_TARGET, remote_cmd) || abort('Failed to delete old media on Termux host')
+end
+
+def main
+  options = parse_options
+
+  unless ensure_termux_reachable?(quiet: options[:quiet])
+    exit 0
+  end
+
+  sync_directories(quiet: options[:quiet])
+
+  if confirm_deletion?(quiet: options[:quiet])
+    delete_old_media
+  end
+end
+
+main if __FILE__ == $PROGRAM_NAME

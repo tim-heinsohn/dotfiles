@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# setup-archlinux-sd-encrypt-stage1 - Partition + encrypt + pacstrap for ArchISO
+#
+# Usage:
+#   setup-archlinux-sd-encrypt-stage1 /dev/sdX
+#
+# This script is intended to be run on ArchISO (live environment).
+#
+# It will:
+# - Wipe the target disk (GPT)
+# - Create partitions: EFI (FAT32), swap (LUKS), root (LUKS)
+# - Format, mount at /mnt, pacstrap base system, generate fstab
+#
+# Then run stage2 inside chroot:
+#   arch-chroot /mnt bash -c 'curl .../setup-archlinux-sd-encrypt-stage2 | bash'
+
+TTY=/dev/tty
+
+say() { printf '%s\n' "$*" >&2; }
+die() { say "Error: $*"; exit 1; }
+
+have_tty() { [ -r "$TTY" ] && [ -w "$TTY" ]; }
+
+prompt() {
+  local message="$1"
+  local default="${2:-}"
+  local answer=""
+
+  if have_tty; then
+    if [ -n "$default" ]; then
+      printf '%s [%s]: ' "$message" "$default" >"$TTY"
+    else
+      printf '%s: ' "$message" >"$TTY"
+    fi
+    IFS= read -r answer <"$TTY" || true
+  fi
+
+  if [ -z "$answer" ] && [ -n "$default" ]; then
+    answer="$default"
+  fi
+
+  printf '%s' "$answer"
+}
+
+prompt_secret() {
+  local message="$1"
+  local answer=""
+
+  have_tty || die "Need a TTY for secret input: $message"
+
+  printf '%s: ' "$message" >"$TTY"
+  stty -echo <"$TTY" 2>/dev/null || true
+  IFS= read -r answer <"$TTY" || true
+  stty echo <"$TTY" 2>/dev/null || true
+  printf '\n' >"$TTY"
+
+  printf '%s' "$answer"
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+partition_path() {
+  local disk="$1"
+  local number="$2"
+  if [[ "$disk" =~ [0-9]$ ]]; then
+    printf '%sp%s' "$disk" "$number"
+  else
+    printf '%s%s' "$disk" "$number"
+  fi
+}
+
+wait_for_block_device() {
+  local path="$1"
+  local attempts="${2:-30}"
+  local delay_s="${3:-0.2}"
+
+  for ((i = 0; i < attempts; i++)); do
+    if [ -b "$path" ]; then
+      return 0
+    fi
+    udevadm settle 2>/dev/null || true
+    sleep "$delay_s"
+  done
+
+  return 1
+}
+
+ensure_mapper_ready() {
+  local name="$1"
+  local path="/dev/mapper/${name}"
+
+  if wait_for_block_device "$path"; then
+    return 0
+  fi
+
+  say ""
+  say "Device-mapper node did not appear: $path"
+  say "Diagnostics:"
+  ls -la /dev/mapper >&2 || true
+  cryptsetup status "$name" >&2 || true
+  die "Unable to continue without $path. Try rebooting the live system and re-running stage1."
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: setup-archlinux-sd-encrypt-stage1 /dev/sdX
+
+Creates:
+  1) EFI  (FAT32, mounted at /mnt/boot)
+  2) swap (LUKS -> /dev/mapper/swap)
+  3) root (LUKS -> /dev/mapper/root, ext4 mounted at /mnt)
+
+Dry-run checklist:
+  - Verify target disk with: lsblk /dev/sdX
+  - Ensure you booted in UEFI mode: test -d /sys/firmware/efi/efivars
+  - Ensure you have internet (optional but recommended): ping -c1 archlinux.org
+  - If using Wi‑Fi: rfkill unblock + iwctl connect
+
+Environment variables (optional):
+  SWAP_SIZE_GIB   Swap size in GiB (default: 16)
+  EFI_SIZE_MIB    EFI size in MiB (default: 1024)
+  KEYMAP          Console keymap to write for stage2 (default: fr)
+USAGE
+}
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+DISK="${1:-}"
+[ -n "$DISK" ] || { usage; exit 1; }
+
+if [[ "$DISK" != /dev/* ]]; then
+  die "Disk must be a /dev path, got: $DISK"
+fi
+
+[ -b "$DISK" ] || die "Not a block device: $DISK"
+
+need_cmd lsblk
+need_cmd sgdisk
+need_cmd partprobe
+need_cmd udevadm
+need_cmd wipefs
+need_cmd cryptsetup
+need_cmd mkfs.fat
+need_cmd mkfs.ext4
+need_cmd mkswap
+need_cmd swapon
+need_cmd mount
+need_cmd umount
+need_cmd pacstrap
+need_cmd genfstab
+need_cmd awk
+need_cmd sleep
+need_cmd stty
+
+if [ ! -d /run/archiso ]; then
+  die "Refusing to run: /run/archiso not found. This script is intended for the ArchISO live environment."
+fi
+
+if [ "$(lsblk -dn -o TYPE "$DISK")" != "disk" ]; then
+  die "Target must be a disk (not a partition): $DISK"
+fi
+
+EFI_SIZE_MIB="${EFI_SIZE_MIB:-1024}"
+SWAP_SIZE_GIB="${SWAP_SIZE_GIB:-16}"
+KEYMAP="${KEYMAP:-fr}"
+
+say ""
+say "Target disk: $DISK"
+lsblk "$DISK" >&2 || true
+say ""
+say "Planned layout (GPT):"
+say "  1) EFI  FAT32  ${EFI_SIZE_MIB}MiB  (mount /mnt/boot)"
+say "  2) swap LUKS   ${SWAP_SIZE_GIB}GiB (map /dev/mapper/swap)"
+say "  3) root LUKS   rest (map /dev/mapper/root -> ext4 /mnt)"
+say ""
+
+confirm="$(prompt "Type \"WIPE $DISK\" to wipe and partition" "")"
+[ "$confirm" = "WIPE $DISK" ] || die "Confirmation failed."
+
+EFI_PART="$(partition_path "$DISK" 1)"
+SWAP_PART="$(partition_path "$DISK" 2)"
+ROOT_PART="$(partition_path "$DISK" 3)"
+
+say ""
+say "Wiping and partitioning..."
+swapoff -a 2>/dev/null || true
+umount -R /mnt 2>/dev/null || true
+
+# Close any dm-crypt mappings that originate from the target disk (including
+# leftovers from previous manual attempts like /dev/mapper/cryptroot).
+mapfile -t crypt_mappers < <(lsblk -nr -o NAME,TYPE,PKNAME "$DISK" | awk '$2=="crypt" {print $1}' || true)
+if [ "${#crypt_mappers[@]}" -gt 0 ]; then
+  say "Closing dm-crypt mappings on $DISK: ${crypt_mappers[*]}"
+  for name in "${crypt_mappers[@]}"; do
+    cryptsetup close "$name" 2>/dev/null || true
+  done
+fi
+
+wipefs -af "$DISK"
+sgdisk --zap-all "$DISK"
+
+sgdisk -n 1:0:+"${EFI_SIZE_MIB}"MiB -t 1:ef00 -c 1:EFI "$DISK"
+sgdisk -n 2:0:+"${SWAP_SIZE_GIB}"GiB -t 2:8200 -c 2:SWAP "$DISK"
+sgdisk -n 3:0:0 -t 3:8300 -c 3:ROOT "$DISK"
+
+if command -v blockdev >/dev/null 2>&1; then
+  blockdev --rereadpt "$DISK" 2>/dev/null || true
+fi
+partprobe "$DISK"
+udevadm settle
+
+if [ ! -b "$EFI_PART" ] || [ ! -b "$SWAP_PART" ] || [ ! -b "$ROOT_PART" ]; then
+  say "Warning: new partition nodes are not visible yet:"
+  lsblk "$DISK" >&2 || true
+  die "Kernel did not pick up the new partition table. Reboot the live system and run stage1 again."
+fi
+
+say "Created partitions:"
+lsblk "$DISK" >&2
+
+say ""
+say "Enter LUKS passphrase to use for swap+root (typed on this console, not from stdin)."
+luks_pass_1="$(prompt_secret "LUKS passphrase")"
+luks_pass_2="$(prompt_secret "Repeat LUKS passphrase")"
+[ -n "$luks_pass_1" ] || die "Empty passphrase not allowed."
+[ "$luks_pass_1" = "$luks_pass_2" ] || die "Passphrases do not match."
+
+say ""
+say "Formatting EFI partition..."
+mkfs.fat -F32 -n EFI "$EFI_PART"
+
+say ""
+say "Creating LUKS swap on $SWAP_PART"
+wipefs -af "$SWAP_PART" || true
+cryptsetup luksFormat --type luks2 --batch-mode --key-file <(printf '%s' "$luks_pass_1") "$SWAP_PART"
+cryptsetup open --key-file <(printf '%s' "$luks_pass_1") "$SWAP_PART" swap
+ensure_mapper_ready swap
+
+say ""
+say "Creating LUKS root on $ROOT_PART"
+wipefs -af "$ROOT_PART" || true
+cryptsetup luksFormat --type luks2 --batch-mode --key-file <(printf '%s' "$luks_pass_1") "$ROOT_PART"
+cryptsetup open --key-file <(printf '%s' "$luks_pass_1") "$ROOT_PART" root
+ensure_mapper_ready root
+
+say ""
+say "Formatting root filesystem..."
+mkfs.ext4 -F -L ROOT /dev/mapper/root
+
+unset luks_pass_1 luks_pass_2 || true
+
+say ""
+say "Setting up swap..."
+mkswap -L SWAP /dev/mapper/swap
+swapon /dev/mapper/swap
+
+say ""
+say "Mounting filesystems at /mnt..."
+mount /dev/mapper/root /mnt
+mkdir -p /mnt/boot
+mount "$EFI_PART" /mnt/boot
+
+say ""
+say "Installing base system (pacstrap)..."
+pacstrap -K /mnt base linux linux-firmware grub efibootmgr cryptsetup networkmanager sudo
+
+say ""
+say "Generating fstab..."
+genfstab -U /mnt >> /mnt/etc/fstab
+
+ROOT_LUKS_UUID="$(cryptsetup luksUUID "$ROOT_PART")"
+SWAP_LUKS_UUID="$(cryptsetup luksUUID "$SWAP_PART")"
+
+STATE_FILE="/mnt/root/.archlinux-sd-encrypt-setup.env"
+say ""
+say "Writing state to $STATE_FILE"
+cat >"$STATE_FILE" <<EOF
+DISK='$DISK'
+EFI_PART='$EFI_PART'
+ROOT_LUKS_PART='$ROOT_PART'
+SWAP_LUKS_PART='$SWAP_PART'
+ROOT_LUKS_UUID='$ROOT_LUKS_UUID'
+SWAP_LUKS_UUID='$SWAP_LUKS_UUID'
+KEYMAP='${KEYMAP}'
+EOF
+chmod 0600 "$STATE_FILE" || true
+
+say ""
+say "Stage1 complete."
+say ""
+say "Next steps:"
+say "  1) Run stage2 inside chroot (recommended one-liner from your serve script), e.g.:"
+say "       curl http://<HOST>:8000/arch2 | arch-chroot /mnt bash -s --"
+say "  2) Set root password:"
+say "       arch-chroot /mnt passwd"
+
+# vi: ft=bash

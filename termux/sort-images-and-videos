@@ -1,0 +1,354 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'optparse'
+require 'fileutils'
+require 'English'
+
+DEFAULT_STORAGE_PARENT = '/srv'
+DEFAULT_STORAGE_SUFFIX = 'storage'
+DEFAULT_DESTINATION_ROOT = '/srv/Bilder'
+SAMPLE_LINK_BASENAME = '.rapid-photo-downloader-sample'
+SAMPLE_EXTENSIONS = %w[jpg jpeg heic heif dng nef arw raf cr2 cr3 rw2 orf srw]
+PREFERRED_SAMPLE_SUBDIRS = [
+  %w[dcim Camera],
+  %w[DCIM Camera],
+  %w[dcim camera],
+  %w[DCIM 100MEDIA],
+  %w[DCIM 100ANDRO],
+  %w[dcim],
+  %w[DCIM]
+].freeze
+RPD_BIN = ENV.fetch('RAPID_PHOTO_DOWNLOADER_BIN', 'rapid-photo-downloader')
+RPD_CONFIG_DIR = File.join(Dir.home, '.config', 'Rapid Photo Downloader')
+RPD_CONFIG_PATH = File.join(RPD_CONFIG_DIR, 'Rapid Photo Downloader.conf')
+PYTHON = ENV.fetch('PYTHON', 'python')
+
+OPTIONS = {
+  quiet: false,
+  source: nil,
+  destination_root: nil,
+  skip_gthumb_prompt: false
+}.freeze
+
+def parse_options
+  options = OPTIONS.dup
+
+  parser = OptionParser.new do |opts|
+    opts.banner = 'Usage: termux/sort-images-and-videos [HOST] [options]'
+    opts.separator ''
+    opts.separator 'Note: Rapid Photo Downloader keeps a download history and skips files it already imported.'
+    opts.separator 'Tagged images already sorted into /srv/Bilder will not be overwritten unless you delete that history'
+    opts.separator '(e.g., remove ~/.local/share/rapid-photo-downloader/downloaded_files.sqlite or use --forget-remembered-files/--reset).'
+    opts.separator ''
+    opts.separator 'HOST defaults to the ssh config entry "termux".'
+
+    opts.on('-s', '--source PATH', 'Override source directory (default: /srv/<host>/storage)') do |path|
+      options[:source] = path
+    end
+
+    opts.on('-d', '--destination-root PATH', 'Override destination root (default: /srv/Bilder)') do |path|
+      options[:destination_root] = path
+    end
+
+    opts.on('-q', '--quiet', 'Suppress non-error output and prompts') do
+      options[:quiet] = true
+    end
+
+    opts.on('--skip-gthumb', 'Do not prompt to open gThumb after sorting') do
+      options[:skip_gthumb_prompt] = true
+    end
+
+    opts.on('-h', '--help', 'Show this help and exit') do
+      puts opts
+      exit 0
+    end
+  end
+
+  args = parser.parse!(ARGV)
+  host = args.shift || ENV['TERMUX_SSH_TARGET'] || 'termux'
+
+  [host.strip, options]
+end
+
+def command_available?(cmd)
+  system('which', cmd, out: File::NULL, err: File::NULL)
+end
+
+def ensure_command!(cmd, friendly_name = cmd)
+  return if command_available?(cmd)
+
+  abort("#{friendly_name} (#{cmd}) not found in PATH")
+end
+
+def default_source_path(host)
+    File.join(DEFAULT_STORAGE_PARENT, host, DEFAULT_STORAGE_SUFFIX)
+end
+
+def build_paths(host, options)
+  env_storage = ENV['TERMUX_STORAGE_DEST']&.strip
+  default_source = env_storage.nil? || env_storage.empty? ? default_source_path(host) : env_storage
+  source_path = File.expand_path(options[:source] || default_source)
+
+  unless Dir.exist?(source_path)
+    abort("Source directory #{source_path} does not exist. Supply --source PATH if needed.")
+  end
+
+  env_destination = ENV['TERMUX_SORT_DEST']&.strip
+  destination_root = File.expand_path(options[:destination_root] || env_destination || DEFAULT_DESTINATION_ROOT)
+  FileUtils.mkdir_p(destination_root)
+
+  [source_path, destination_root]
+end
+
+def build_rpd_command(source_path, destination_root)
+  [
+    RPD_BIN,
+    '--auto-detect', 'off',
+    '--auto-download-startup', 'on',
+    '--this-computer', 'on',
+    '--this-computer-location', source_path,
+    '--photo-destination', destination_root,
+    '--video-destination', destination_root
+  ]
+end
+
+def preferred_sample_candidates(source_root)
+  return enum_for(:preferred_sample_candidates, source_root) unless block_given?
+
+  PREFERRED_SAMPLE_SUBDIRS.each do |segments|
+    candidate_dir = File.join(source_root, *segments)
+    next unless Dir.exist?(candidate_dir)
+
+    Dir.glob(File.join(candidate_dir, '*'), File::FNM_CASEFOLD).sort.each do |path|
+      yield path if File.file?(path)
+    end
+  end
+
+  Dir.glob(File.join(source_root, '**', '*'), File::FNM_CASEFOLD).each do |path|
+    next unless File.file?(path)
+    yield path
+  end
+end
+
+def upsert_ini_value(lines, section, key, value)
+  in_section = false
+  section_found = false
+  key_written = false
+  changed = false
+  result = []
+
+  lines.each do |line|
+    if (match = line.match(/^\s*\[(.+?)\]\s*$/))
+      if in_section && !key_written
+        result << "#{key}=#{value}\n"
+        key_written = true
+        changed = true
+      end
+      in_section = match[1] == section
+      section_found ||= in_section
+      result << line
+      next
+    end
+
+    if in_section && line.start_with?("#{key}=")
+      unless line.chomp == "#{key}=#{value}"
+        line = "#{key}=#{value}\n"
+        changed = true
+      end
+      key_written = true
+    end
+
+    result << line
+  end
+
+  unless section_found
+    result << "\n" unless result.empty? || result.last.end_with?("\n")
+    result << "[#{section}]\n"
+    result << "#{key}=#{value}\n"
+    key_written = true
+    changed = true
+  else
+    if in_section && !key_written
+      result << "#{key}=#{value}\n"
+      changed = true
+    end
+  end
+
+  [result, changed]
+end
+
+def ensure_rpd_destinations(destination_root)
+  FileUtils.mkdir_p(RPD_CONFIG_DIR)
+  lines = File.exist?(RPD_CONFIG_PATH) ? File.readlines(RPD_CONFIG_PATH, chomp: false) : []
+  changed_any = false
+
+  %w[photo_download_folder video_download_folder].each do |key|
+    lines, changed = upsert_ini_value(lines, 'Rename', key, destination_root)
+    changed_any ||= changed
+  end
+
+  return unless changed_any
+
+  File.write(RPD_CONFIG_PATH, lines.join)
+end
+
+def ensure_rpd_subfolders
+  python_script = <<'PY'
+import sys
+
+try:
+    from PyQt5.QtCore import QSettings
+    from raphodo.generatenameconfig import (
+        DATE_TIME,
+        IMAGE_DATE,
+        VIDEO_DATE,
+        LIST_DATE_TIME_L2,
+    )
+except Exception as exc:  # pragma: no cover - runtime guard
+    sys.stderr.write(f"Failed to import Rapid Photo Downloader libraries: {exc}\n")
+    sys.exit(1)
+
+settings = QSettings('Rapid Photo Downloader', 'Rapid Photo Downloader')
+
+photo_pref = [
+    DATE_TIME,
+    IMAGE_DATE,
+    LIST_DATE_TIME_L2[11],
+    '/',
+    '',
+    '',
+    DATE_TIME,
+    IMAGE_DATE,
+    LIST_DATE_TIME_L2[13],
+]
+
+video_pref = [
+    DATE_TIME,
+    VIDEO_DATE,
+    LIST_DATE_TIME_L2[11],
+    '/',
+    '',
+    '',
+    DATE_TIME,
+    VIDEO_DATE,
+    LIST_DATE_TIME_L2[13],
+]
+
+changed = False
+
+if settings.value('Rename/photo_subfolder') != photo_pref:
+    settings.setValue('Rename/photo_subfolder', photo_pref)
+    changed = True
+
+if settings.value('Rename/video_subfolder') != video_pref:
+    settings.setValue('Rename/video_subfolder', video_pref)
+    changed = True
+
+if changed:
+    settings.sync()
+PY
+
+  system(PYTHON, '-c', python_script) || warn('Failed to enforce Rapid Photo Downloader subfolder preferences')
+end
+
+def ensure_sample_symlink(source_root)
+  return nil unless File.writable?(source_root)
+
+  Dir.glob(File.join(source_root, "#{SAMPLE_LINK_BASENAME}.*")).each do |stale|
+    File.delete(stale) if File.symlink?(stale)
+  rescue StandardError
+    next
+  end
+
+  preferred_sample_candidates(source_root).each do |candidate|
+    ext = File.extname(candidate).delete('.').downcase
+    next unless SAMPLE_EXTENSIONS.include?(ext)
+    link_path = File.join(source_root, "#{SAMPLE_LINK_BASENAME}.#{ext}")
+    next if File.exist?(link_path)
+    begin
+      File.symlink(candidate, link_path)
+      return link_path
+    rescue StandardError => e
+      warn("Failed to create Rapid Photo Downloader sample link: #{e.message}")
+      break
+    end
+  end
+
+  nil
+end
+
+def cleanup_sample_symlink(sample_link)
+  return unless sample_link
+  File.delete(sample_link) if File.symlink?(sample_link)
+rescue StandardError => e
+  warn("Failed to clean up sample link #{sample_link}: #{e.message}")
+end
+
+def run_rpd(cmd, quiet:)
+  puts "Launching Rapid Photo Downloader: #{cmd.join(' ')}" unless quiet
+  system(*cmd) || abort('Rapid Photo Downloader exited with an error')
+end
+
+def rpd_running?
+  system('pgrep', '-x', 'rapid-photo-downloader', out: File::NULL, err: File::NULL)
+end
+
+def wait_for_rpd_exit(quiet:)
+  return unless rpd_running?
+
+  puts 'Waiting for Rapid Photo Downloader to close...' unless quiet
+  loop do
+    break unless rpd_running?
+    sleep 2
+  end
+end
+
+def prompt_gthumb(destination_root, quiet:, skip_prompt:)
+  return nil if skip_prompt
+  return nil if quiet
+  return nil unless STDIN.tty?
+
+  year_dir = File.join(destination_root, Time.now.strftime('%Y'))
+  return nil unless Dir.exist?(year_dir)
+
+  print "Open gThumb in #{year_dir}? [y/N]: "
+  STDOUT.flush
+  answer = STDIN.gets
+  return nil unless answer
+
+  [answer.strip.downcase, year_dir]
+end
+
+def open_gthumb(year_dir)
+  unless command_available?('gthumb')
+    warn('gThumb not found in PATH; skipping launch')
+    return
+  end
+
+  system('gthumb', year_dir) || warn('Failed to launch gThumb')
+end
+
+def main
+  host, options = parse_options
+  ensure_command!(RPD_BIN, 'Rapid Photo Downloader')
+
+  source_path, destination_root = build_paths(host, options)
+  ensure_rpd_destinations(destination_root)
+  ensure_rpd_subfolders
+  sample_link = ensure_sample_symlink(source_path)
+  begin
+    run_rpd(build_rpd_command(source_path, destination_root), quiet: options[:quiet])
+  ensure
+    cleanup_sample_symlink(sample_link)
+  end
+  wait_for_rpd_exit(quiet: options[:quiet])
+
+  response, year_dir = prompt_gthumb(destination_root, quiet: options[:quiet], skip_prompt: options[:skip_gthumb_prompt])
+  return unless response
+  return unless %w[y yes].include?(response)
+
+  open_gthumb(year_dir)
+end
+
+main if __FILE__ == $PROGRAM_NAME
