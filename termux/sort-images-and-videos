@@ -37,6 +37,10 @@ def parse_options
   parser = OptionParser.new do |opts|
     opts.banner = 'Usage: termux/sort-images-and-videos [HOST] [options]'
     opts.separator ''
+    opts.separator 'Note: Rapid Photo Downloader keeps a download history and skips files it already imported.'
+    opts.separator 'Tagged images already sorted into /srv/Bilder will not be overwritten unless you delete that history'
+    opts.separator '(e.g., remove ~/.local/share/rapid-photo-downloader/downloaded_files.sqlite or use --forget-remembered-files/--reset).'
+    opts.separator ''
     opts.separator 'HOST defaults to the ssh config entry "termux".'
 
     opts.on('-s', '--source PATH', 'Override source directory (default: /srv/<host>/storage)') do |path|
