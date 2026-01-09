@@ -1,0 +1,49 @@
+#!/bin/bash
+# https://developer.atlassian.com/cloud/acli/guides/install-linux/#install-binary-with-curl-on-linux
+set -euo pipefail
+
+# Install the Atlassian CLI (acli) via the official binary download.
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        ACLI_ARCH=amd64
+        ;;
+    aarch64|arm64)
+        ACLI_ARCH=arm64
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH"
+        exit 1
+        ;;
+esac
+
+ACLI_URL="https://acli.atlassian.com/linux/latest/acli_linux_${ACLI_ARCH}/acli"
+TMP_DIR=$(mktemp -d)
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+curl -fsSL "$ACLI_URL" -o "$TMP_DIR/acli"
+chmod +x "$TMP_DIR/acli"
+
+INSTALL_DIR="/usr/local/bin"
+INSTALL_PATH="$INSTALL_DIR/acli"
+
+if [ -w "$INSTALL_DIR" ]; then
+    install -m 0755 "$TMP_DIR/acli" "$INSTALL_PATH"
+elif command -v sudo >/dev/null 2>&1; then
+    sudo install -o root -g root -m 0755 "$TMP_DIR/acli" "$INSTALL_PATH"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+    mkdir -p "$INSTALL_DIR"
+    INSTALL_PATH="$INSTALL_DIR/acli"
+    install -m 0755 "$TMP_DIR/acli" "$INSTALL_PATH"
+    echo "Installed acli to $INSTALL_PATH"
+    echo "Ensure $INSTALL_DIR is on your PATH."
+    exit 0
+fi
+
+echo "Installed acli to $INSTALL_PATH"
