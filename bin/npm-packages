@@ -22,6 +22,7 @@ declare -a NPM_PACKAGES=(
     "dockerfile-language-server-nodejs"
     "happy-coder"
     "markmap-cli"
+    "opencode-ai"
     "vscode-langservers-extracted"
 )
 
