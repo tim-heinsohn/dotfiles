@@ -229,6 +229,8 @@ extra/pamixer
     Pulseaudio command-line mixer like amixer.
 extra/pipewire-jack
     Low-latency audio/video router and processor - JACK replacement.
+extra/pipewire-pulse
+    PipeWire PulseAudio replacement.
 extra/parted
     A program for creating, destroying, resizing, checking and copying partitions.
 extra/pavucontrol
@@ -247,8 +249,6 @@ extra/postgresql-old-upgrade
     Older PostgreSQL for migrating major versions with pg_upgrade
 extra/pv
     A terminal-based tool for monitoring the progress of data through a pipeline.
-extra/pulseaudio-bluetooth
-    Bluetooth support for PulseAudio.
 extra/python-bcrypt
     A library for hashing passwords using the bcrypt algorithm.
 extra/python-pipx
