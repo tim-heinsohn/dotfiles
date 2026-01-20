@@ -16,6 +16,7 @@ declare -a NPM_PACKAGES=(
     "@openai/codex"
     "@spotlightjs/spotlight"
     "@usebruno/cli"
+    "agent-browser"
     "bash-language-server"
     "backlog.md"
     "codebuff"
