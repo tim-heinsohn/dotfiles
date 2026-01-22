@@ -6,6 +6,7 @@
     rv = remote -v
     fa = fetch --all
     tu = !git ls-files --others --exclude-standard | tree --fromfile # tree unversioned
+    main-delta = "!f(){ base=$(git merge-base HEAD origin/main); echo \"base: $base\"; git log --oneline \"$base..origin/main\"; git diff --name-status \"$base..origin/main\"; git diff \"$base..origin/main\"; }; f"
 
 [color]
     ui = auto
