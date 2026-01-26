@@ -19,6 +19,8 @@ aur/nvm
     A version manager for node.js, installed per-user, and invoked per-shell.
 aur/pg_top
     A 'top' like tool for PostgreSQL.
+aur/pgvector 0.8.1-1 (+10 1.46)
+    A vector similarity search extension for PostgreSQL.
 aur/pinentry-rofi
     A rofi-based pinentry program.
 aur/qotd
