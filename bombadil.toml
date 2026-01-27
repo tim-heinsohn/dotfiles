@@ -41,6 +41,10 @@ xmodmap = { source = "xmodmap/xmodmap", target = ".Xmodmap" }
 xkbmap = { source = "xmodmap/xkbmap", target = ".Xkbmap" }
 wezterm = { source = "wezterm/wezterm.lua", target = "~/.wezterm.lua" }
 gopass_shared = { source = "gopass/config.shared", target = ".config/gopass/config.shared" }
+bashrc = { source = "shell/bashrc", target = ".bashrc" }
+bash_profile = { source = "shell/bash_profile", target = ".bash_profile" }
+profile = { source = "shell/profile", target = ".profile" }
+zlogin = { source = "shell/zlogin", target = ".zlogin" }
 zsh_aliases = { source = "zsh/aliases", target = ".zsh/aliases" }
 zsh_environment = { source = "zsh/environment", target = ".zsh/environment" }
 zsh_functions = { source = "zsh/functions", target = ".zsh/functions" }
