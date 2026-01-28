@@ -1,0 +1,6 @@
+#!/bin/bash
+# Fix display offset issue that prevents flameshot from capturing full screen
+# Issue: Intel i915 driver was adding Y offset of +286 to eDP-1, reducing usable screen space
+# This script resets the display positions to correct coordinates
+
+xrandr --output eDP-1 --pos 0x0 --output DP-1-2 --pos 1920x0
