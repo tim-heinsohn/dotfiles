@@ -15,10 +15,23 @@
     excludesfile = ~/.gitignore
     fileMode = true
     editor = nvim -u ~/.vimrc.minimal -n
-    pager = less -R --chop-long-lines --no-init --quit-if-one-screen
+    pager = delta
 
 [credential]
     helper = "!gopass git-credential $@"
+
+[delta]
+    navigate = true       # use n and N to move between diff sections
+    line-numbers = true
+    side-by-side = false  # set to true for side-by-side view
+    syntax-theme = Monokai Extended
+    # Dark theme - let delta auto-detect or use these popular alternatives:
+    # syntax-theme = Dracula
+    # syntax-theme = Coldark-Dark
+    # syntax-theme = DarkNeon
+
+[interactive]
+    diffFilter = delta --color-only
 
 [diff]
     tool = nvimdiff
@@ -45,6 +58,9 @@
     dsf = true
     icdiff = true
     status = true
+    diff = delta
+    show = delta
+    log = delta
 
 [user]
     email = smile@friendsoft.de

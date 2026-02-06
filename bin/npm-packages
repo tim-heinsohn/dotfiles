@@ -44,7 +44,7 @@ check_nvm_node() {
     if [ -s "/usr/share/nvm/init-nvm.sh" ]; then
         source /usr/share/nvm/init-nvm.sh
     fi
-    
+
     # Check if node is available
     if ! command -v node >/dev/null 2>&1; then
         log "ERROR: Node.js is not installed or not in PATH"
@@ -101,7 +101,7 @@ retry_clean_install() {
 
 install_packages() {
     log "Installing global npm packages..."
-    
+
     for package in "${NPM_PACKAGES[@]}"; do
         log "Installing $package..."
         cleanup_stale_npm_dirs "$package" >/dev/null
@@ -115,7 +115,7 @@ install_packages() {
 
 update_packages() {
     log "Updating global npm packages..."
-    
+
     for package in "${NPM_PACKAGES[@]}"; do
         log "Updating $package..."
         if npm list -g "$package" >/dev/null 2>&1; then
@@ -139,7 +139,7 @@ update_packages() {
 
 install_or_update_packages() {
     log "Installing/updating global npm packages..."
-    
+
     for package in "${NPM_PACKAGES[@]}"; do
         if npm list -g "$package" >/dev/null 2>&1; then
             log "Updating $package..."
@@ -162,24 +162,43 @@ install_or_update_packages() {
     done
 }
 
-install_mcp_get_local() {
-    local repo="/srv/lib/mcp-get"
+install_opencode_smart_title_local() {
+    local repo="/srv/lib/opencode-smart-title"
+    local plugin_dir="$HOME/.config/opencode/plugins"
+    local fork_url="https://github.com/tim-heinsohn/opencode-smart-title"
+
+    # Clone repo if it doesn't exist
     if [ ! -d "$repo" ]; then
-        log "mcp-get repo not found at $repo; skipping local setup"
-        return 0
+        log "opencode-smart-title repo not found at $repo; cloning from $fork_url"
+        mkdir -p /srv/lib
+        if git clone "$fork_url" "$repo"; then
+            log "Cloned opencode-smart-title fork successfully"
+        else
+            log "⚠ git clone failed; skipping opencode-smart-title setup"
+            return 0
+        fi
     fi
-    log "Setting up local mcp-get from $repo"
+
+    log "Setting up local opencode-smart-title from $repo"
     pushd "$repo" >/dev/null || { log "Unable to enter $repo"; return 0; }
 
     # Try to update repository to latest (optional if offline)
     if command -v git >/dev/null 2>&1; then
         if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            # Ensure we're tracking the fork
+            local current_remote
+            current_remote="$(git remote get-url origin 2>/dev/null || echo '')"
+            if [ "$current_remote" != "$fork_url" ]; then
+                log "Updating remote to fork: $fork_url"
+                git remote set-url origin "$fork_url" || log "⚠ Failed to update remote"
+            fi
+
             if git fetch --quiet; then
                 if git merge-base --is-ancestor @ @{u} 2>/dev/null; then
-                    log "mcp-get repo is up to date"
+                    log "opencode-smart-title repo is up to date"
                 else
                     if git pull --ff-only; then
-                        log "Pulled latest changes for mcp-get"
+                        log "Pulled latest changes for opencode-smart-title"
                     else
                         log "⚠ git pull failed; continuing with current checkout"
                     fi
@@ -192,27 +211,28 @@ install_mcp_get_local() {
 
     # Install dependencies (requires network access)
     if npm ci; then
-        log "Dependencies installed"
+        log "Dependencies installed for opencode-smart-title"
     else
         log "⚠ npm ci failed (likely no network); skipping build"
         popd >/dev/null
         return 0
     fi
 
-    # Build CLI and ensure it is executable
+    # Build plugin
     if npm run -s build; then
-        log "mcp-get built successfully"
+        log "opencode-smart-title built successfully"
     else
-        log "⚠ mcp-get build failed; skipping link"
+        log "⚠ opencode-smart-title build failed; skipping link"
         popd >/dev/null
         return 0
     fi
 
-    mkdir -p "$HOME/bin"
-    ln -sf "$repo/dist/index.js" "$HOME/bin/mcp-get"
-    chmod +x "$repo/dist/index.js" || true
+    # Symlink dist to OpenCode plugins directory
+    mkdir -p "$plugin_dir"
+    rm -rf "$plugin_dir/opencode-smart-title"
+    ln -sf "$repo/dist" "$plugin_dir/opencode-smart-title"
     popd >/dev/null
-    log "Linked $HOME/bin/mcp-get -> $repo/dist/index.js"
+    log "Linked $plugin_dir/opencode-smart-title -> $repo/dist"
 }
 
 show_usage() {
@@ -227,30 +247,32 @@ show_usage() {
     for package in "${NPM_PACKAGES[@]}"; do
         echo "  - $package"
     done
-    echo "  - @openai/codex (from source)"
+    echo ""
+    echo "Local packages built from source:"
+    echo "  - opencode-smart-title (from /srv/lib/opencode-smart-title fork)"
 }
 
 main() {
     local command="${1:-auto}"
-    
+
     case "$command" in
         install)
             check_npm
             check_nvm_node
             install_packages
-            install_mcp_get_local
+            install_opencode_smart_title_local
             ;;
         update)
             check_npm
             check_nvm_node
             update_packages
-            install_mcp_get_local
+            install_opencode_smart_title_local
             ;;
         auto)
             check_npm
             check_nvm_node
             install_or_update_packages
-            install_mcp_get_local
+            install_opencode_smart_title_local
             ;;
         -h|--help|help)
             show_usage
@@ -262,7 +284,7 @@ main() {
             exit 1
             ;;
     esac
-    
+
     log "npm packages management completed"
 }
 

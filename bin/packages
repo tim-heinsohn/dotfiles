@@ -153,6 +153,8 @@ extra/gimagereader-qt
     A simple Gtk/Qt front-end to tesseract-ocr.
 extra/git
     The fast distributed version control system.
+extra/git-delta 0.18.2-6 (3.4 MiB 9.2 MiB)
+    Syntax-highlighting pager for git and diff output.
 extra/github-cli
     GitHub's official command line tool.
 extra/glab

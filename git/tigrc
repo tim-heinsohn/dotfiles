@@ -2,6 +2,20 @@
 #
 # see 'man tigrc' for complete reference
 # see <https://github.com/jonas/tig/wiki/Bindings> for bind examples
+
+# Enable line wrapping by default
+set wrap-lines = yes
+
+# Configure tig to show better diffs (delta configuration in gitconfig will be used)
+set diff-options = --color-moved
+set log-options = --color-moved
+
+# Key bindings
 bind status + !git commit --amend
-bind diff w :toggle wrap-lines
+bind generic W :toggle wrap-lines
 bind main U !@sh -c "git url-commit %(commit) | xclip -selection c" # copy commit URL to clipboard
+
+# View current commit/diff with delta (press 'D' for delta view)
+bind main D !@sh -c "git show %(commit) | delta | less -R"
+bind diff D !@sh -c "git diff %(file) | delta | less -R"
+bind stage D !@sh -c "git diff %(file) | delta | less -R"

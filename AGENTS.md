@@ -26,6 +26,41 @@ symlinking.
 There is also `claude-code/CLAUDE.md` which (via symlink) serves as the user
 CLAUDE.md.
 
+## Dotfiles Management with Bombadil
+
+This repository uses **Bombadil** to manage dotfiles via symlinks.
+
+### Critical Rule: Edit Source Files, Not Symlink Targets
+
+**NEVER edit files in `~/.config/` or `~/.*` directly.** These are symlink targets managed by Bombadil.
+
+**ALWAYS edit the source files in this repository:**
+
+| Config Type | Source Location (edit here) | Symlink Target (don't edit) |
+|-------------|----------------------------|----------------------------|
+| **Git** | `git/gitconfig` | `~/.gitconfig` |
+| **Neovim** | `nvim/init.lua`, `nvim/lua/*.lua` | `~/.config/nvim/` |
+| **OpenCode** | `opencode/opencode.json` | `~/.config/opencode/opencode.json` |
+| **Zsh** | `zsh/zshrc`, `zsh/aliases`, `zsh/functions` | `~/.zshrc`, `~/.zsh/` |
+| OpenCode smart-title | `opencode/smart-title.jsonc` | `~/.config/opencode/smart-title.jsonc` |
+| Vim | `vim/vimrc` | `~/.vimrc` |
+| All other configs | See `bombadil.toml` [settings.dots] | (listed in bombadil.toml) |
+
+**After editing source files**, run `bombadil link` to update symlinks (or let posthooks handle it).
+
+### Verification
+
+Check if a file is managed by Bombadil:
+```bash
+ls -la ~/.config/opencode/opencode.json
+# Should show: ~/.config/opencode/opencode.json -> /home/t/dotfiles/.dots/opencode/opencode.json
+```
+
+### See Also
+- `bombadil.toml` - Complete list of managed dotfiles
+- `bin/prehooks` and `bin/posthooks` - Auto-run on `bombadil link`
+- @claude-code/docs/workflow/dotfiles-management.md - Detailed workflow guide
+
 ## Workflow Commands
 - See @claude-code/docs/workflow/dotfiles-management.md for dotfile operations
   and guidelines

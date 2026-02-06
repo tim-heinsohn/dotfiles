@@ -33,6 +33,8 @@ nvim_init_lua = { source = "nvim/init.lua", target = ".config/nvim/init.lua" }
 nvim_keymaps = { source = "nvim/lua/keymaps.lua", target = ".config/nvim/lua/keymaps.lua" }
 nvim_lsp_setup = { source = "nvim/lua/lsp_setup.lua", target = ".config/nvim/lua/lsp_setup.lua" }
 nvim_plugins = { source = "nvim/lua/plugins.lua", target = ".config/nvim/lua/plugins.lua" }
+opencode = { source = "opencode/opencode.json", target = "~/.config/opencode/opencode.json" }
+opencode_smart_title = { source = "opencode/smart-title.jsonc", target = "~/.config/opencode/smart-title.jsonc" }
 pandoc_defaults = { source = "pandoc/defaults.yaml", target = ".pandoc/defaults.yaml" }
 profile = { source = "shell/profile", target = ".profile" }
 railsrc = { source = "rails/railsrc", target = ".railsrc" }
