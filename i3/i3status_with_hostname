@@ -45,6 +45,25 @@ i3status | (
             with_caps=$(echo "$with_project" | jq --arg text "CAPS" --arg color "#FF3B30" '[{ "full_text": $text, "name": "caps_lock", "color": $color }] + .')
         fi
 
+        # Calculate RAM usage and color (inserted before disk block later).
+        mem_text=""
+        mem_color=""
+        mem_kb=$(awk '/MemTotal:/ {total=$2} /MemAvailable:/ {avail=$2} END {if (total > 0) printf "%d %d", total, avail}' /proc/meminfo)
+        if [ -n "$mem_kb" ]; then
+            set -- $mem_kb
+            total_kb=$1
+            avail_kb=$2
+            used_kb=$((total_kb - avail_kb))
+            mem_pct=$(((used_kb * 100 + total_kb / 2) / total_kb))
+            mem_text="RAM ${mem_pct}%"
+
+            if [ "$mem_pct" -gt 90 ]; then
+                mem_color="#FF0000"
+            elif [ "$mem_pct" -gt 80 ]; then
+                mem_color="#FFA500"
+            fi
+        fi
+
         # Determine current keyboard layout from setxkbmap and format for display.
         layout=$(setxkbmap -query | awk '/layout:/ {print $2}' | cut -d',' -f1)
         [ -n "$layout" ] || layout="??"
@@ -59,14 +78,21 @@ i3status | (
             with_reboot=$(echo "$with_layout" | jq --arg text "REBOOT" --arg color "#FFA500" '[{ "full_text": $text, "name": "kernel_mismatch", "color": $color }] + .')
         fi
 
+        # Insert RAM usage right before root disk usage.
+        with_ram="$with_reboot"
+        if [ -n "$mem_text" ]; then
+            ram_block=$(jq -n --arg text "$mem_text" --arg color "$mem_color" 'if $color == "" then {"full_text": $text, "name": "ram_usage"} else {"full_text": $text, "name": "ram_usage", "color": $color} end')
+            with_ram=$(echo "$with_reboot" | jq --argjson ram "$ram_block" 'if any(.[]; .name == "disk_info" and .instance == "/") then reduce .[] as $item ([]; if $item.name == "disk_info" and $item.instance == "/" then . + [$ram, $item] else . + [$item] end) else . + [$ram] end')
+        fi
+
         # Check for disk health alerts
-        with_disk="$with_reboot"
+        with_disk="$with_ram"
         if [ -f /tmp/disk-health-alert ]; then
             alert_level=$(cat /tmp/disk-health-alert 2>/dev/null | head -1)
             if [ "$alert_level" = "ERROR" ]; then
-                with_disk=$(echo "$with_reboot" | jq --arg text "DISK!" --arg color "#FF0000" '[{ "full_text": $text, "name": "disk_alert", "color": $color }] + .')
+                with_disk=$(echo "$with_ram" | jq --arg text "DISK!" --arg color "#FF0000" '[{ "full_text": $text, "name": "disk_alert", "color": $color }] + .')
             elif [ "$alert_level" = "WARN" ]; then
-                with_disk=$(echo "$with_reboot" | jq --arg text "DISK" --arg color "#FFA500" '[{ "full_text": $text, "name": "disk_warning", "color": $color }] + .')
+                with_disk=$(echo "$with_ram" | jq --arg text "DISK" --arg color "#FFA500" '[{ "full_text": $text, "name": "disk_warning", "color": $color }] + .')
             fi
         fi
 
