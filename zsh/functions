@@ -292,7 +292,7 @@ fi
 function wt() {
   local worktree=$(git worktree list | fzf --height=40% --border --prompt="Select worktree: " | awk '{print $1}')
   if [ -n "$worktree" ]; then
-    cd "$worktree"
+    cd "$worktree" || return 1
   fi
 }
 
@@ -301,7 +301,7 @@ function wtr() {
   local worktree=$(git worktree list | fzf --height=40% --border --prompt="Select worktree to remove: " | awk '{print $1}')
   if [ -n "$worktree" ]; then
     echo "Remove worktree: $worktree"
-    read -q "REPLY?Are you sure? (y/n) "
+    read -q "REPLY?Are you sure? (y/N) "
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       git worktree remove "$worktree"
@@ -310,6 +310,11 @@ function wtr() {
       echo "Cancelled."
     fi
   fi
+}
+
+# Git worktree list
+function wtl() {
+  git worktree list
 }
 
 # vim: set ft=zsh:

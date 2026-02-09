@@ -1,0 +1,187 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+SWAPFILE_PATH="/swapfile"
+SWAP_MULTIPLIER="1.2"
+SWAP_PRIORITY="100"
+FORCE_RECREATE="0"
+
+usage() {
+  cat <<EOF
+Usage: $SCRIPT_NAME [OPTIONS]
+
+Create and enable a swapfile sized to 1.2x RAM (default), intended for hibernation.
+
+Options:
+  --swapfile PATH      Swapfile path (default: /swapfile)
+  --multiplier FLOAT   RAM multiplier for size calculation (default: 1.2)
+  --priority INT       Swap priority in /etc/fstab (default: 100)
+  --force              Recreate swapfile if it already exists
+  -h, --help           Show this help message
+
+Examples:
+  $SCRIPT_NAME
+  $SCRIPT_NAME --multiplier 1.2 --swapfile /swapfile --force
+EOF
+}
+
+log() {
+  printf 'setup-swapfile: %s\n' "$1"
+}
+
+fail() {
+  printf 'setup-swapfile: %s\n' "$1" >&2
+  exit 1
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --swapfile)
+        [[ $# -ge 2 ]] || fail "Missing value for --swapfile"
+        SWAPFILE_PATH="$2"
+        shift 2
+        ;;
+      --multiplier)
+        [[ $# -ge 2 ]] || fail "Missing value for --multiplier"
+        SWAP_MULTIPLIER="$2"
+        shift 2
+        ;;
+      --priority)
+        [[ $# -ge 2 ]] || fail "Missing value for --priority"
+        SWAP_PRIORITY="$2"
+        shift 2
+        ;;
+      --force)
+        FORCE_RECREATE="1"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        fail "Unknown option: $1"
+        ;;
+    esac
+  done
+}
+
+validate_inputs() {
+  [[ "$SWAPFILE_PATH" = /* ]] || fail "Swapfile path must be absolute"
+
+  [[ "$SWAP_PRIORITY" =~ ^[0-9]+$ ]] || fail "--priority must be an integer"
+
+  if ! awk -v m="$SWAP_MULTIPLIER" 'BEGIN { exit !(m ~ /^[0-9]+([.][0-9]+)?$/ && m > 0) }'; then
+    fail "--multiplier must be a positive number"
+  fi
+}
+
+compute_target_mib() {
+  local mem_kib target_kib target_mib rounded_mib
+
+  mem_kib="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+  [[ -n "$mem_kib" ]] || fail "Could not read MemTotal from /proc/meminfo"
+
+  target_kib="$(awk -v mem="$mem_kib" -v mult="$SWAP_MULTIPLIER" 'BEGIN { printf "%.0f", mem * mult }')"
+  target_mib=$(( (target_kib + 1023) / 1024 ))
+  rounded_mib=$(( (target_mib + 255) / 256 * 256 ))
+
+  printf '%s\n' "$rounded_mib"
+}
+
+warn_if_root_not_on_dmcrypt() {
+  local root_source root_type
+
+  root_source="$(findmnt -no SOURCE / || true)"
+  root_type="$(lsblk -no TYPE "$root_source" 2>/dev/null || true)"
+
+  if [[ "$root_type" != "crypt" ]]; then
+    log "Warning: / does not appear to be on a dm-crypt mapping."
+    log "Swapfile content may not be encrypted at rest unless the backing filesystem is encrypted."
+  fi
+}
+
+disable_swap_if_active() {
+  local active_swap
+
+  active_swap="$(swapon --noheadings --raw --output=NAME 2>/dev/null | awk -v p="$SWAPFILE_PATH" '$1 == p { print $1 }')"
+  if [[ -n "$active_swap" ]]; then
+    log "Disabling active swap on $SWAPFILE_PATH"
+    sudo swapoff "$SWAPFILE_PATH"
+  fi
+}
+
+create_swapfile() {
+  local target_mib="$1"
+
+  if [[ -e "$SWAPFILE_PATH" && "$FORCE_RECREATE" != "1" ]]; then
+    fail "$SWAPFILE_PATH already exists. Re-run with --force to recreate it."
+  fi
+
+  if [[ -e "$SWAPFILE_PATH" && "$FORCE_RECREATE" == "1" ]]; then
+    disable_swap_if_active
+    log "Removing existing $SWAPFILE_PATH"
+    sudo rm -f "$SWAPFILE_PATH"
+  fi
+
+  log "Creating $SWAPFILE_PATH with ${target_mib}MiB"
+  sudo fallocate -l "${target_mib}M" "$SWAPFILE_PATH"
+  sudo chmod 600 "$SWAPFILE_PATH"
+  sudo mkswap "$SWAPFILE_PATH" >/dev/null
+}
+
+persist_fstab_entry() {
+  local tmp_fstab fstab_line
+
+  tmp_fstab="$(mktemp)"
+  fstab_line="$SWAPFILE_PATH none swap defaults,pri=${SWAP_PRIORITY} 0 0"
+
+  awk -v path="$SWAPFILE_PATH" '!($1 == path && $3 == "swap") { print }' /etc/fstab > "$tmp_fstab"
+  printf '%s\n' "$fstab_line" >> "$tmp_fstab"
+
+  sudo cp "$tmp_fstab" /etc/fstab
+  rm -f "$tmp_fstab"
+}
+
+enable_swap() {
+  log "Enabling swap on $SWAPFILE_PATH"
+  sudo swapon "$SWAPFILE_PATH"
+}
+
+print_post_steps() {
+  cat <<EOF
+
+Swapfile setup complete.
+
+Next steps for hibernation:
+  1. Configure kernel resume parameters for a swapfile (resume + resume_offset).
+  2. Regenerate initramfs and bootloader config.
+
+Verification:
+  swapon --show
+  free -h
+EOF
+}
+
+main() {
+  parse_args "$@"
+  validate_inputs
+
+  warn_if_root_not_on_dmcrypt
+
+  local target_mib
+  target_mib="$(compute_target_mib)"
+
+  log "Detected swap target size: ${target_mib}MiB (multiplier: ${SWAP_MULTIPLIER}x RAM)"
+  create_swapfile "$target_mib"
+  persist_fstab_entry
+  enable_swap
+  print_post_steps
+}
+
+main "$@"
+
+# vi: ft=bash

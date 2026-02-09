@@ -92,7 +92,7 @@ nvm alias default 24.4.0
 
 # Setup Epson V330 scanner (if connected)
 if lsusb | grep -q "04b8:0142"; then
-    "${DOTFILES_DIR}/bin/scanner-epson-v330-setup"
+    "${DOTFILES_DIR}/bin/scanner/setup-epson-v330"
 fi &&
 
 # overcommit

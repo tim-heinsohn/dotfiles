@@ -1,0 +1,195 @@
+#!/bin/bash
+
+# Lexmark XC9235 Printer Installation Script
+# For Arch Linux with network (IPP) connection
+#
+# Model: Lexmark XC9235 (color MFP)
+# Firmware: CXTMH.230.408
+# Serial: 7559030006807
+#
+# This printer has no vendor-supplied Linux PPD.
+# Strategy: IPP Everywhere (driverless) primary, Generic PostScript fallback.
+
+set -e
+
+PRINTER_NAME="Lexmark-XC9235"
+PRINTER_DESC="Lexmark XC9235"
+
+echo "=== Lexmark XC9235 Printer Installation ==="
+echo "This script will set up your Lexmark XC9235 on Arch Linux via network"
+echo
+
+# Check if running as root
+if [[ $EUID -eq 0 ]]; then
+   echo "This script should not be run as root"
+   exit 1
+fi
+
+# ── 1. Required packages ────────────────────────────────────────────
+
+echo "1. Installing required packages..."
+sudo pacman -S --needed --noconfirm \
+    cups \
+    cups-filters \
+    cups-pdf \
+    ghostscript \
+    gsfonts \
+    avahi \
+    nss-mdns \
+    system-config-printer
+
+# ── 2. CUPS & Avahi services ────────────────────────────────────────
+
+echo "2. Starting and enabling CUPS and Avahi services..."
+sudo systemctl start cups
+sudo systemctl enable cups
+sudo systemctl start avahi-daemon
+sudo systemctl enable avahi-daemon
+
+# Ensure mDNS resolution is enabled in nsswitch.conf
+if ! grep -q 'mdns_minimal' /etc/nsswitch.conf 2>/dev/null; then
+    echo "  Enabling mDNS in nsswitch.conf..."
+    sudo sed -i 's/^hosts:.*/hosts: mymachines mdns_minimal [NOTFOUND=return] resolve [!UNAVAIL=return] files myhostname dns/' /etc/nsswitch.conf
+    echo "  ✓ mDNS enabled"
+fi
+
+# ── 3. Discover printer on network ──────────────────────────────────
+
+echo "3. Discovering Lexmark XC9235 on the network..."
+echo "   Waiting for CUPS to be ready..."
+sleep 3
+
+# Try mDNS/dnssd discovery first
+PRINTER_URI=""
+echo "   Scanning for IPP printers (this may take a moment)..."
+
+# Look for dnssd (Bonjour) URIs
+DNSSD_URI=$(lpinfo -v 2>/dev/null | grep -i "dnssd.*Lexmark.*XC9235\|dnssd.*XC9235" | awk '{print $2}' | head -1)
+if [ -n "$DNSSD_URI" ]; then
+    echo "   ✓ Found via mDNS: $DNSSD_URI"
+    PRINTER_URI="$DNSSD_URI"
+fi
+
+# Look for IPP URIs
+if [ -z "$PRINTER_URI" ]; then
+    IPP_URI=$(lpinfo -v 2>/dev/null | grep -i "ipp.*Lexmark.*XC9235\|ipp.*XC9235" | awk '{print $2}' | head -1)
+    if [ -n "$IPP_URI" ]; then
+        echo "   ✓ Found via IPP: $IPP_URI"
+        PRINTER_URI="$IPP_URI"
+    fi
+fi
+
+# Manual fallback
+if [ -z "$PRINTER_URI" ]; then
+    echo "   ⚠ Auto-discovery did not find the printer."
+    echo "   Available network printers:"
+    lpinfo -v 2>/dev/null | grep -E "^(network|dnssd|ipp)" | head -20
+    echo
+    read -p "   Enter the printer IP address or hostname: " PRINTER_HOST
+    if [ -z "$PRINTER_HOST" ]; then
+        echo "No address provided. Aborting."
+        exit 1
+    fi
+    PRINTER_URI="ipp://${PRINTER_HOST}/ipp/print"
+    echo "   Using URI: $PRINTER_URI"
+fi
+
+# ── 4. Add printer to CUPS ──────────────────────────────────────────
+
+echo "4. Adding printer to CUPS..."
+
+if lpstat -p "$PRINTER_NAME" >/dev/null 2>&1; then
+    echo "   ✓ $PRINTER_NAME already configured"
+    read -p "   Reconfigure? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "   Keeping existing configuration."
+    else
+        sudo lpadmin -x "$PRINTER_NAME"
+        echo "   Removed old configuration."
+    fi
+fi
+
+if ! lpstat -p "$PRINTER_NAME" >/dev/null 2>&1; then
+    # Strategy 1: IPP Everywhere (driverless)
+    echo "   Trying IPP Everywhere (driverless)..."
+    if sudo lpadmin -p "$PRINTER_NAME" -E \
+        -v "$PRINTER_URI" \
+        -m everywhere \
+        -L "Network" \
+        -D "$PRINTER_DESC" 2>/dev/null; then
+        echo "   ✓ Added with IPP Everywhere driver"
+    else
+        echo "   ⚠ IPP Everywhere failed, falling back to Generic PostScript..."
+
+        # Strategy 2: Generic PostScript PPD
+        # Find a suitable generic PostScript driver
+        PS_PPD=$(lpinfo -m 2>/dev/null | grep -i "generic.*postscript\|postscript.*color" | head -1 | awk '{print $1}')
+        if [ -z "$PS_PPD" ]; then
+            PS_PPD="drv:///sample.drv/generic.ppd"
+        fi
+
+        echo "   Using PPD: $PS_PPD"
+        if sudo lpadmin -p "$PRINTER_NAME" -E \
+            -v "$PRINTER_URI" \
+            -m "$PS_PPD" \
+            -L "Network" \
+            -D "$PRINTER_DESC"; then
+            echo "   ✓ Added with Generic PostScript driver"
+        else
+            echo "   ✗ Failed to add printer"
+            echo "   Please add manually via http://localhost:631"
+            exit 1
+        fi
+    fi
+fi
+
+# ── 5. Configure default options ────────────────────────────────────
+
+echo "5. Setting sensible defaults..."
+# Duplex (long-edge) - the XC9235 supports duplex
+sudo lpadmin -p "$PRINTER_NAME" -o sides=two-sided-long-edge 2>/dev/null || true
+# A4 paper (adjust to Letter if needed)
+sudo lpadmin -p "$PRINTER_NAME" -o media=iso_a4_210x297mm 2>/dev/null || true
+echo "   ✓ Defaults: duplex on, A4 paper"
+
+# ── 6. Verify ───────────────────────────────────────────────────────
+
+echo "6. Verifying printer setup..."
+
+if lpstat -p "$PRINTER_NAME" >/dev/null 2>&1; then
+    echo "   ✓ Lexmark XC9235 successfully configured"
+    lpstat -p "$PRINTER_NAME"
+
+    echo
+    echo "7. Set as default printer (optional)..."
+    read -p "   Set $PRINTER_NAME as default printer? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        sudo lpadmin -d "$PRINTER_NAME"
+        echo "   ✓ Set as default printer"
+    fi
+
+    echo
+    echo "8. Test print..."
+    read -p "   Print a test page? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "   Printing test page..."
+        lp -d "$PRINTER_NAME" /usr/share/cups/data/testprint
+        echo "   ✓ Test page sent to printer"
+    fi
+else
+    echo "   ⚠ Printer setup may need manual configuration"
+    echo "   Please visit http://localhost:631 to complete setup"
+fi
+
+echo
+echo "=== Installation Complete ==="
+echo "Printer management commands:"
+echo "- Check status:       lpstat -p -d"
+echo "- List printers:      lpstat -a"
+echo "- CUPS web interface: http://localhost:631"
+echo "- Cancel jobs:        cancel -a"
+echo "- Print file:         lp -d $PRINTER_NAME file.pdf"
+echo "- Printer options:    lpoptions -p $PRINTER_NAME -l"

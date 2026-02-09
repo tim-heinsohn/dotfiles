@@ -4,7 +4,7 @@
 mkdir -p ~/bin
 
 # Loop through each file in $DOTFILES_DIR/bin
-for file in "$DOTFILES_DIR"/bin/* "$DOTFILES_DIR"/bin/live-usb/*; do
+for file in "$DOTFILES_DIR"/bin/* "$DOTFILES_DIR"/bin/live-usb/* "$DOTFILES_DIR"/bin/printer/* "$DOTFILES_DIR"/bin/scanner/*; do
     # Skip directories - only symlink regular files
     if [ -d "$file" ]; then
         continue

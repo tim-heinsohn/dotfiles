@@ -1,7 +1,13 @@
 #!/bin/bash
 #
-# This script documents the reproducible process for installing Playwright MCP
-# (Model Context Protocol) on Arch Linux for use with Claude Code.
+# This script installs Playwright browser automation for AI coding assistants
+# on Arch Linux. It sets up:
+#   - System dependencies for browser rendering
+#   - @playwright/mcp (MCP server for Claude Code)
+#   - agent-browser (CLI for OpenCode / skill-based browser automation)
+#   - Browser binaries compatible with both tools
+
+set -euo pipefail
 
 # --- Installation Process ---
 
@@ -13,23 +19,38 @@ sudo pacman -S --needed --noconfirm nss nspr at-spi2-core libcups libdrm dbus li
 yay -S --needed --noconfirm icu66 enchant libffi7 libwebp
 
 
-# 2. Install Playwright MCP (Model Context Protocol)
-# This is a server that uses Playwright to provide browser automation
-# capabilities to Claude Code and other AI assistants.
-echo "Step 2: Installing Playwright MCP..."
+# 2. Install Playwright MCP and agent-browser
+echo "Step 2: Installing Playwright MCP and agent-browser..."
 npm install -g @playwright/mcp
+npm install -g agent-browser
 
 
-# 3. Install Browser Dependencies
-# This pulls the required browser binaries (Chromium, Firefox, WebKit)
-echo "Step 3: Installing browser dependencies..."
+# 3. Install Browser Binaries
+#
+# IMPORTANT: agent-browser bundles its own playwright-core which may expect
+# a different chromium revision than the global `npx playwright`. We must
+# install browsers using BOTH the global playwright CLI and agent-browser's
+# bundled playwright-core to ensure compatibility.
+echo "Step 3: Installing browser binaries..."
+
+# 3a. Install browsers for @playwright/mcp (global playwright)
+echo "  Installing browsers for @playwright/mcp..."
 npx playwright install chromium
 npx playwright install firefox
 npx playwright install webkit
 
-# 3b. Install Google Chrome (optional, for Chrome-specific testing)
-# echo "Installing Google Chrome..."
-# yay -S --needed --noconfirm google-chrome
+# 3b. Install chromium for agent-browser (bundled playwright-core)
+# This ensures the exact chromium revision agent-browser expects is present,
+# even if it differs from the global playwright version.
+echo "  Installing chromium for agent-browser..."
+AGENT_BROWSER_PW="$(npm root -g)/agent-browser/node_modules/playwright-core/cli.js"
+if [[ -f "$AGENT_BROWSER_PW" ]]; then
+  node "$AGENT_BROWSER_PW" install chromium
+else
+  echo "  Warning: agent-browser's bundled playwright-core not found at $AGENT_BROWSER_PW"
+  echo "  Falling back to: agent-browser install"
+  agent-browser install
+fi
 
 
 # 4. Configure Claude Code
@@ -40,9 +61,16 @@ claude mcp list | grep -q playwright || claude mcp add --scope=user playwright n
 
 # 5. Verify the installation
 echo "Step 5: Verifying installation..."
-echo "1. Test MCP server: mcp-server-playwright"
-echo "2. Check global installation: npm ls -g @playwright/mcp"
-echo "3. Test in Claude: 'Use playwright to open https://google.com'"
+echo "  Checking @playwright/mcp..."
+npm ls -g @playwright/mcp 2>/dev/null || echo "  Warning: @playwright/mcp not found globally"
+echo "  Checking agent-browser..."
+agent-browser open https://example.com && agent-browser close && echo "  agent-browser: OK" || echo "  Warning: agent-browser test failed"
+echo ""
+echo "Manual verification:"
+echo "  1. Test MCP server: mcp-server-playwright"
+echo "  2. Test in Claude: 'Use playwright to open https://google.com'"
+echo "  3. Test in OpenCode: agent-browser open https://google.com"
 
 
-echo "Playwright MCP installation is complete!"
+echo ""
+echo "Playwright installation is complete!"
