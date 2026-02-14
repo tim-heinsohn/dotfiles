@@ -1,4 +1,15 @@
 #!/bin/bash
+#
+# prehooks: Create required directories before Bombadil symlinks
+#
+# Description:
+# Creates necessary directories in ~/.config and home directory
+# that dotfiles will be symlinked into. Also installs the pinentry
+# wrapper for GPG if changed.
+#
+# This runs before bombadil creates symlinks.
+
+set -euo pipefail
 
 cd ~/.config && mkdir -p \
   alacritty \

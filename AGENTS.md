@@ -61,6 +61,55 @@ ls -la ~/.config/opencode/opencode.json
 ## Workflow Commands
 - See doc/guides/dotfiles-management.md for dotfile operations and guidelines
 
+# Naming Conventions
+
+## Directory Naming
+- Use **kebab-case** for directories: `shell-scripts/`, `setup-scripts/` instead of snake_case or camelCase
+
+## File Naming
+- Config files: Use consistent extension (e.g., `.conf`, `.config`, `.yml`, `.yaml`, `.toml`)
+- Scripts: Use consistent extension (`.sh` for bash, `.zsh` for zsh, or no extension - pick one per use case)
+- Document files: Use `.md` extension for Markdown
+
+## Script Naming
+- Setup scripts: Use `setup-<service>` or `<service>-setup` pattern
+- Use consistent verb prefixes: `setup-`, `install-`, `enable-`, `disable-`
+- Prefer hyphenated names: `packages-install` over `packages_install`
+
+## Shell Script Header Template
+
+When creating new shell scripts in `bin/`, use this header template:
+
+```bash
+#!/bin/bash
+#
+# <script-name>: <one-line description>
+#
+# Usage: <script-name> [options]
+#
+# Description:
+# <multi-line description>
+#
+# Dependencies:
+# - <dependency1>
+# - <dependency2>
+
+set -euo pipefail
+```
+
+## Documentation Style
+
+- Use Markdown (`.md`) for all documentation
+- Use ATX-style headers (`#`, `##`, `###`)
+- Maximum line length: 100 characters where practical
+- Include heading hierarchy: Title -> H2 sections -> H3 subsections
+
+## Code Style
+
+- Shell: Use `set -euo pipefail` in scripts
+- Comments: Use `#` for shell, `--` for Lua
+- Prefer explicit over implicit
+
 ## Rails Development Commands
 **ALWAYS use project-specific binstubs:**
 - `bin/rails` instead of `rails`

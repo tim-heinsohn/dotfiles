@@ -1,4 +1,14 @@
 #!/bin/bash
+#
+# posthooks: Run post-installation setup tasks
+#
+# Description:
+# Sets up additional symlinks and configurations that cannot be
+# handled by Bombadil (e.g., files with template syntax conflicts).
+#
+# This runs after bombadil creates symlinks.
+
+set -euo pipefail
 
 # Setup projects and symlinks
 ~/dotfiles/bin/projects-setup

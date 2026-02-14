@@ -1,4 +1,13 @@
 #!/bin/bash
+#
+# packages-install: Install packages from the packages file
+#
+# Description:
+# Reads package definitions from bin/packages and installs them
+# using pacman (official) or yay (AUR). Separates AUR and official
+# packages for optimal installation.
+
+set -euo pipefail
 
 # Get the directory where this script is located
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
