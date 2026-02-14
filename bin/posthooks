@@ -31,4 +31,4 @@ if [ -x "$HOME/mcp/bin/mcp" ]; then
 fi
 
 # Print reminder for brightness control
-echo "Run ~/dotfiles/acpi/enable to enable brightness control."
+echo "Run ~/dotfiles/services/acpi/enable to enable brightness control."

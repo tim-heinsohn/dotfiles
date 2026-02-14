@@ -17,6 +17,15 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
+# Git Workflow
+
+**Always rebase before merge** to keep history clean:
+```bash
+git fetch origin
+git rebase origin/main
+git merge --no-ff your-feature-branch
+```
+
 # Dotfiles Configuration
 
 This repository manages dotfiles and configurations using Bombadil for

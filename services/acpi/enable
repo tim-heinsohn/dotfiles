@@ -7,5 +7,5 @@ if ! command -v brightnessctl &> /dev/null; then
 fi
 
 # NOTE: check via: journalctl -u acpid -f
-sudo cp ~/dotfiles/acpi/events/* /etc/acpi/events/
+sudo cp ~/dotfiles/services/acpi/events/* /etc/acpi/events/
 sudo systemctl restart acpid
