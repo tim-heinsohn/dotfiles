@@ -1,3 +1,5 @@
+# @description Main Zsh shell configuration - sourced by ~/.zshrc
+# @target ~/.zshrc
 # instant prompt
 typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
