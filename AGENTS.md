@@ -17,14 +17,10 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
-# Claude Code Configuration
+# Dotfiles Configuration
 
-This is the project CLAUDE.md for the dotfiles repository.
 This repository manages dotfiles and configurations using Bombadil for
 symlinking.
-
-There is also `claude-code/CLAUDE.md` which (via symlink) serves as the user
-CLAUDE.md.
 
 ## Dotfiles Management with Bombadil
 
@@ -59,13 +55,11 @@ ls -la ~/.config/opencode/opencode.json
 ### See Also
 - `bombadil.toml` - Complete list of managed dotfiles
 - `bin/prehooks` and `bin/posthooks` - Auto-run on `bombadil link`
-- @claude-code/docs/workflow/dotfiles-management.md - Detailed workflow guide
+- `doc/dotfiles-structure.md` - Directory structure overview
+- `doc/bombadil-workflow.md` - Bombadil workflow guide
 
 ## Workflow Commands
-- See @claude-code/docs/workflow/dotfiles-management.md for dotfile operations
-  and guidelines
-
-- Please use claude-code/CLAUDE.md for user level claude instructions within this repository.
+- See doc/guides/dotfiles-management.md for dotfile operations and guidelines
 
 ## Rails Development Commands
 **ALWAYS use project-specific binstubs:**

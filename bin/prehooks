@@ -37,6 +37,4 @@ if [ -f "$WRAPPER_SOURCE" ]; then
   fi
 fi
 
-rm -rf ~/dotfiles/.dots/claude-code/agents/*
-rm -rf ~/dotfiles/.dots/claude-code/commands/*
-rm -rf ~/dotfiles/.dots/claude-code/docs/*
+# (Removed: claude-code cleanup - no longer managed via this repo)
