@@ -56,7 +56,18 @@ return {
     "sindrets/diffview.nvim",
     dependencies = "nvim-lua/plenary.nvim",
   },
-  "rhysd/committia.vim",
+  {
+    "rhysd/committia.vim",
+    config = function()
+      vim.g.committia_hooks = {}
+      vim.g.committia_hooks.edit_open = function(info)
+        vim.cmd('wincmd =') -- render all windows almost equally high and wide
+        vim.opt_local.spell = true
+        vim.opt_local.spelllang = "en_us"
+        vim.opt_local.complete:append("kspell")
+      end
+    end
+  },
 
   -- Live Share / Instant w/ localhost.run
   {
