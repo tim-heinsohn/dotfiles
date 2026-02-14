@@ -13,3 +13,13 @@ CLAUDE.local.md
 TODO.local.md
 tags
 vendor/*
+
+# Security
+*.bak*
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.gpg
+secrets/
+credentials/
