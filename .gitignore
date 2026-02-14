@@ -1,2 +1,16 @@
 .dots
 .direnv/
+*.bak*
+*.swp
+*.swo
+*~
+.DS_Store
+.env
+.env.local
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.gpg
+secrets/
+credentials/
