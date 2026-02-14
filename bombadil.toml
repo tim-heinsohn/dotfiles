@@ -1,63 +1,128 @@
 # toml bombadil (configuration file)
 #
 # A Dotfile Manager written in Rust
-# <https://oknozor.github.io/toml-bombadil/>
+# https://oknozor.github.io/toml-bombadil/
 dotfiles_dir = "dotfiles"
 
+# ============================================================================
+# Hooks
+# ============================================================================
+# Prehooks: Run before symlinks are created (create directories, etc.)
+# Posthooks: Run after symlinks are created (additional setup)
 [settings]
 prehooks = [ "~/dotfiles/bin/prehooks" ]
 posthooks = [ "~/dotfiles/bin/posthooks" ]
 
+# ============================================================================
+# Dotfiles Configuration
+# ============================================================================
+# Format: name = { source = "relative/path", target = "~/target/path" }
+# Source: Path relative to this repository
+# Target: Destination path in home directory (~ expands to $HOME)
+# ============================================================================
+
 [settings.dots]
-alacritty = { source = "alacritty/alacritty.yml", target = ".config/alacritty/alacritty.yml" }
-# claude_notes = { source = "claude-code/CLAUDE.md", target = "~/.claude/CLAUDE.md" }
-# claude_commands = { source = "claude-code/commands", target = "~/.claude/commands" }
-# claude_agents = { source = "claude-code/agents", target = "~/.claude/agents" }
-# claude_docs = { source = "claude-code/docs", target = "~/.claude/docs" }
+# --------------------------------------------------------------------------
+# Shell Configuration
+# --------------------------------------------------------------------------
 bash_profile = { source = "shell/bash_profile", target = ".bash_profile" }
 bashrc = { source = "shell/bashrc", target = ".bashrc" }
-flameshot =  { source = "utils/flameshot/flameshot.ini", target = "~/.config/flameshot/flameshot.ini" }
-gemini_settings = { source = "gemini/settings.json", target = ".gemini/settings.json" }
-gitattributes = { source = "git/gitattributes", target = ".gitattributes" }
+profile = { source = "shell/profile", target = ".profile" }
+zlogin = { source = "shell/zlogin", target = ".zlogin" }
+
+# --------------------------------------------------------------------------
+# Zsh Configuration
+# --------------------------------------------------------------------------
+# Main zsh entry point
+zshrc = { source = "zsh/zshrc", target = ".zshrc" }
+# Shell aliases (sourced by zshrc)
+zsh_aliases = { source = "zsh/aliases", target = ".zsh/aliases" }
+# Environment variables
+zsh_environment = { source = "zsh/environment", target = ".zsh/environment" }
+# Shell functions
+zsh_functions = { source = "zsh/functions", target = ".zsh/functions" }
+# Powerlevel10k custom configuration
+zsh_p10k_custom = { source = "zsh/p10k.custom.zsh", target = ".zsh/p10k.custom.zsh" }
+# Sheldon plugin manager config
+zsh_sheldon = { source = "zsh/plugins.toml", target = ".config/sheldon/plugins.toml" }
+
+# --------------------------------------------------------------------------
+# Git Configuration
+# --------------------------------------------------------------------------
 gitconfig = { source = "git/gitconfig", target = ".gitconfig" }
 gitignore = { source = "git/gitignore", target = ".gitignore" }
+gitattributes = { source = "git/gitattributes", target = ".gitattributes" }
 gittigrc = { source = "git/tigrc", target = ".tigrc" }
-gopass_shared = { source = "gopass/config.shared", target = ".config/gopass/config.shared" }
-gpg_agent = { source = "gpg/gpg-agent", target = ".gnupg/gpg-agent.conf" }
-i3 = { source = "i3/config", target = ".config/i3/config" }
-i3_status = { source = "i3/i3status.conf", target = ".config/i3status/config" }
-i3_status_with_hostname = { source = "i3/i3status_with_hostname", target = ".config/i3/i3status_with_hostname" }
-npmrc = { source = "npm/npmrc", target = ".npmrc" }
-nvim_functions = { source = "nvim/lua/functions.lua", target = ".config/nvim/lua/functions.lua" }
+
+# --------------------------------------------------------------------------
+# Editor Configuration
+# --------------------------------------------------------------------------
+# Neovim main init
 nvim_init_lua = { source = "nvim/init.lua", target = ".config/nvim/init.lua" }
-nvim_keymaps = { source = "nvim/lua/keymaps.lua", target = ".config/nvim/lua/keymaps.lua" }
-nvim_lsp_setup = { source = "nvim/lua/lsp_setup.lua", target = ".config/nvim/lua/lsp_setup.lua" }
+# Neovim plugins (plugin manager config)
 nvim_plugins = { source = "nvim/lua/plugins.lua", target = ".config/nvim/lua/plugins.lua" }
-opencode = { source = "opencode/opencode.json", target = "~/.config/opencode/opencode.json" }
-opencode_smart_title = { source = "opencode/smart-title.jsonc", target = "~/.config/opencode/smart-title.jsonc" }
-pandoc_defaults = { source = "pandoc/defaults.yaml", target = ".pandoc/defaults.yaml" }
-profile = { source = "shell/profile", target = ".profile" }
-railsrc = { source = "rails/railsrc", target = ".railsrc" }
-rofi = { source = "rofi/config", target = ".config/rofi/config.rasi" }
-rofi_pass = { source = "rofi/rofi-pass", target = ".config/rofi-pass/config" }
+# Neovim key mappings
+nvim_keymaps = { source = "nvim/lua/keymaps.lua", target = ".config/nvim/lua/keymaps.lua" }
+# Neovim custom functions
+nvim_functions = { source = "nvim/lua/functions.lua", target = ".config/nvim/lua/functions.lua" }
+# Neovim LSP setup
+nvim_lsp_setup = { source = "nvim/lua/lsp_setup.lua", target = ".config/nvim/lua/lsp_setup.lua" }
+# Vim configuration
 vimrc = { source = "vim/vimrc", target = ".vimrc" }
 vimrc_minimal = { source = "vim/vimrc.minimal", target = ".vimrc.minimal" }
 vimrc_template = { source = "vim/vimrc.template", target = ".vimrc.template" }
-wezterm = { source = "wezterm/wezterm.lua", target = "~/.wezterm.lua" }
+
+# --------------------------------------------------------------------------
+# AI Assistant Configuration
+# --------------------------------------------------------------------------
+# OpenCode main config
+opencode = { source = "opencode/opencode.json", target = "~/.config/opencode/opencode.json" }
+# OpenCode smart title rules
+opencode_smart_title = { source = "opencode/smart-title.jsonc", target = "~/.config/opencode/smart-title.jsonc" }
+
+# --------------------------------------------------------------------------
+# Desktop Environment
+# --------------------------------------------------------------------------
+i3 = { source = "i3/config", target = ".config/i3/config" }
+i3_status = { source = "i3/i3status.conf", target = ".config/i3status/config" }
+i3_status_with_hostname = { source = "i3/i3status_with_hostname", target = ".config/i3/i3status_with_hostname" }
+rofi = { source = "rofi/config", target = ".config/rofi/config.rasi" }
+rofi_pass = { source = "rofi/rofi-pass", target = ".config/rofi-pass/config" }
 xinitrc = { source = "xinit/xinitrc", target = ".xinitrc" }
 xkbmap = { source = "xmodmap/xkbmap", target = ".Xkbmap" }
 xmodmap = { source = "xmodmap/xmodmap", target = ".Xmodmap" }
-zlogin = { source = "shell/zlogin", target = ".zlogin" }
-zsh_aliases = { source = "zsh/aliases", target = ".zsh/aliases" }
-zsh_environment = { source = "zsh/environment", target = ".zsh/environment" }
-zsh_functions = { source = "zsh/functions", target = ".zsh/functions" }
-# NOTE: copy manually: "zsh/p10k.zsh" to ".p10k.zsh"
-zsh_p10k_custom = { source = "zsh/p10k.custom.zsh", target = ".zsh/p10k.custom.zsh" }
-# NOTE: p10k.claude.zsh includes zsh parameter length syntax `${#...}`
-# which conflicts with Tera template comment parsing in Bombadil.
-# We symlink it in posthooks to bypass templating.
-# zsh_p10k_claude = { source = "zsh/p10k.claude.zsh", target = ".zsh/p10k.claude.zsh" }
-zsh_sheldon = { source = "zsh/plugins.toml", target = ".config/sheldon/plugins.toml" }
-zshrc = { source = "zsh/zshrc", target = ".zshrc" }
-# Note: Codex MCP configuration is managed dynamically via bin/codex-mcp.
-# The file codex/mcp.toml remains as a reference template only and is not symlinked.
+
+# --------------------------------------------------------------------------
+# Terminal Emulators
+# --------------------------------------------------------------------------
+wezterm = { source = "wezterm/wezterm.lua", target = "~/.wezterm.lua" }
+# alacritty = { source = "alacritty/alacritty.yml", target = ".config/alacritty/alacritty.yml" }
+
+# --------------------------------------------------------------------------
+# Development Tools
+# --------------------------------------------------------------------------
+npmrc = { source = "npm/npmrc", target = ".npmrc" }
+railsrc = { source = "rails/railsrc", target = ".railsrc" }
+pandoc_defaults = { source = "pandoc/defaults.yaml", target = ".pandoc/defaults.yaml" }
+gemini_settings = { source = "gemini/settings.json", target = ".gemini/settings.json" }
+
+# --------------------------------------------------------------------------
+# Security
+# --------------------------------------------------------------------------
+gpg_agent = { source = "gpg/gpg-agent", target = ".gnupg/gpg-agent.conf" }
+gopass_shared = { source = "gopass/config.shared", target = ".config/gopass/config.shared" }
+
+# --------------------------------------------------------------------------
+# Utilities
+# --------------------------------------------------------------------------
+flameshot = { source = "utils/flameshot/flameshot.ini", target = "~/.config/flameshot/flameshot.ini" }
+
+# ============================================================================
+# Notes
+# ============================================================================
+# - Claude MCP configuration is managed dynamically via bin/codex-mcp
+#   The file codex/mcp.toml remains as a reference template only
+# - p10k.zsh is symlinked manually in posthooks (not via bombadil)
+#   Reason: Tera template parsing conflicts with zsh ${#...} syntax
+# - To add a new dotfile: add entry above and run 'bombadil link'
+# ============================================================================

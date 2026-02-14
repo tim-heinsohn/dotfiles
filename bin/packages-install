@@ -1,4 +1,30 @@
 #!/bin/bash
+# @description Install packages from the packages list file
+
+print_help() {
+    cat <<'EOF'
+Usage: packages-install
+
+Installs packages listed in bin/packages:
+- Updates pacman database
+- Installs official (core/extra) packages in batch
+- Installs AUR packages individually via yay
+
+Package categories:
+- aur/* - AUR packages (Arch User Repository)
+- core/* - Core pacman packages
+- extra/* - Extra pacman packages
+
+Requires: yay (AUR helper), sudo
+EOF
+}
+
+case "$1" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+esac
 
 # Get the directory where this script is located
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

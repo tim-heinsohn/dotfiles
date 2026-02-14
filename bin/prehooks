@@ -1,4 +1,26 @@
 #!/bin/bash
+# @description Pre-link hooks - runs before bombadil link to prepare directories
+
+print_help() {
+    cat <<'EOF'
+Usage: prehooks
+
+Runs before bombadil link to prepare directories and clean up temporary files:
+- Creates necessary ~/.config/ subdirectories
+- Creates ~/.gnupg/ and ~/.zsh/ directories
+- Installs pinentry wrapper if needed (requires sudo)
+- Clears claude-code agent/command/docs directories
+
+This script is called automatically by bombadil.
+EOF
+}
+
+case "$1" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+esac
 
 cd ~/.config && mkdir -p \
   alacritty \

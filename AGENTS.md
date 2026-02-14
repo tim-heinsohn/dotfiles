@@ -17,57 +17,122 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
-# Claude Code Configuration
+# Dotfiles Repository
 
-This is the project CLAUDE.md for the dotfiles repository.
-This repository manages dotfiles and configurations using Bombadil for
-symlinking.
+This is the **project CLAUDE.md** for the dotfiles repository. It manages personal
+dotfiles and configurations using **Bombadil** for symlink management.
 
-There is also `claude-code/CLAUDE.md` which (via symlink) serves as the user
+There is also `claude-code/CLAUDE.md` which (via symlink) serves as the user-level
 CLAUDE.md.
 
-## Dotfiles Management with Bombadil
+---
 
-This repository uses **Bombadil** to manage dotfiles via symlinks.
+## Quick Reference
 
-### Critical Rule: Edit Source Files, Not Symlink Targets
+### Critical Rules
 
-**NEVER edit files in `~/.config/` or `~/.*` directly.** These are symlink targets managed by Bombadil.
+| Rule | Description |
+|------|-------------|
+| **NEVER** edit symlink targets | Always edit source files in this repository |
+| **ALWAYS** run `bombadil link` | After modifying config files |
+| **USE** bin/ scripts with `--help` | Most scripts support `--help` |
 
-**ALWAYS edit the source files in this repository:**
+### Common Tasks
 
-| Config Type | Source Location (edit here) | Symlink Target (don't edit) |
-|-------------|----------------------------|----------------------------|
-| **Git** | `git/gitconfig` | `~/.gitconfig` |
-| **Neovim** | `nvim/init.lua`, `nvim/lua/*.lua` | `~/.config/nvim/` |
-| **OpenCode** | `opencode/opencode.json` | `~/.config/opencode/opencode.json` |
-| **Zsh** | `zsh/zshrc`, `zsh/aliases`, `zsh/functions` | `~/.zshrc`, `~/.zsh/` |
-| OpenCode smart-title | `opencode/smart-title.jsonc` | `~/.config/opencode/smart-title.jsonc` |
-| Vim | `vim/vimrc` | `~/.vimrc` |
-| All other configs | See `bombadil.toml` [settings.dots] | (listed in bombadil.toml) |
+```bash
+# Add a new dotfile
+# 1. Create file in appropriate directory
+# 2. Add entry to bombadil.toml
+# 3. Run: bombadil link
 
-**After editing source files**, run `bombadil link` to update symlinks (or let posthooks handle it).
+# Modify existing config
+nvim ~/dotfiles/zsh/zshrc   # Edit source, not ~/.zshrc
+bombadil link               # Relink after changes
+
+# Verify health
+~/dotfiles/bin/dotfiles-health
+
+# Get help on scripts
+~/dotfiles/bin/setup-system --help
+~/dotfiles/bin/packages --help
+```
+
+### Directory Purpose
+
+| Directory | Purpose |
+|-----------|---------|
+| `bin/` | Executable scripts (use `--help`) |
+| `zsh/` | Zsh configuration |
+| `git/` | Git configuration |
+| `nvim/` | Neovim Lua configuration |
+| `vim/` | Vim configuration |
+| `opencode/` | OpenCode/Claude Code config |
+| `shell/` | Bash and POSIX shell configs |
+| `services/` | Service configs (Traefik, Caddy, etc.) |
+| `doc/guides/` | Getting started and troubleshooting |
+
+### Bombadil Configuration
+
+All managed dotfiles are defined in `bombadil.toml`:
+
+```toml
+[settings.dots]
+# Format: name = { source = "path", target = "~/target" }
+nvim_init_lua = { source = "nvim/init.lua", target = ".config/nvim/init.lua" }
+```
+
+### Key Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `bin/setup-system` | Initial system setup (--help available) |
+| `bin/packages-install` | Install packages from bin/packages |
+| `bin/dotfiles-health` | Verify symlinks and config |
+| `bin/prehooks` | Pre-link setup (runs before bombadil link) |
+| `bin/posthooks` | Post-link setup (runs after bombadil link) |
+
+---
+
+## Dotfiles Management
+
+### Edit Source, Not Target
+
+**ALWAYS edit source files in this repository:**
+
+| Config | Edit This | Not This |
+|--------|-----------|----------|
+| Git | `git/gitconfig` | `~/.gitconfig` |
+| Zsh | `zsh/zshrc` | `~/.zshrc` |
+| Neovim | `nvim/init.lua` | `~/.config/nvim/init.lua` |
 
 ### Verification
 
 Check if a file is managed by Bombadil:
 ```bash
-ls -la ~/.config/opencode/opencode.json
-# Should show: ~/.config/opencode/opencode.json -> /home/t/dotfiles/.dots/opencode/opencode.json
+ls -la ~/.config/nvim/init.lua
+# Should show: -> /home/t/dotfiles/nvim/init.lua
 ```
 
-### See Also
-- `bombadil.toml` - Complete list of managed dotfiles
-- `bin/prehooks` and `bin/posthooks` - Auto-run on `bombadil link`
-- @claude-code/docs/workflow/dotfiles-management.md - Detailed workflow guide
+### After Editing
 
-## Workflow Commands
-- See @claude-code/docs/workflow/dotfiles-management.md for dotfile operations
-  and guidelines
+After modifying any config file:
+```bash
+bombadil link
+```
 
-- Please use claude-code/CLAUDE.md for user level claude instructions within this repository.
+---
 
-## Rails Development Commands
+## Documentation
+
+- [Getting Started](doc/guides/getting-started.md)
+- [Common Workflows](doc/guides/workflows.md)
+- [Troubleshooting](doc/guides/troubleshooting.md)
+- [Navigation Index](doc/navigation.md)
+
+---
+
+## Rails Development
+
 **ALWAYS use project-specific binstubs:**
 - `bin/rails` instead of `rails`
 - `bin/bundle` instead of `bundle`

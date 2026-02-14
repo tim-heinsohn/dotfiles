@@ -1,0 +1,103 @@
+#!/bin/bash
+# @description Check repository health - verifies symlinks and configuration
+
+print_help() {
+    cat <<'EOF'
+Usage: dotfiles-health
+
+Checks the health of the dotfiles repository:
+- Verifies bombadil.toml is valid
+- Checks all symlinks exist and point to correct targets
+- Verifies key config files are present
+- Reports any broken or misconfigured links
+
+Exit codes:
+  0 - All checks passed
+  1 - Some checks failed
+EOF
+}
+
+case "$1" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+esac
+
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+ERRORS=0
+
+echo "=== Dotfiles Health Check ==="
+echo
+
+# Check bombadil.toml exists and is valid
+echo "Checking bombadil.toml..."
+if [ -f "$DOTFILES_DIR/bombadil.toml" ]; then
+    if command -v bombadil >/dev/null 2>&1; then
+        if bombadil check >/dev/null 2>&1; then
+            echo "  ✓ bombadil.toml is valid"
+        else
+            echo "  ✗ bombadil.toml has errors"
+            ERRORS=$((ERRORS + 1))
+        fi
+    else
+        echo "  ⊘ bombadil not installed, skipping validation"
+    fi
+else
+    echo "  ✗ bombadil.toml not found"
+    ERRORS=$((ERRORS + 1))
+fi
+echo
+
+# Check key directories exist
+echo "Checking directory structure..."
+for dir in zsh git nvim bin; do
+    if [ -d "$DOTFILES_DIR/$dir" ]; then
+        echo "  ✓ $dir/ exists"
+    else
+        echo "  ✗ $dir/ not found"
+        ERRORS=$((ERRORS + 1))
+    fi
+done
+echo
+
+# Check key symlinks
+echo "Checking key symlinks..."
+check_link() {
+    local target=$1
+    local name=$2
+    if [ -L "$target" ]; then
+        local link_target
+        link_target=$(readlink -f "$target")
+        if [ "$link_target" = "$DOTFILES_DIR"* ]; then
+            echo "  ✓ $name -> $link_target"
+        else
+            echo "  ✗ $name points to wrong target: $link_target"
+            ERRORS=$((ERRORS + 1))
+        fi
+    elif [ -e "$target" ]; then
+        echo "  ✗ $name exists but is not a symlink"
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "  ✗ $name does not exist"
+        ERRORS=$((ERRORS + 1))
+    fi
+}
+
+check_link "$HOME/.zshrc" "zshrc"
+check_link "$HOME/.gitconfig" "gitconfig"
+check_link "$HOME/.config/nvim" "nvim"
+echo
+
+# Summary
+echo "=== Summary ==="
+if [ $ERRORS -eq 0 ]; then
+    echo "✓ All checks passed!"
+    exit 0
+else
+    echo "✗ $ERRORS error(s) found"
+    echo
+    echo "To fix symlinks, run:"
+    echo "  bombadil link"
+    exit 1
+fi

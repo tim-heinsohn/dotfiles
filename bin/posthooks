@@ -1,4 +1,28 @@
 #!/bin/bash
+# @description Post-link hooks - runs after bombadil link for additional setup
+
+print_help() {
+    cat <<'EOF'
+Usage: posthooks
+
+Runs after bombadil link to complete setup:
+- Runs projects-setup for project directories
+- Sets up binaries-symlink
+- Configures gopass cascading config
+- Creates p10k.zsh and p10k.claude.zsh symlinks
+- Links MCP CLI if present
+- Prints reminders for additional setup
+
+This script is called automatically by bombadil.
+EOF
+}
+
+case "$1" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+esac
 
 # Setup projects and symlinks
 ~/dotfiles/bin/projects-setup
