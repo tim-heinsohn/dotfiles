@@ -17,7 +17,7 @@
 - [x] 3.3 Review test-playwright-optimization.js - move or delete (moved)
 
 ## 4. Unused Configs
-- [x] 4.1 Verify Gemfile/Gemfile.lock usage - remove if unused (removed)
+- [x] 4.1 Verify Gemfile/Gemfile.lock usage - kept, used by termux/serve for webrick
 - [x] 4.2 Review bin/ scripts for orphaned tools (kept - gopass is installed)
 - [x] 4.3 Review .dots/goodies/ - verify usage (not present)
 - [x] 4.4 Check for other orphaned configs (none found)
