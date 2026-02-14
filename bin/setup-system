@@ -71,7 +71,6 @@ cd "${DOTFILES_DIR}" &&
 "${DOTFILES_DIR}/bin/packages-install" &&
 "${DOTFILES_DIR}/docker/docker-group-setup" &&
 "${DOTFILES_DIR}/ruby/rvm-setup" &&
-"${DOTFILES_DIR}/vundle-install" &&
 "${DOTFILES_DIR}/whisper/setup" &&
 bombadil link &&
 sheldeon lock &&

@@ -78,9 +78,9 @@ function M.setup()
   vim.keymap.set('n', '<Leader>tb', '<cmd>TigBlame<CR>', { desc = "tig blame" })
 
   -- Tab management
-  vim.keymap.set('n', '<leader>tcl', function() require('functions').tabcloseleft() end,
+  vim.keymap.set('n', '<leader>tcl', function() TabCloseLeft() end,
     { desc = "Close tabs to the left" })
-  vim.keymap.set('n', '<leader>tcr', function() require('functions').tabcloseright() end,
+  vim.keymap.set('n', '<leader>tcr', function() TabCloseRight() end,
     { desc = "Close tabs to the right" })
 
   -- Ruby documentation
