@@ -2,6 +2,5 @@
 
 source "https://rubygems.org"
 
-# gem "rails"
-
+# Used by termux/serve for local HTTP server
 gem "webrick", "~> 1.9"
