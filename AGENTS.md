@@ -17,14 +17,19 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
-# Claude Code Configuration
+# Git Workflow
 
-This is the project CLAUDE.md for the dotfiles repository.
+**Always rebase before merge** to keep history clean:
+```bash
+git fetch origin
+git rebase origin/main
+git merge --no-ff your-feature-branch
+```
+
+# Dotfiles Configuration
+
 This repository manages dotfiles and configurations using Bombadil for
 symlinking.
-
-There is also `claude-code/CLAUDE.md` which (via symlink) serves as the user
-CLAUDE.md.
 
 ## Dotfiles Management with Bombadil
 
@@ -59,13 +64,60 @@ ls -la ~/.config/opencode/opencode.json
 ### See Also
 - `bombadil.toml` - Complete list of managed dotfiles
 - `bin/prehooks` and `bin/posthooks` - Auto-run on `bombadil link`
-- @claude-code/docs/workflow/dotfiles-management.md - Detailed workflow guide
+- `doc/dotfiles-structure.md` - Directory structure overview
+- `doc/bombadil-workflow.md` - Bombadil workflow guide
 
 ## Workflow Commands
-- See @claude-code/docs/workflow/dotfiles-management.md for dotfile operations
-  and guidelines
+- See doc/guides/dotfiles-management.md for dotfile operations and guidelines
 
-- Please use claude-code/CLAUDE.md for user level claude instructions within this repository.
+# Naming Conventions
+
+## Directory Naming
+- Use **kebab-case** for directories: `shell-scripts/`, `setup-scripts/` instead of snake_case or camelCase
+
+## File Naming
+- Config files: Use consistent extension (e.g., `.conf`, `.config`, `.yml`, `.yaml`, `.toml`)
+- Scripts: Use consistent extension (`.sh` for bash, `.zsh` for zsh, or no extension - pick one per use case)
+- Document files: Use `.md` extension for Markdown
+
+## Script Naming
+- Setup scripts: Use `setup-<service>` or `<service>-setup` pattern
+- Use consistent verb prefixes: `setup-`, `install-`, `enable-`, `disable-`
+- Prefer hyphenated names: `packages-install` over `packages_install`
+
+## Shell Script Header Template
+
+When creating new shell scripts in `bin/`, use this header template:
+
+```bash
+#!/bin/bash
+#
+# <script-name>: <one-line description>
+#
+# Usage: <script-name> [options]
+#
+# Description:
+# <multi-line description>
+#
+# Dependencies:
+# - <dependency1>
+# - <dependency2>
+
+set -euo pipefail
+```
+
+## Documentation Style
+
+- Use Markdown (`.md`) for all documentation
+- Use ATX-style headers (`#`, `##`, `###`)
+- Maximum line length: 100 characters where practical
+- Include heading hierarchy: Title -> H2 sections -> H3 subsections
+
+## Code Style
+
+- Shell: Use `set -euo pipefail` in scripts
+- Comments: Use `#` for shell, `--` for Lua
+- Prefer explicit over implicit
 
 ## Rails Development Commands
 **ALWAYS use project-specific binstubs:**

@@ -1,4 +1,26 @@
 #!/bin/bash
+# @description Setup project directories and environment variables
+
+print_help() {
+    cat <<'EOF'
+Usage: projects-setup
+
+Sets up project directories and environment configuration:
+- Symlinks dotfiles from project-specific .dotfiles directories
+- Configures direnv whitelists for .dev directories
+- Initializes ~/.projects with template variables
+
+Environment:
+  No special environment variables required.
+EOF
+}
+
+case "$1" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+esac
 
 # symlink project dotfiles
 find ~ -maxdepth 1 -type d -iname '*.dotfiles' | while read dotfiles

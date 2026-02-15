@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Check if brightnessctl is installed
+if ! command -v brightnessctl &> /dev/null; then
+    echo "Error: brightnessctl is not installed. Please install it and try again."
+    exit 1
+fi
+
+# NOTE: check via: journalctl -u acpid -f
+sudo cp ~/dotfiles/services/acpi/events/* /etc/acpi/events/
+sudo systemctl restart acpid

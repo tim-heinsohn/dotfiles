@@ -1,2 +1,7 @@
 .dots
 .direnv/
+*.swp
+*.swo
+.DS_Store
+.env
+.env.local

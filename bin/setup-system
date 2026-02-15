@@ -1,4 +1,18 @@
 #!/bin/bash
+#
+# setup-system: Clone or update the dotfiles repository
+#
+# Usage: setup-system [OPTIONS]
+#
+# Options:
+#   DOTFILES_REPO   Git repository URL (default: https://github.com/tim-heinsohn/dotfiles.git)
+#   DOTFILES_DIR    Target directory (default: ~/dotfiles)
+#
+# Description:
+# Clones the dotfiles repository if not present, or updates it if
+# already exists. Validates that the target is a valid git repository.
+
+set -euo pipefail
 
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
 DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
@@ -71,7 +85,6 @@ cd "${DOTFILES_DIR}" &&
 "${DOTFILES_DIR}/bin/packages-install" &&
 "${DOTFILES_DIR}/docker/docker-group-setup" &&
 "${DOTFILES_DIR}/ruby/rvm-setup" &&
-"${DOTFILES_DIR}/vundle-install" &&
 "${DOTFILES_DIR}/whisper/setup" &&
 bombadil link &&
 sheldeon lock &&

@@ -1,4 +1,15 @@
 #!/bin/bash
+#
+# prehooks: Create required directories before Bombadil symlinks
+#
+# Description:
+# Creates necessary directories in ~/.config and home directory
+# that dotfiles will be symlinked into. Also installs the pinentry
+# wrapper for GPG if changed.
+#
+# This runs before bombadil creates symlinks.
+
+set -euo pipefail
 
 cd ~/.config && mkdir -p \
   alacritty \
@@ -37,6 +48,4 @@ if [ -f "$WRAPPER_SOURCE" ]; then
   fi
 fi
 
-rm -rf ~/dotfiles/.dots/claude-code/agents/*
-rm -rf ~/dotfiles/.dots/claude-code/commands/*
-rm -rf ~/dotfiles/.dots/claude-code/docs/*
+# (Removed: claude-code cleanup - no longer managed via this repo)

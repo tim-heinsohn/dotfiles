@@ -4,8 +4,83 @@
 vim.g.mapleader = "_"
 vim.g.maplocalleader = "\\"
 
--- source existing ~/.vimrc
-vim.cmd('source ~/.vimrc')
+-- Neovim settings migrated from vim/vimrc
+vim.opt.relativenumber = true
+vim.opt.number = true
+vim.opt.autochdir = true
+vim.opt.exrc = true
+vim.opt.secure = true
+vim.opt.visualbell = true
+vim.opt.cursorcolumn = true
+vim.opt.cursorline = true
+vim.opt.laststatus = 2
+vim.opt.report = 0
+vim.opt.ruler = true
+vim.opt.mouse = "a"
+vim.opt.mousehide = true
+vim.opt.scrolloff = 10
+vim.opt.shortmess:append("aOstTI")
+vim.opt.showcmd = true
+vim.opt.sidescrolloff = 10
+vim.opt.autoindent = true
+vim.opt.expandtab = true
+vim.opt.iskeyword:append("_,$,@,%,#")
+vim.opt.list = true
+vim.opt.listchars = { tab = ">-.", trail = "_" }
+vim.opt.startofline = false
+vim.opt.shiftwidth = 2
+vim.opt.showmatch = true
+vim.opt.smartindent = true
+vim.opt.softtabstop = 2
+vim.opt.tabstop = 2
+vim.opt.noeol = true
+vim.opt.fileformat = "unix"
+vim.opt.hlsearch = true
+vim.opt.incsearch = true
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
+vim.opt.wildignore:append({ ".git", ".svn", "*.bak", "*.jpg", "*.gif", "*.png", "*.pdf" })
+vim.opt.wildmenu = true
+vim.opt.wildmode = { "longest:full", "full" }
+vim.opt.autoread = true
+
+-- Jump to last position when reopening file
+vim.api.nvim_create_autocmd("BufReadPost", {
+  callback = function(args)
+    local mark = vim.api.nvim_buf_get_mark(0, '"')
+    local lcount = vim.api.nvim_buf_line_count(args.buf)
+    if mark[1] > 0 and mark[1] <= lcount then
+      pcall(vim.api.nvim_win_set_cursor, 0, mark)
+    end
+  end,
+})
+
+-- gopass: disable swap/backup/undo for sensitive files
+vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
+  pattern = "/dev/shm/gopass.*",
+  callback = function()
+    vim.opt_local.swapfile = false
+    vim.opt_local.backup = false
+    vim.opt_local.undofile = false
+  end,
+})
+
+-- Ruby/YAML: remove : from iskeyword (inherited from vimrc)
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "ruby", "yaml" },
+  callback = function()
+    vim.opt_local.iskeyword:remove(":")
+  end
+})
+
+-- Gitcommit: set textwidth and format options
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "gitcommit",
+  callback = function()
+    vim.opt_local.textwidth = 80
+    vim.opt_local.formatoptions:append("tcrqnlj1")
+  end
+})
 
 -- lazy load lazy, the plugin manager
 ---@see lazy.nvim README https://raw.githubusercontent.com/folke/lazy.nvim/main/README.md
