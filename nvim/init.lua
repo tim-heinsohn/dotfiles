@@ -33,7 +33,7 @@ vim.opt.showmatch = true
 vim.opt.smartindent = true
 vim.opt.softtabstop = 2
 vim.opt.tabstop = 2
-vim.opt.noeol = true
+vim.opt.eol = false
 vim.opt.fileformat = "unix"
 vim.opt.hlsearch = true
 vim.opt.incsearch = true
@@ -164,7 +164,7 @@ require('aerial').setup({
 
 -- Treesitter
 require('nvim-treesitter.configs').setup({
-  ensure_installed = { "ruby" },
+  ensure_installed = { "ruby", "python" },
   highlight = { enable = true },
   indent = { enable = true },
   incremental_selection = { enable = true },

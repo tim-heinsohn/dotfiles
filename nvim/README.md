@@ -25,6 +25,7 @@ Lua-based Neovim configuration.
 - Neovim (latest stable recommended)
 - Git (for plugin updates)
 - Optional: LSP servers, language tools
+- Python LSP: `pyright` (`npm install -g pyright`)
 
 ## Usage
 

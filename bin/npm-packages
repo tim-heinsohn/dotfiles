@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+OPENSPEC_PACKAGE="@fission-ai/openspec"
+OPENSPEC_SUPERSKILLS_REPO="$HOME/superskills"
+
 # List of global npm packages to manage
 declare -a NPM_PACKAGES=(
     "@ansible/ansible-language-server"
@@ -25,11 +28,65 @@ declare -a NPM_PACKAGES=(
     "happy-coder"
     "markmap-cli"
     "opencode-ai"
+    "pyright"
     "vscode-langservers-extracted"
 )
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+get_global_npm_package_version() {
+    local package="$1"
+
+    npm list -g "$package" --depth=0 --json 2>/dev/null | node -e '
+const pkg = process.argv[1];
+let input = "";
+process.stdin.on("data", (chunk) => input += chunk);
+process.stdin.on("end", () => {
+  try {
+    const json = JSON.parse(input || "{}");
+    const dep = (json.dependencies || {})[pkg];
+    if (dep && dep.version) {
+      process.stdout.write(dep.version);
+    }
+  } catch (_) {}
+});
+' "$package" || true
+}
+
+run_openspec_update_if_needed() {
+    local before_version="$1"
+    local after_version="$2"
+
+    if [ "$before_version" = "$after_version" ]; then
+        log "openspec unchanged ($after_version); skipping 'openspec update'"
+        return 0
+    fi
+
+    if [ ! -d "$OPENSPEC_SUPERSKILLS_REPO/.git" ]; then
+        log "superskills repo not found at $OPENSPEC_SUPERSKILLS_REPO; skipping 'openspec update'"
+        return 0
+    fi
+
+    if ! command -v openspec >/dev/null 2>&1; then
+        log "openspec command not found; skipping 'openspec update'"
+        return 0
+    fi
+
+    log "openspec changed ($before_version -> $after_version); running 'openspec update' in $OPENSPEC_SUPERSKILLS_REPO"
+    pushd "$OPENSPEC_SUPERSKILLS_REPO" >/dev/null || {
+        log "Unable to enter $OPENSPEC_SUPERSKILLS_REPO; skipping 'openspec update'"
+        return 0
+    }
+
+    if openspec update; then
+        log "✓ Successfully ran 'openspec update' in $OPENSPEC_SUPERSKILLS_REPO"
+    else
+        log "⚠ 'openspec update' failed in $OPENSPEC_SUPERSKILLS_REPO"
+    fi
+
+    popd >/dev/null
 }
 
 check_npm() {
@@ -209,13 +266,24 @@ install_opencode_smart_title_local() {
         fi
     fi
 
-    # Install dependencies (requires network access)
-    if npm ci; then
-        log "Dependencies installed for opencode-smart-title"
+    # Install dependencies
+    if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+        if npm ci; then
+            log "Dependencies installed for opencode-smart-title (npm ci)"
+        else
+            log "⚠ npm ci failed; skipping build"
+            popd >/dev/null
+            return 0
+        fi
     else
-        log "⚠ npm ci failed (likely no network); skipping build"
-        popd >/dev/null
-        return 0
+        log "No lockfile found; using npm install instead of npm ci"
+        if npm install; then
+            log "Dependencies installed for opencode-smart-title (npm install)"
+        else
+            log "⚠ npm install failed; skipping build"
+            popd >/dev/null
+            return 0
+        fi
     fi
 
     # Build plugin
@@ -254,25 +322,36 @@ show_usage() {
 
 main() {
     local command="${1:-auto}"
+    local openspec_before_version=""
+    local openspec_after_version=""
 
     case "$command" in
         install)
             check_npm
             check_nvm_node
+            openspec_before_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             install_packages
             install_opencode_smart_title_local
+            openspec_after_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
+            run_openspec_update_if_needed "$openspec_before_version" "$openspec_after_version"
             ;;
         update)
             check_npm
             check_nvm_node
+            openspec_before_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             update_packages
             install_opencode_smart_title_local
+            openspec_after_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
+            run_openspec_update_if_needed "$openspec_before_version" "$openspec_after_version"
             ;;
         auto)
             check_npm
             check_nvm_node
+            openspec_before_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             install_or_update_packages
             install_opencode_smart_title_local
+            openspec_after_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
+            run_openspec_update_if_needed "$openspec_before_version" "$openspec_after_version"
             ;;
         -h|--help|help)
             show_usage

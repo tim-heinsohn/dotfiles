@@ -29,6 +29,7 @@ vim.filetype.add({
 })
 
 lspconfig.ts_ls.setup{}
+lspconfig.pyright.setup{}
 lspconfig.eslint.setup{
   settings = {
     eslint = {
