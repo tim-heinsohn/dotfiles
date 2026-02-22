@@ -36,22 +36,40 @@ ensure_cron() {
     return
   fi
 
+  display_line="DISPLAY=:0"
+  xauthority_line="XAUTHORITY=${HOME}/.Xauthority"
   cron_line="*/20 * * * *    \\command feh --bg-fill --randomize --no-fehbg ${WALLPAPERS_DIR} ${WALLPAPERS_DIR}"
   existing_crontab=$(fcrontab -l 2>/dev/null || true)
+  updated_crontab="$existing_crontab"
+  changed=0
 
-  if printf '%s\n' "$existing_crontab" | grep -Fqx "$cron_line"; then
-    log "Cron entry already present"
+  append_line_if_missing() {
+    local line="$1"
+
+    if printf '%s\n' "$updated_crontab" | grep -Fqx "$line"; then
+      return
+    fi
+
+    if [[ -n "$updated_crontab" ]]; then
+      updated_crontab+=$'\n'
+    fi
+
+    updated_crontab+="$line"
+    changed=1
+  }
+
+  append_line_if_missing "$display_line"
+  append_line_if_missing "$xauthority_line"
+  append_line_if_missing "$cron_line"
+
+  if [[ "$changed" -eq 0 ]]; then
+    log "Cron entry and environment already present"
     return
   fi
 
-  {
-    if [[ -n "$existing_crontab" ]]; then
-      printf '%s\n' "$existing_crontab"
-    fi
-    printf '%s\n' "$cron_line"
-  } | fcrontab -
+  printf '%s\n' "$updated_crontab" | fcrontab -
 
-  log "Cron entry installed"
+  log "Cron entry and environment installed"
 }
 
 apply_wallpaper_now() {
