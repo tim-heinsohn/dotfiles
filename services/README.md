@@ -11,6 +11,12 @@ Reverse proxy and service configurations.
 | `postgresql/` | PostgreSQL config |
 | `mariadb/` | MariaDB config |
 
+## User systemd units
+
+- `browser-workspace-restore.service`: restore browser windows to cached i3 workspaces
+- `browser-workspace-snapshot.service`: take one browser workspace snapshot
+- `browser-workspace-snapshot.timer`: periodic snapshot scheduler
+
 ## Traefik
 
 Dynamic reverse proxy with:

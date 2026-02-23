@@ -48,5 +48,7 @@ Quick reference for finding things in this repository.
 
 - Getting Started: `doc/guides/getting-started.md`
 - Common Workflows: `doc/guides/workflows.md`
+- Tmux + i3 Workflow: `doc/guides/tmux-i3-workflow.md`
+- Browser Workspace Recovery: `doc/guides/browser-window-workspace-recovery.md`
 - Troubleshooting: `doc/guides/troubleshooting.md`
 - This file: `doc/navigation.md`

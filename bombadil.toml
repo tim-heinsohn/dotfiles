@@ -69,6 +69,7 @@ wezterm = { source = "wezterm/wezterm.lua", target = "~/.wezterm.lua" }
 railsrc = { source = "rails/railsrc", target = ".railsrc" }
 npmrc = { source = "npm/npmrc", target = ".npmrc" }
 pandoc_defaults = { source = "pandoc/defaults.yaml", target = ".pandoc/defaults.yaml" }
+tmux = { source = "tmux/tmux.conf", target = ".tmux.conf" }
 
 # ============================================================
 # Security

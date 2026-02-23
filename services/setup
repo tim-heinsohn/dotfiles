@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
+shopt -s nullglob
+
 SERVICE_DIR=~/.config/systemd/user/
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
 mkdir -p "$SERVICE_DIR"
 
-# Find all service files
+# Find all unit files
 service_files=("$SCRIPT_DIR"/*.service)
+timer_files=("$SCRIPT_DIR"/*.timer)
 
-# Symlink all services
+# Symlink all units
 for service_file in "${service_files[@]}"; do
     ln -fs "$service_file" "$SERVICE_DIR"
+done
+
+for timer_file in "${timer_files[@]}"; do
+    ln -fs "$timer_file" "$SERVICE_DIR"
 done
 
 systemctl --user daemon-reload
@@ -18,8 +27,21 @@ systemctl --user daemon-reload
 # Enable/start and show status for each service
 for service_file in "${service_files[@]}"; do
     service_name=$(basename "$service_file")
+
+    if [ "$service_name" = "browser-workspace-restore.service" ]; then
+        echo -e "\n=== Skipping auto-enable for $service_name (started by i3 startup) ==="
+        continue
+    fi
+
     echo -e "\n=== Setting up $service_name ==="
     systemctl --user enable --now "${service_name}"
     systemctl --user status "${service_name}" --no-pager
 done
 
+# Enable/start and show status for each timer
+for timer_file in "${timer_files[@]}"; do
+    timer_name=$(basename "$timer_file")
+    echo -e "\n=== Setting up $timer_name ==="
+    systemctl --user enable --now "${timer_name}"
+    systemctl --user status "${timer_name}" --no-pager
+done

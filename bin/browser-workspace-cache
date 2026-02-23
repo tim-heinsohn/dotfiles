@@ -1,0 +1,279 @@
+#!/bin/bash
+#
+# browser-workspace-cache: Cache and restore browser window workspaces in i3
+#
+# Usage: browser-workspace-cache [snapshot|restore|restore-wait|show]
+#
+# Description:
+# Captures Firefox/Chromium window titles and their current i3 workspace,
+# stores them in a local cache, and can restore currently open windows to the
+# remembered workspace. Snapshot updates existing entries and never removes
+# entries for windows that are currently closed.
+#
+# Dependencies:
+# - i3-msg
+# - jq
+
+set -euo pipefail
+
+cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
+cache_file="$cache_dir/i3-browser-workspaces.json"
+lock_dir="$cache_dir/i3-browser-workspaces.lock"
+restore_stamp_file="$cache_dir/i3-browser-workspaces.restore-at"
+
+min_browser_uptime_sec="${BWC_MIN_BROWSER_UPTIME_SEC:-45}"
+snapshot_cooldown_after_restore_sec="${BWC_SNAPSHOT_COOLDOWN_SEC:-120}"
+restore_stable_iterations="${BWC_RESTORE_STABLE_ITERATIONS:-3}"
+restore_stable_interval_sec="${BWC_RESTORE_STABLE_INTERVAL_SEC:-2}"
+restore_max_wait_sec="${BWC_RESTORE_MAX_WAIT_SEC:-180}"
+
+usage() {
+  echo "Usage: browser-workspace-cache [snapshot|restore|restore-wait|show]" >&2
+}
+
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Missing dependency: $cmd" >&2
+    exit 1
+  fi
+}
+
+get_open_browser_windows() {
+  i3-msg -t get_tree | jq -c '
+    def walk($ws):
+      . as $n
+      | ($ws // (if $n.type == "workspace" then ($n.name // "") else null end)) as $cur
+      | (if ($n.window != null and $n.window_properties? != null) then
+          [{
+            id: ($n.id | tostring),
+            class: ($n.window_properties.class // ""),
+            title: ($n.name // ""),
+            workspace: ($cur // "")
+          }]
+        else
+          []
+        end)
+      + (($n.nodes // []) | map(walk($cur)) | add // [])
+      + (($n.floating_nodes // []) | map(walk($cur)) | add // []);
+
+    walk(null)
+    | map(
+        select(.title != "")
+        | .class_lc = (.class | ascii_downcase)
+        | select(.class_lc | test("(firefox|chromium|chrome|brave)"))
+        | del(.class_lc)
+      )
+  '
+}
+
+ensure_cache_file() {
+  mkdir -p "$cache_dir"
+  if [ ! -f "$cache_file" ]; then
+    jq -n '{version: 1, updated_at: 0, entries: {}}' > "$cache_file"
+  fi
+}
+
+acquire_lock() {
+  mkdir -p "$cache_dir"
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    echo "Another browser-workspace-cache run is in progress; skipping." >&2
+    exit 0
+  fi
+  trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+}
+
+youngest_browser_uptime() {
+  local proc etimes min_uptime=""
+
+  for proc in firefox chromium chrome brave brave-browser; do
+    while IFS= read -r etimes; do
+      etimes="${etimes//[[:space:]]/}"
+      [ -n "$etimes" ] || continue
+      if [ -z "$min_uptime" ] || [ "$etimes" -lt "$min_uptime" ]; then
+        min_uptime="$etimes"
+      fi
+    done < <(ps -C "$proc" -o etimes= 2>/dev/null || true)
+  done
+
+  if [ -z "$min_uptime" ]; then
+    echo "-1"
+  else
+    echo "$min_uptime"
+  fi
+}
+
+snapshot_allowed() {
+  local now_ts last_restore_ts youngest_uptime
+  now_ts="$(date +%s)"
+
+  if [ -f "$restore_stamp_file" ]; then
+    last_restore_ts="$(cat "$restore_stamp_file" 2>/dev/null || true)"
+    if [ -n "$last_restore_ts" ] && [ "$last_restore_ts" -gt 0 ] && \
+      [ $((now_ts - last_restore_ts)) -lt "$snapshot_cooldown_after_restore_sec" ]; then
+      echo "Skipping snapshot: restore cooldown is active."
+      return 1
+    fi
+  fi
+
+  youngest_uptime="$(youngest_browser_uptime)"
+  if [ "$youngest_uptime" -ge 0 ] && [ "$youngest_uptime" -lt "$min_browser_uptime_sec" ]; then
+    echo "Skipping snapshot: browser startup still in progress (${youngest_uptime}s < ${min_browser_uptime_sec}s)."
+    return 1
+  fi
+
+  return 0
+}
+
+wait_for_stable_windows() {
+  local elapsed=0 stable=0 prev="" current count
+
+  while [ "$elapsed" -lt "$restore_max_wait_sec" ]; do
+    current="$(get_open_browser_windows | jq -c 'map({class, title, workspace}) | sort_by(.class, .title, .workspace)')"
+    count="$(jq 'length' <<<"$current")"
+
+    if [ "$current" = "$prev" ]; then
+      stable=$((stable + 1))
+    else
+      stable=1
+      prev="$current"
+    fi
+
+    if [ "$stable" -ge "$restore_stable_iterations" ]; then
+      echo "Browser windows stable after ${elapsed}s (${count} window(s))."
+      return 0
+    fi
+
+    sleep "$restore_stable_interval_sec"
+    elapsed=$((elapsed + restore_stable_interval_sec))
+  done
+
+  echo "Stability wait timed out after ${restore_max_wait_sec}s; restoring with current window state."
+}
+
+mark_restore_time() {
+  date +%s > "$restore_stamp_file"
+}
+
+snapshot() {
+  if ! snapshot_allowed; then
+    return 0
+  fi
+
+  ensure_cache_file
+
+  local existing windows updated
+  existing="$(jq -c '.' "$cache_file")"
+  windows="$(get_open_browser_windows)"
+
+  updated="$(jq -n \
+    --argjson existing "$existing" \
+    --argjson windows "$windows" \
+    '
+      ($existing.entries // {}) as $entries
+      | reduce $windows[] as $w (
+          {version: 1, updated_at: (now | floor), entries: $entries};
+          .entries[($w.class + "|" + $w.title)] = {
+            class: $w.class,
+            title: $w.title,
+            workspace: $w.workspace,
+            last_seen: (now | floor)
+          }
+        )
+    ')"
+
+  printf '%s\n' "$updated" > "$cache_file"
+
+  local current_count total_count
+  current_count="$(jq 'length' <<<"$windows")"
+  total_count="$(jq '.entries | length' "$cache_file")"
+  echo "Snapshot complete: $current_count open window(s), $total_count cached entry(ies)."
+}
+
+restore() {
+  if [ ! -f "$cache_file" ]; then
+    echo "No cache file found at $cache_file" >&2
+    exit 1
+  fi
+
+  local windows moves
+  windows="$(get_open_browser_windows)"
+
+  moves="$(jq -r \
+    --argjson windows "$windows" \
+    '
+      .entries as $entries
+      | $windows[]
+      | .key = (.class + "|" + .title)
+      | .target = ($entries[.key].workspace // "")
+      | select(.target != "")
+      | select(.workspace != .target)
+      | [.id, .workspace, .target, .class, .title] | @tsv
+    ' "$cache_file")"
+
+  if [ -z "$moves" ]; then
+    echo "Nothing to restore."
+    exit 0
+  fi
+
+  local moved=0
+  while IFS=$'\t' read -r id current target class title; do
+    [ -n "$id" ] || continue
+    i3-msg "[con_id=${id}] move container to workspace \"${target//\"/\\\"}\"" >/dev/null
+    moved=$((moved + 1))
+    echo "Moved ${class} window '${title}' from '${current}' to '${target}'."
+  done <<< "$moves"
+
+  echo "Restore complete: moved $moved window(s)."
+}
+
+restore_wait() {
+  wait_for_stable_windows
+  restore
+  mark_restore_time
+}
+
+show_cache() {
+  if [ ! -f "$cache_file" ]; then
+    echo "No cache file found at $cache_file" >&2
+    exit 1
+  fi
+
+  jq -r '
+    .entries
+    | to_entries
+    | sort_by(.value.class, .value.title)
+    | .[]
+    | "[\(.value.class)] \(.value.title) -> \(.value.workspace)"
+  ' "$cache_file"
+}
+
+main() {
+  require_cmd i3-msg
+  require_cmd jq
+
+  local cmd="${1:-snapshot}"
+  acquire_lock
+
+  case "$cmd" in
+    snapshot)
+      snapshot
+      ;;
+    restore)
+      restore
+      mark_restore_time
+      ;;
+    restore-wait)
+      restore_wait
+      ;;
+    show)
+      show_cache
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

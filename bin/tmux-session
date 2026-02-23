@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+# tmux-session: Open or attach a tmuxp profile session
+#
+# Usage: tmux-session <profile>
+#
+# Description:
+# Loads tmuxp profile ~/dotfiles/tmuxp/<profile>.yaml when the related tmux
+# session does not already exist, then attaches to that session.
+#
+# Dependencies:
+# - tmux
+# - tmuxp
+
+set -euo pipefail
+
+run_tmuxp() {
+  # Avoid Python import shadowing when current directory contains ./tmuxp/
+  # (as in this dotfiles repo).
+  (
+    cd "$HOME"
+    command tmuxp "$@"
+  )
+}
+
+print_available_profiles() {
+  shopt -s nullglob
+  for file in "$HOME"/dotfiles/tmuxp/*.yaml; do
+    base="${file##*/}"
+    echo "  ${base%.yaml}" >&2
+  done
+}
+
+print_help() {
+  cat >&2 <<'EOF'
+Usage: tmux-session <profile>
+
+Open or attach a tmux session from tmuxp profile ~/dotfiles/tmuxp/<profile>.yaml.
+
+Examples:
+  tmux-session dotfiles
+  tmux-session ia
+
+Options:
+  -h, --help    Show this help message
+EOF
+  echo "Available profiles:" >&2
+  print_available_profiles
+}
+
+if [ "$#" -eq 1 ] && { [ "$1" = "-h" ] || [ "$1" = "--help" ]; }; then
+  print_help
+  exit 0
+fi
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: tmux-session <profile>" >&2
+  echo "Available profiles:" >&2
+  print_available_profiles
+  exit 1
+fi
+
+profile="$1"
+profile_path="$HOME/dotfiles/tmuxp/${profile}.yaml"
+
+if [ ! -f "$profile_path" ]; then
+  echo "Profile not found: $profile_path" >&2
+  exit 1
+fi
+
+if ! run_tmuxp --help >/dev/null 2>&1; then
+  echo "tmuxp is installed but not runnable in this environment." >&2
+  echo "Possible causes:" >&2
+  echo "  - Python package/runtime mismatch (common after partial system updates)" >&2
+  echo "  - Python import shadowing by a local ./tmuxp directory" >&2
+  echo "Try: tmuxp --help" >&2
+  echo "If it still fails, run: sudo pacman -Syu tmuxp python python-libtmux" >&2
+  exit 1
+fi
+
+session_name="$(awk -F': *' '/^session_name:/ {print $2; exit}' "$profile_path" | tr -d '"')"
+session_name="${session_name:-$profile}"
+
+if ! tmux has-session -t "$session_name" 2>/dev/null; then
+  run_tmuxp load -d "$profile_path"
+fi
+
+exec tmux attach -t "$session_name"

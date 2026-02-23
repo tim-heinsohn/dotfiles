@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# tmux-copy-to-clipboard: Copy stdin to system clipboard
+#
+# Usage: tmux-copy-to-clipboard
+#
+# Description:
+# Reads text from stdin and copies it to the first available clipboard tool.
+# Priority: wl-copy, xclip, xsel, pbcopy.
+#
+# Dependencies:
+# - wl-copy or xclip or xsel or pbcopy
+
+set -euo pipefail
+
+if command -v wl-copy >/dev/null 2>&1; then
+  wl-copy
+  exit 0
+fi
+
+if command -v xclip >/dev/null 2>&1; then
+  xclip -selection clipboard -in
+  exit 0
+fi
+
+if command -v xsel >/dev/null 2>&1; then
+  xsel --clipboard --input
+  exit 0
+fi
+
+if command -v pbcopy >/dev/null 2>&1; then
+  pbcopy
+  exit 0
+fi
+
+cat >/dev/null
+exit 0

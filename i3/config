@@ -32,6 +32,9 @@ exec_always --no-startup-id $HOME/dotfiles/bin/fix-display-offset
 # screen before suspend. Use loginctl lock-session to lock your screen.
 exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c 'i3lock --nofork; setxkbmap fr'
 
+# Restore browser windows to remembered workspaces after startup.
+exec --no-startup-id systemctl --user start browser-workspace-restore.service
+
 # lock session
 # bindsym $mod+Shift+x exec --no-startup-id loginctl lock-session
 bindsym $mod+Shift+y exec "i3lock -c 35373A"
@@ -72,6 +75,9 @@ tiling_drag modifier titlebar
 # NOTE: i3-sensible-terminal uses $TERMINAL, otherwise just checks for common terminals
 # NOTE: WezTerm is configured on its own to use zsh or bash with -l, see ~/.wezterm.lua
 bindsym $mod+Return exec i3-sensible-terminal
+
+# Open workspace 5 with a tmuxp profile in WezTerm.
+bindsym $mod+Shift+Return workspace number 5; exec --no-startup-id wezterm start --always-new-process --cwd "$HOME/dotfiles" -- zsh -lc "$HOME/dotfiles/bin/tmux-session dotfiles"
 
 # start a browser with a secondary profile – the first firefox instance should
 # not be opened with -no-remote though, to allow external links to be opened in

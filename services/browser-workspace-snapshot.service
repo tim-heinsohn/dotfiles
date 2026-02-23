@@ -1,0 +1,7 @@
+[Unit]
+Description=Snapshot browser workspace layout cache
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/dotfiles/bin/browser-workspace-cache snapshot

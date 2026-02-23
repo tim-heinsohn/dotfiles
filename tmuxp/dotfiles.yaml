@@ -1,0 +1,9 @@
+session_name: dotfiles
+start_directory: ~/dotfiles
+windows:
+  - window_name: opencode
+    panes:
+      - opencode
+  - window_name: shell
+    panes:
+      -

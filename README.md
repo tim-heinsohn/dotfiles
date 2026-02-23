@@ -102,6 +102,8 @@ For proposals and changes, use OpenSpec:
 ## Documentation
 
 - **doc/guides/dotfiles-management.md** - How to manage dotfiles with Bombadil
+- **doc/guides/tmux-i3-workflow.md** - Tmux session profiles and i3 integration
+- **doc/guides/browser-window-workspace-recovery.md** - Restore browser windows to remembered i3 workspaces
 - **doc/guides/openspec-usage.md** - How to use OpenSpec for changes
 - **doc/architecture/overview.md** - Architecture decisions and structure
 - **doc/rvm-management.md** - Ruby Version Manager setup

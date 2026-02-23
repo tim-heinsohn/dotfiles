@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic browser workspace cache snapshot
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=3min
+AccuracySec=30s
+Unit=browser-workspace-snapshot.service
+
+[Install]
+WantedBy=timers.target

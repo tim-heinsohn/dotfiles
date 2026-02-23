@@ -1,0 +1,7 @@
+[Unit]
+Description=Restore browser workspace layout in i3
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/dotfiles/bin/browser-workspace-cache restore-wait

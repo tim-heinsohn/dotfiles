@@ -17,6 +17,8 @@ aur/neovim-remote
     A tool to control Neovim instances from the command line.
 aur/nvm
     A version manager for node.js, installed per-user, and invoked per-shell.
+aur/opencode-desktop-bin 1.2.10-1 (+5 2.49)
+    OpenCode desktop client
 aur/pg_top
     A 'top' like tool for PostgreSQL.
 aur/pgvector 0.8.1-1 (+10 1.46)
@@ -343,6 +345,10 @@ extra/typst
     A markup-based typesetting system for the sciences.
 extra/tig
     Text-mode interface for Git.
+extra/tmux 3.6_a-1 (485.2 KiB 1.1 MiB)
+    Terminal multiplexer
+extra/tmuxp 1.64.0-1 (191.9 KiB 1.0 MiB)
+    Tmux session manager built on libtmux
 extra/toml-bombadil
     Adotfile manager with templating.
 extra/traceroute
@@ -369,6 +375,8 @@ extra/wget
     Network utility to retrieve files from the Web.
 extra/wireguard-tools
     Tools for managing WireGuard interfaces.
+extra/xclip
+    Command line interface to the X11 clipboard.
 extra/xkeycaps
     A graphical front-end to xmodmap.
 extra/xmlstarlet
