@@ -250,18 +250,24 @@ install_opencode_smart_title_local() {
                 git remote set-url origin "$fork_url" || log "⚠ Failed to update remote"
             fi
 
-            if git fetch --quiet; then
-                if git merge-base --is-ancestor @ @{u} 2>/dev/null; then
-                    log "opencode-smart-title repo is up to date"
-                else
-                    if git pull --ff-only; then
-                        log "Pulled latest changes for opencode-smart-title"
+            if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+                if git fetch --quiet; then
+                    if git diff --quiet HEAD "@{u}"; then
+                        log "opencode-smart-title repo is up to date"
+                    elif git merge-base --is-ancestor HEAD "@{u}"; then
+                        if git pull --ff-only; then
+                            log "Pulled latest changes for opencode-smart-title"
+                        else
+                            log "⚠ git pull failed; continuing with current checkout"
+                        fi
                     else
-                        log "⚠ git pull failed; continuing with current checkout"
+                        log "⚠ Local branch has diverged or is ahead; skipping git pull"
                     fi
+                else
+                    log "⚠ git fetch failed (likely no network); continuing"
                 fi
             else
-                log "⚠ git fetch failed (likely no network); continuing"
+                log "⚠ Current branch has no upstream; skipping git pull"
             fi
         fi
     fi

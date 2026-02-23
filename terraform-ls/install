@@ -9,8 +9,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Get latest version from releases page
-LATEST_VERSION=$(curl -s https://releases.hashicorp.com/terraform-ls/ | grep -o 'terraform-ls_[0-9]\+\.[0-9]\+\.[0-9]\+' | head -n1 | cut -d'_' -f2)
+# Get latest stable version from releases page
+LATEST_VERSION=$(
+    curl -fsSL "https://releases.hashicorp.com/terraform-ls/" |
+        grep -oE 'terraform-ls_[^"/< ]+' |
+        sed -E 's#terraform-ls_##' |
+        grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' |
+        sort -V |
+        tail -n1
+)
+
+if [ -z "${LATEST_VERSION}" ]; then
+    echo "Failed to determine latest stable terraform-ls version"
+    exit 1
+fi
 
 # Set variables for download
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -26,12 +38,12 @@ CHECKSUM_FILE="terraform-ls_${LATEST_VERSION}_SHA256SUMS"
 
 # Download files
 echo "Downloading terraform-ls version ${LATEST_VERSION}..."
-curl -s -o "$TEMP_DIR/$FILENAME" "https://releases.hashicorp.com/terraform-ls/${LATEST_VERSION}/${FILENAME}"
-curl -s -o "$TEMP_DIR/$CHECKSUM_FILE" "https://releases.hashicorp.com/terraform-ls/${LATEST_VERSION}/${CHECKSUM_FILE}"
+curl -fsSL -o "$TEMP_DIR/$FILENAME" "https://releases.hashicorp.com/terraform-ls/${LATEST_VERSION}/${FILENAME}"
+curl -fsSL -o "$TEMP_DIR/$CHECKSUM_FILE" "https://releases.hashicorp.com/terraform-ls/${LATEST_VERSION}/${CHECKSUM_FILE}"
 
 # Verify checksum
 cd "$TEMP_DIR"
-if ! sha256sum -c --ignore-missing "$CHECKSUM_FILE"; then
+if ! grep -F " ${FILENAME}" "$CHECKSUM_FILE" | sha256sum -c -; then
     echo "Checksum verification failed!"
     exit 1
 fi

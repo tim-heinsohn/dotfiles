@@ -20,6 +20,26 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+install_uv_tool() {
+    local tool="$1"
+    local output
+
+    if output="$(uv tool install "$tool" 2>&1)"; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
+    printf '%s\n' "$output"
+
+    if [[ "$output" == *"Executables already exist"* ]]; then
+        log "Retrying $tool install with --force due to existing executables"
+        uv tool install --force "$tool"
+        return $?
+    fi
+
+    return 1
+}
+
 check_uv() {
     if ! command -v uv >/dev/null 2>&1; then
         log "ERROR: uv is not installed or not in PATH"
@@ -33,7 +53,7 @@ install_tools() {
 
     for tool in "${UV_TOOLS[@]}"; do
         log "Installing $tool..."
-        if uv tool install "$tool"; then
+        if install_uv_tool "$tool"; then
             log "✓ Successfully installed $tool"
         else
             log "✗ Failed to install $tool"
@@ -52,7 +72,7 @@ update_tools() {
             log "✓ Successfully updated $tool"
         else
             log "⚠ $tool not installed, installing..."
-            if uv tool install "$tool"; then
+            if install_uv_tool "$tool"; then
                 log "✓ Successfully installed $tool"
             else
                 log "✗ Failed to install $tool"
@@ -94,7 +114,7 @@ install_or_update_tools() {
             fi
         else
             log "Installing $tool..."
-            if uv tool install "$tool"; then
+            if install_uv_tool "$tool"; then
                 log "✓ Successfully installed $tool"
             else
                 log "✗ Failed to install $tool"

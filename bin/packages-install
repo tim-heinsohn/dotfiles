@@ -49,7 +49,7 @@ if [[ ${#official_packages[@]} -gt 0 ]]; then
         echo "⚠ Some official packages failed to install"
         # Try installing official packages individually to identify failures
         for pkg in "${official_packages[@]}"; do
-            if sudo pacman -S --needed --noconfirm "$pkg" 2>/dev/null; then
+            if sudo pacman -S --needed --noconfirm "$pkg"; then
                 success_count=$((success_count + 1))
             else
                 failed_packages+=("$pkg")
@@ -78,7 +78,7 @@ if [[ ${#aur_packages[@]} -gt 0 ]]; then
                 sudo pacman -R --noconfirm "$old_pkg"
             fi
         fi
-        if yay -S --needed --noconfirm "$pkg" 2>/dev/null; then
+        if yay -S --needed --noconfirm "$pkg"; then
             success_count=$((success_count + 1))
             # After an Antigravity upgrade, wipe the stale Service Worker cache.
             # A version bump changes the service-worker.js query string, which
