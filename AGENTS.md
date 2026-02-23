@@ -119,6 +119,17 @@ set -euo pipefail
 - Comments: Use `#` for shell, `--` for Lua
 - Prefer explicit over implicit
 
+## Sudo Commands
+
+**NEVER run `sudo` commands directly.** You have no TTY and sudo will fail silently or error.
+
+Instead, show the user the exact commands to run:
+```
+Run this in your terminal:
+  sudo pacman -R old-package
+  sudo pacman -U /path/to/package.tar.zst
+```
+
 ## Rails Development Commands
 **ALWAYS use project-specific binstubs:**
 - `bin/rails` instead of `rails`

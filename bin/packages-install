@@ -58,13 +58,40 @@ if [[ ${#official_packages[@]} -gt 0 ]]; then
     fi
 fi
 
+# Package rename/replacement map: if the old package is installed and conflicts
+# with the new one, remove it first before installing.
+# Format: ["new/pkg"]="old-pkg-name"
+declare -A package_replaces=(
+    ["aur/antigravity"]="antigravity-bin"
+)
+
 # Install AUR packages individually (they can't be batched as easily)
 if [[ ${#aur_packages[@]} -gt 0 ]]; then
     echo "Installing ${#aur_packages[@]} AUR packages..."
     for pkg in "${aur_packages[@]}"; do
         echo "Installing $pkg..."
+        # Remove a conflicting predecessor package if present
+        if [[ -n "${package_replaces[$pkg]:-}" ]]; then
+            old_pkg="${package_replaces[$pkg]}"
+            if pacman -Q "$old_pkg" &>/dev/null; then
+                echo "Removing conflicting predecessor: $old_pkg..."
+                sudo pacman -R --noconfirm "$old_pkg"
+            fi
+        fi
         if yay -S --needed --noconfirm "$pkg" 2>/dev/null; then
             success_count=$((success_count + 1))
+            # After an Antigravity upgrade, wipe the stale Service Worker cache.
+            # A version bump changes the service-worker.js query string, which
+            # causes Chromium to fail re-registration with InvalidStateError on
+            # the next launch if the old registration is still in the LevelDB.
+            if [[ "$pkg" == "aur/antigravity" ]]; then
+                sw_dir="${HOME}/.config/Antigravity/Service Worker"
+                if [[ -d "$sw_dir" ]]; then
+                    echo "Clearing Antigravity Service Worker cache after upgrade..."
+                    rm -rf "$sw_dir/Database" "$sw_dir/ScriptCache"
+                    echo "✓ Service Worker cache cleared"
+                fi
+            fi
         else
             failed_packages+=("$pkg")
             echo "⚠ Failed to install $pkg"

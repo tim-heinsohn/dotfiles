@@ -1,14 +1,12 @@
 aur/acpilight
     A backward-compatible xbacklight replacement with ACPI kernel support.
-aur/antigravity-bin
-    Google Antigravity - Agentic Development Platform (Pre-built Binary)
+aur/antigravity
+    An agentic development platform from Google, evolving the IDE into the agent-first era.
     A small command-line utility to show and change EXIF information in JPEG files.
 aur/bruno-bin
     Opensource API Client for Exploring and Testing APIs.
 aur/google-chrome
     A browser that combines a minimal design with sophisticated technology.
-aur/goose-desktop
-    An open-source, extensible AI agent that goes beyond code suggestions (with UI)
 aur/hey-bin
     HTTP load generator, ApacheBench (ab) replacement.
 aur/html2md
