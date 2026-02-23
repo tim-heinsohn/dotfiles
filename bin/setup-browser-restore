@@ -1,0 +1,255 @@
+#!/bin/bash
+#
+# setup-browser-restore: Enable browser session restore for a profile
+#
+# Usage: setup-browser-restore <browser> [--profile <name>]
+#
+# Description:
+# Enables "restore previous session" settings for Firefox or Chromium profile
+# data. If --profile is omitted, PRIMARY_PROJECT_CODE from ~/.projects is used.
+#
+# Dependencies:
+# - jq (for Chromium/Chrome)
+
+set -euo pipefail
+
+PROJECTS_FILE="$HOME/.projects"
+
+print_help() {
+  cat <<'EOF'
+setup-browser-restore: Enable browser session restore for a profile
+
+Usage:
+  setup-browser-restore <browser> [--profile <name>]
+
+Arguments:
+  <browser>              firefox | chromium | chrome
+
+Options:
+  -p, --profile <name>   Profile name (default: PRIMARY_PROJECT_CODE from ~/.projects)
+  -h, --help             Show this help
+
+Examples:
+  setup-browser-restore firefox
+  setup-browser-restore chromium --profile PRIM
+  setup-browser-restore chrome -p "Profile 1"
+
+Notes:
+  - Firefox uses profile NAME (from profiles.ini), not directory name.
+  - Chromium/Chrome accepts either UI profile name (e.g. ia) or directory name
+    (e.g. Profile 1) under ~/.config/<browser>/.
+  - Run the browser at least once to create profile data before running this.
+EOF
+}
+
+die() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+load_default_profile() {
+  local code=""
+
+  if [ -f "$PROJECTS_FILE" ]; then
+    code="$(awk -F= '/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{
+      v=$2
+      sub(/^[[:space:]]*"/, "", v)
+      sub(/"[[:space:]]*$/, "", v)
+      sub(/^[[:space:]]*\047/, "", v)
+      sub(/\047[[:space:]]*$/, "", v)
+      print v
+      exit
+    }' "$PROJECTS_FILE")"
+  fi
+
+  if [ -z "$code" ]; then
+    die "No --profile given and PRIMARY_PROJECT_CODE is unset in $PROJECTS_FILE"
+  fi
+
+  printf '%s\n' "$code"
+}
+
+firefox_profile_dir_from_name() {
+  local profile_name="$1"
+  local ini="$HOME/.mozilla/firefox/profiles.ini"
+  local rec is_relative path
+
+  [ -f "$ini" ] || die "Firefox profiles file not found: $ini"
+
+  rec="$(awk -F= -v target="$profile_name" '
+    function flush() {
+      if (active && name == target && path != "") {
+        print is_relative ":" path
+        found=1
+      }
+    }
+
+    /^\[Profile[0-9]+\]$/ {
+      flush()
+      if (found) {
+        exit
+      }
+      active=1
+      name=""
+      path=""
+      is_relative="1"
+      next
+    }
+
+    /^\[/ {
+      flush()
+      if (found) {
+        exit
+      }
+      active=0
+      next
+    }
+
+    active && $1 == "Name" { name=$2; next }
+    active && $1 == "Path" { path=$2; next }
+    active && $1 == "IsRelative" { is_relative=$2; next }
+
+    END { if (!found) flush() }
+  ' "$ini")"
+
+  [ -n "$rec" ] || die "Firefox profile '$profile_name' not found in $ini"
+
+  is_relative="${rec%%:*}"
+  path="${rec#*:}"
+
+  if [ "$is_relative" = "1" ]; then
+    printf '%s\n' "$HOME/.mozilla/firefox/$path"
+  else
+    printf '%s\n' "$path"
+  fi
+}
+
+configure_firefox() {
+  local profile_name="$1"
+  local profile_dir user_js tmp
+
+  profile_dir="$(firefox_profile_dir_from_name "$profile_name")"
+  [ -d "$profile_dir" ] || die "Firefox profile directory not found: $profile_dir"
+
+  user_js="$profile_dir/user.js"
+  tmp="$(mktemp)"
+
+  if [ -f "$user_js" ]; then
+    awk '!/^[[:space:]]*user_pref\("browser\.startup\.page",/' "$user_js" > "$tmp"
+  fi
+
+  printf 'user_pref("browser.startup.page", 3);\n' >> "$tmp"
+  mv "$tmp" "$user_js"
+
+  echo "Firefox: enabled restore for profile '$profile_name' ($profile_dir)."
+}
+
+configure_chromium_like() {
+  local browser="$1"
+  local profile_name="$2"
+  local config_root profile_dir_name profile_dir prefs tmp
+
+  case "$browser" in
+    chromium)
+      config_root="$HOME/.config/chromium"
+      ;;
+    chrome)
+      config_root="$HOME/.config/google-chrome"
+      ;;
+    *)
+      die "Unsupported Chromium-like browser: $browser"
+      ;;
+  esac
+
+  profile_dir_name="$(resolve_chromium_profile_dir_name "$config_root" "$profile_name")"
+  profile_dir="$config_root/$profile_dir_name"
+  prefs="$profile_dir/Preferences"
+
+  [ -d "$profile_dir" ] || die "Profile directory not found: $profile_dir"
+  [ -f "$prefs" ] || die "Preferences file not found: $prefs"
+  command -v jq >/dev/null 2>&1 || die "Missing dependency: jq"
+
+  tmp="$(mktemp)"
+  jq '.session.restore_on_startup = 1 | .session.startup_urls = []' "$prefs" > "$tmp"
+  mv "$tmp" "$prefs"
+
+  echo "${browser}: enabled restore for profile '$profile_name' (directory '$profile_dir_name', $profile_dir)."
+}
+
+resolve_chromium_profile_dir_name() {
+  local config_root="$1"
+  local profile_name="$2"
+  local local_state resolved
+
+  # Already a directory name.
+  if [ -d "$config_root/$profile_name" ]; then
+    printf '%s\n' "$profile_name"
+    return 0
+  fi
+
+  local_state="$config_root/Local State"
+  [ -f "$local_state" ] || die "Profile directory not found: $config_root/$profile_name"
+  command -v jq >/dev/null 2>&1 || die "Missing dependency: jq"
+
+  # Resolve UI profile name (e.g. "ia") to internal directory (e.g. "Profile 1").
+  resolved="$(jq -r --arg name "$profile_name" '[.profile.info_cache | to_entries[] | select(.value.name == $name) | .key][0] // empty' "$local_state")"
+
+  [ -n "$resolved" ] || die "Chromium profile '$profile_name' not found in $local_state"
+  [ -d "$config_root/$resolved" ] || die "Resolved profile directory missing: $config_root/$resolved"
+
+  printf '%s\n' "$resolved"
+}
+
+main() {
+  local browser profile=""
+
+  if [ "$#" -eq 0 ]; then
+    print_help
+    exit 1
+  fi
+
+  case "$1" in
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+  esac
+
+  browser="$1"
+  shift
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -p|--profile)
+        [ "$#" -ge 2 ] || die "Missing value for $1"
+        profile="$2"
+        shift 2
+        ;;
+      -h|--help)
+        print_help
+        exit 0
+        ;;
+      *)
+        die "Unknown argument: $1"
+        ;;
+    esac
+  done
+
+  if [ -z "$profile" ]; then
+    profile="$(load_default_profile)"
+  fi
+
+  case "$browser" in
+    firefox)
+      configure_firefox "$profile"
+      ;;
+    chromium|chrome)
+      configure_chromium_like "$browser" "$profile"
+      ;;
+    *)
+      die "Unsupported browser '$browser'. Use: firefox | chromium | chrome"
+      ;;
+  esac
+}
+
+main "$@"

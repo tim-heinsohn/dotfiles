@@ -32,6 +32,10 @@ exec_always --no-startup-id $HOME/dotfiles/bin/fix-display-offset
 # screen before suspend. Use loginctl lock-session to lock your screen.
 exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c 'i3lock --nofork; setxkbmap fr'
 
+# Auto-start primary project browsers from ~/.projects.
+exec --no-startup-id sh -lc 'code="$(awk -F= '\''/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{v=$2; sub(/^[[:space:]]*"/, "", v); sub(/"[[:space:]]*$/, "", v); sub(/^[[:space:]]*\047/, "", v); sub(/\047[[:space:]]*$/, "", v); print v; exit}'\'' "$HOME/.projects" 2>/dev/null)"; [ -n "$code" ] && firefox -P "$code" || firefox'
+exec --no-startup-id sh -lc 'code="$(awk -F= '\''/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{v=$2; sub(/^[[:space:]]*"/, "", v); sub(/"[[:space:]]*$/, "", v); sub(/^[[:space:]]*\047/, "", v); sub(/\047[[:space:]]*$/, "", v); print v; exit}'\'' "$HOME/.projects" 2>/dev/null)"; profile="$code"; if [ -n "$code" ] && [ -f "$HOME/.config/chromium/Local State" ] && command -v jq >/dev/null 2>&1; then mapped="$(jq -r --arg name "$code" '\''[.profile.info_cache | to_entries[] | select(.value.name == $name) | .key][0] // empty'\'' "$HOME/.config/chromium/Local State" 2>/dev/null)"; [ -n "$mapped" ] && profile="$mapped"; fi; [ -n "$profile" ] && chromium --profile-directory="$profile" || chromium'
+
 # Restore browser windows to remembered workspaces after startup.
 exec --no-startup-id systemctl --user start browser-workspace-restore.service
 
