@@ -97,6 +97,9 @@ nvm alias default 24.4.0
 # Install/update npm packages
 "${DOTFILES_DIR}/bin/npm-packages" auto &&
 
+# Install/update uv tools
+"${DOTFILES_DIR}/bin/uv-packages" auto &&
+
 # Keep Tree-sitter parsers aligned with current Neovim runtime
 if command -v nvim >/dev/null 2>&1; then
     nvim --headless "+TSUpdateSync" "+qa" || true

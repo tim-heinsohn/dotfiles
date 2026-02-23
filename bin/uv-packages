@@ -8,6 +8,7 @@ set -euo pipefail
 # List of uv tools to manage
 declare -a UV_TOOLS=(
     "llm"
+    "pytest"
 )
 
 # List of llm plugins to install after llm
