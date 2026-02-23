@@ -79,6 +79,9 @@ bindsym $mod+Return exec i3-sensible-terminal
 # Open workspace 5 with a tmuxp profile in WezTerm.
 bindsym $mod+Shift+Return workspace number 5; exec --no-startup-id wezterm start --always-new-process --cwd "$HOME/dotfiles" -- zsh -lc "$HOME/dotfiles/bin/tmux-session dotfiles"
 
+# Auto-start the dotfiles tmux session on workspace 5 at i3 startup.
+exec --no-startup-id sh -lc 'i3-msg "workspace number 5"; wezterm start --always-new-process --cwd "$HOME/dotfiles" -- zsh -lc "$HOME/dotfiles/bin/tmux-session dotfiles"'
+
 # start a browser with a secondary profile – the first firefox instance should
 # not be opened with -no-remote though, to allow external links to be opened in
 # a running instance
@@ -106,6 +109,9 @@ bindsym $mod+c exec --no-startup-id rofi -show calc -theme DarkBlue -modi calc -
 bindsym $mod+p exec --no-startup-id rofi-pass -theme DarkBlue --root $HOME/.password-store/inaudito-private:$HOME/ia.passwords/:$HOME/.password-store
 bindsym $mod+Shift+p exec PASSWORD_STORE_DIR=~/ia.passwords rofi-pass --no-startup-id -theme DarkBlue
 # bindsym $mod+Shift+p exec --no-startup-id rofi-pass -theme DarkBlue --root $HOME/ia.passwords
+
+# tmuxp session selector
+bindsym $mod+m exec --no-startup-id $HOME/dotfiles/bin/rofi-tmuxp
 
 # change focus
 bindsym $mod+h focus left

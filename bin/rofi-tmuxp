@@ -1,0 +1,171 @@
+#!/bin/bash
+#
+# rofi-tmuxp: Rofi launcher for tmuxp sessions
+#
+# Usage: rofi-tmuxp
+#
+# Description:
+# Shows a Rofi menu with available tmuxp sessions from:
+# - ~/dotfiles/tmuxp/
+# - Any project following *.dotfiles or *.dev naming pattern with tmuxp/ subdirectory
+#
+# Select a session to launch or attach to it.
+#
+# Dependencies:
+# - rofi
+# - tmuxp
+# - tmux
+
+set -euo pipefail
+
+print_help() {
+  cat <<'EOF'
+rofi-tmuxp: Rofi launcher for tmuxp sessions
+
+Usage: rofi-tmuxp [OPTIONS]
+
+Description:
+  Interactive Rofi menu to select and launch tmuxp sessions. Discovers
+  sessions from ~/dotfiles/tmuxp/ and all project directories following
+  the *.dotfiles or *.dev naming pattern.
+
+Session Behavior:
+  - If session doesn't exist: Creates it with tmuxp and attaches
+  - If session exists (not attached): Attaches to it
+  - If session exists (already attached): Creates a second client attachment
+
+Profile Format:
+  <name>           Session from ~/dotfiles/tmuxp/<name>.yaml
+  <project>:<name> Session from ~/<project>.{dotfiles,dev}/tmuxp/<name>.yaml
+
+Options:
+  -h, --help       Show this help message
+
+Examples:
+  # Launch interactively via keybinding
+  $mod+m           (i3 keybinding to open rofi-tmuxp)
+  
+  # Launch from command line
+  rofi-tmuxp
+
+Keybinding:
+  This script is meant to be bound to a keyboard shortcut in your window
+  manager (e.g., i3). See i3/config for the binding configuration.
+
+See also:
+  bin/tmux-session - CLI version for direct session launching
+EOF
+}
+
+# Handle help argument
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  print_help
+  exit 0
+fi
+
+# Find all tmuxp session files and extract session names
+get_sessions() {
+  local sessions=()
+  
+  # Get sessions from main dotfiles
+  local dotfiles_dir="$HOME/dotfiles/tmuxp"
+  if [ -d "$dotfiles_dir" ]; then
+    shopt -s nullglob
+    for file in "$dotfiles_dir"/*.yaml "$dotfiles_dir"/*.yml; do
+      if [ -f "$file" ]; then
+        basename="${file##*/}"
+        session_name="${basename%.*}"
+        sessions+=("$session_name")
+      fi
+    done
+  fi
+  
+  # Discover project dotfiles (*.dotfiles and *.dev patterns)
+  shopt -s nullglob
+  for project_dir in "$HOME"/*.dotfiles "$HOME"/*.dev; do
+    if [ -d "$project_dir/tmuxp" ]; then
+      # Extract project identifier (e.g., "ia" from "ia.dotfiles")
+      project_name="${project_dir##*/}"
+      project_name="${project_name%.*}"  # Remove .dotfiles or .dev extension
+      
+      for file in "$project_dir/tmuxp"/*.yaml "$project_dir/tmuxp"/*.yml; do
+        if [ -f "$file" ]; then
+          basename="${file##*/}"
+          session_name="${basename%.*}"
+          sessions+=("${project_name}:${session_name}")
+        fi
+      done
+    fi
+  done
+  
+  printf '%s\n' "${sessions[@]}" | sort -u
+}
+
+# Resolve session identifier to full profile path
+resolve_profile_path() {
+  local session="$1"
+  
+  # Check if it's a project-prefixed session (e.g., "ia:core-full")
+  if [[ "$session" == *:* ]]; then
+    local project_prefix="${session%%:*}"
+    local session_name="${session#*:}"
+    
+    # Search for matching project directory
+    shopt -s nullglob
+    for project_dir in "$HOME/${project_prefix}.dotfiles" "$HOME/${project_prefix}.dev"; do
+      if [ -d "$project_dir/tmuxp" ]; then
+        for ext in yaml yml; do
+          local path="$project_dir/tmuxp/${session_name}.${ext}"
+          if [ -f "$path" ]; then
+            echo "$path"
+            return 0
+          fi
+        done
+      fi
+    done
+  else
+    # Main dotfiles session
+    local dotfiles_dir="$HOME/dotfiles/tmuxp"
+    for ext in yaml yml; do
+      local path="$dotfiles_dir/${session}.${ext}"
+      if [ -f "$path" ]; then
+        echo "$path"
+        return 0
+      fi
+    done
+  fi
+  
+  return 1
+}
+
+# Launch tmuxp session
+launch_session() {
+  local session="$1"
+  local tmux_session_script="$HOME/dotfiles/bin/tmux-session"
+  
+  # Verify the profile exists
+  profile_path=$(resolve_profile_path "$session")
+  
+  if [ -z "$profile_path" ]; then
+    notify-send "tmuxp Error" "Profile not found for: $session"
+    exit 1
+  fi
+  
+  # Use tmux-session script which handles WezTerm tab titling
+  exec rofi-sensible-terminal -e "$tmux_session_script" "$session"
+}
+
+# Main
+sessions=$(get_sessions)
+
+if [ -z "$sessions" ]; then
+  notify-send "tmuxp" "No tmuxp sessions found"
+  exit 1
+fi
+
+# Show rofi menu
+selected=$(echo "$sessions" | rofi -dmenu -i -p "tmux session" -matching fuzzy)
+
+if [ -n "$selected" ]; then
+  launch_session "$selected"
+fi

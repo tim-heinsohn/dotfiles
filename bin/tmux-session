@@ -25,24 +25,59 @@ run_tmuxp() {
 
 print_available_profiles() {
   shopt -s nullglob
-  for file in "$HOME"/dotfiles/tmuxp/*.yaml; do
-    base="${file##*/}"
-    echo "  ${base%.yaml}" >&2
+  
+  # Main dotfiles sessions
+  for file in "$HOME"/dotfiles/tmuxp/*.{yaml,yml}; do
+    if [ -f "$file" ]; then
+      base="${file##*/}"
+      echo "  ${base%.*}" >&2
+    fi
+  done
+  
+  # Project sessions (*.dotfiles and *.dev patterns)
+  for project_dir in "$HOME"/*.dotfiles "$HOME"/*.dev; do
+    if [ -d "$project_dir/tmuxp" ]; then
+      project_name="${project_dir##*/}"
+      project_name="${project_name%.*}"
+      
+      for file in "$project_dir/tmuxp"/*.{yaml,yml}; do
+        if [ -f "$file" ]; then
+          base="${file##*/}"
+          echo "  ${project_name}:${base%.*}" >&2
+        fi
+      done
+    fi
   done
 }
 
 print_help() {
   cat >&2 <<'EOF'
+tmux-session: Launch or attach to tmuxp-managed sessions
+
 Usage: tmux-session <profile>
 
-Open or attach a tmux session from tmuxp profile ~/dotfiles/tmuxp/<profile>.yaml.
+Description:
+  Opens or attaches to a tmux session defined by a tmuxp YAML profile.
+  Automatically sets WezTerm tab title when running inside WezTerm.
 
-Examples:
-  tmux-session dotfiles
-  tmux-session ia
+Session Behavior:
+  - If session doesn't exist: Creates it with tmuxp and attaches
+  - If session exists (not attached): Attaches to it
+  - If session exists (already attached): Creates a second client attachment
+    (both clients share the same windows/panes)
+
+Profile Format:
+  <name>           Load from ~/dotfiles/tmuxp/<name>.yaml
+  <project>:<name> Load from ~/<project>.dotfiles/tmuxp/<name>.yaml
+                   or ~/<project>.dev/tmuxp/<name>.yaml
 
 Options:
-  -h, --help    Show this help message
+  -h, --help       Show this help message
+
+Examples:
+  tmux-session dotfiles      # Launch main dotfiles session
+  tmux-session ia:core-full  # Launch ia project session
+
 EOF
   echo "Available profiles:" >&2
   print_available_profiles
@@ -61,10 +96,49 @@ if [ "$#" -ne 1 ]; then
 fi
 
 profile="$1"
-profile_path="$HOME/dotfiles/tmuxp/${profile}.yaml"
 
-if [ ! -f "$profile_path" ]; then
-  echo "Profile not found: $profile_path" >&2
+# Resolve profile path (supports project-prefixed sessions like "ia:core-full")
+resolve_profile_path() {
+  local session="$1"
+  
+  # Check if it's a project-prefixed session
+  if [[ "$session" == *:* ]]; then
+    local project_prefix="${session%%:*}"
+    local session_name="${session#*:}"
+    
+    # Search for matching project directory
+    shopt -s nullglob
+    for project_dir in "$HOME/${project_prefix}.dotfiles" "$HOME/${project_prefix}.dev"; do
+      if [ -d "$project_dir/tmuxp" ]; then
+        for ext in yaml yml; do
+          local path="$project_dir/tmuxp/${session_name}.${ext}"
+          if [ -f "$path" ]; then
+            echo "$path"
+            return 0
+          fi
+        done
+      fi
+    done
+  else
+    # Main dotfiles session
+    for ext in yaml yml; do
+      local path="$HOME/dotfiles/tmuxp/${session}.${ext}"
+      if [ -f "$path" ]; then
+        echo "$path"
+        return 0
+      fi
+    done
+  fi
+  
+  return 1
+}
+
+profile_path=$(resolve_profile_path "$profile")
+
+if [ -z "$profile_path" ]; then
+  echo "Profile not found: $profile" >&2
+  echo "Available profiles:" >&2
+  print_available_profiles
   exit 1
 fi
 
@@ -80,6 +154,11 @@ fi
 
 session_name="$(awk -F': *' '/^session_name:/ {print $2; exit}' "$profile_path" | tr -d '"')"
 session_name="${session_name:-$profile}"
+
+# Set WezTerm tab title if running in WezTerm
+if [ -n "${WEZTERM_PANE:-}" ] && command -v wezterm >/dev/null 2>&1; then
+  wezterm cli set-tab-title "$profile" 2>/dev/null || true
+fi
 
 if ! tmux has-session -t "$session_name" 2>/dev/null; then
   run_tmuxp load -d "$profile_path"
