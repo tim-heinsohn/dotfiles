@@ -30,6 +30,7 @@ This directory contains utility scripts for system management and development.
 |--------|-------------|
 | `projects-setup` | Initialize project directories |
 | `git-cli-setup` | Setup git CLI tools |
+| `setup-pencil-desktop` | Install/update Pencil Desktop AppImage |
 | `ruby` | Ruby version wrapper |
 | `rvm-gems-cleanup` | Clean up old RVM gems |
 

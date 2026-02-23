@@ -1,0 +1,136 @@
+#!/bin/bash
+#
+# setup-pencil-desktop: install Pencil Desktop AppImage
+#
+# Usage: setup-pencil-desktop [version]
+#
+# Description:
+# Download and install the Pencil Desktop AppImage from the
+# highagency/pencil-desktop-releases repository, make it executable,
+# create a stable launcher symlink, and create a .desktop entry for
+# rofi drun and desktop-aware launchers.
+#
+# Dependencies:
+# - curl
+# - sudo (only when installing fuse2)
+
+set -euo pipefail
+trap 'log "failed at line ${LINENO}"' ERR
+
+REPO="highagency/pencil-desktop-releases"
+API_BASE="https://api.github.com/repos/${REPO}"
+
+INSTALL_ROOT="${HOME}/.local/opt/pencil-desktop"
+BIN_DIR="${HOME}/.local/bin"
+DESKTOP_DIR="${HOME}/.local/share/applications"
+
+log() {
+  printf 'setup-pencil-desktop: %s\n' "$1"
+}
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    log "missing required command: $1"
+    exit 1
+  fi
+}
+
+arch_to_asset_suffix() {
+  case "$(uname -m)" in
+    x86_64) printf 'linux-x86_64' ;;
+    aarch64|arm64) printf 'linux-arm64' ;;
+    *)
+      log "unsupported architecture: $(uname -m)"
+      exit 1
+      ;;
+  esac
+}
+
+install_fuse2_if_needed() {
+  if [[ -f /etc/os-release ]] && grep -q '^ID=arch$' /etc/os-release; then
+    if ! pacman -Q fuse2 >/dev/null 2>&1; then
+      log "installing fuse2 (required by many AppImages)"
+      sudo pacman -S --needed fuse2
+    fi
+  fi
+}
+
+fetch_release_json() {
+  local version="${1:-latest}"
+
+  if [[ "$version" == "latest" ]]; then
+    curl -fsSL "${API_BASE}/releases/latest"
+  else
+    curl -fsSL "${API_BASE}/releases/tags/v${version}"
+  fi
+}
+
+extract_value() {
+  local key="$1"
+  grep -m1 "\"${key}\"" | sed -E 's/.*: "([^"]+)".*/\1/'
+}
+
+extract_asset_url() {
+  local suffix="$1"
+  awk -v suffix="$suffix" '
+    match($0, "https://[^\" ]*Pencil-[^\" ]*" suffix "\\.AppImage") {
+      print substr($0, RSTART, RLENGTH)
+      exit
+    }
+  '
+}
+
+write_desktop_file() {
+  local exec_path="$1"
+
+  mkdir -p "$DESKTOP_DIR"
+  cat >"${DESKTOP_DIR}/pencil-desktop.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Pencil Desktop
+Exec=${exec_path}
+Terminal=false
+Categories=Graphics;Office;
+StartupNotify=true
+EOF
+}
+
+main() {
+  local version="${1:-latest}"
+  local arch_suffix
+  local release_json
+  local download_url
+  local tag_name
+  local installed_appimage
+
+  require_cmd curl
+  arch_suffix="$(arch_to_asset_suffix)"
+  install_fuse2_if_needed
+
+  log "resolving release metadata (${version})"
+  release_json="$(fetch_release_json "$version")"
+  tag_name="$(printf '%s\n' "$release_json" | extract_value tag_name)"
+  download_url="$(printf '%s\n' "$release_json" | extract_asset_url "$arch_suffix")"
+
+  if [[ -z "$download_url" ]]; then
+    log "could not find AppImage asset for ${arch_suffix}"
+    exit 1
+  fi
+
+  mkdir -p "$INSTALL_ROOT" "$BIN_DIR"
+  installed_appimage="${INSTALL_ROOT}/Pencil-${tag_name}-${arch_suffix}.AppImage"
+
+  log "downloading ${download_url}"
+  curl -fL "$download_url" -o "$installed_appimage"
+
+  chmod +x "$installed_appimage"
+  ln -sfn "$installed_appimage" "${BIN_DIR}/pencil-desktop"
+  write_desktop_file "${BIN_DIR}/pencil-desktop"
+
+  log "installed: ${installed_appimage}"
+  log "launcher: ${BIN_DIR}/pencil-desktop"
+  log "desktop entry: ${DESKTOP_DIR}/pencil-desktop.desktop"
+  log "run it with: pencil-desktop"
+}
+
+main "$@"
