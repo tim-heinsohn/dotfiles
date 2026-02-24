@@ -1,9 +1,12 @@
 session_name: dotfiles
 start_directory: ~/dotfiles
 windows:
-  - window_name: opencode
+  - window_name: "#dot"
     panes:
       - opencode
-  - window_name: shell
+  - window_name: "dot_"
+    panes:
+      - nvim
+  - window_name: "dot>"
     panes:
       -
