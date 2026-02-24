@@ -109,8 +109,8 @@ main() {
 
   log "resolving release metadata (${version})"
   release_json="$(fetch_release_json "$version")"
-  tag_name="$(printf '%s\n' "$release_json" | extract_value tag_name)"
-  download_url="$(printf '%s\n' "$release_json" | extract_asset_url "$arch_suffix")"
+  tag_name="$(extract_value tag_name <<<"$release_json")"
+  download_url="$(extract_asset_url "$arch_suffix" <<<"$release_json")"
 
   if [[ -z "$download_url" ]]; then
     log "could not find AppImage asset for ${arch_suffix}"
