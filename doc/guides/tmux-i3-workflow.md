@@ -9,9 +9,29 @@ windows, and panes inside WezTerm.
 
 - Tmux config source: `tmux/tmux.conf`
 - Generic session launcher: `bin/tmux-session`
+- Startup autoloader: `bin/tmuxp-autoload`
 - Default profile for dotfiles: `tmuxp/dotfiles.yaml`
 - i3 shortcut for workspace 5:
   - `Mod+Shift+Return` starts `tmux-session dotfiles` in WezTerm
+
+At i3 startup, autoload entries are read from:
+
+- `~/${PRIMARY_PROJECT_CODE}.dotfiles/tmuxp/autoload`
+
+Each non-empty line uses this format:
+
+- `<workspace>:<session-identifier>`
+
+`<session-identifier>` is passed as-is to `tmux-session`.
+Use explicit names (`dotfiles`) or project-prefixed names (`ia:dotfiles`)
+depending on which tmux session you want.
+
+Examples:
+
+- `5:dotfiles` -> starts `tmux-session dotfiles` on workspace 5
+- `6:ia:dotfiles` -> starts `tmux-session ia:dotfiles` on workspace 6
+
+Tip: keep this autoload list minimal and include only essential startup sessions.
 
 ## Session Profiles
 

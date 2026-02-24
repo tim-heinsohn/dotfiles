@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+# tmuxp-autoload: Start tmuxp sessions from primary project config
+#
+# Usage: tmuxp-autoload
+#
+# Description:
+# Reads autoload session definitions from
+# ~/${PRIMARY_PROJECT_CODE}.dotfiles/tmuxp/autoload and starts each entry in
+# a fresh WezTerm window on the configured i3 workspace.
+#
+# Dependencies:
+# - i3-msg
+# - wezterm
+# - zsh
+
+set -euo pipefail
+
+tmux_session_script="$HOME/dotfiles/bin/tmux-session"
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+get_primary_project_code() {
+  if [ -n "${PRIMARY_PROJECT_CODE:-}" ]; then
+    printf '%s\n' "$PRIMARY_PROJECT_CODE"
+    return 0
+  fi
+
+  if [ ! -f "$HOME/.projects" ]; then
+    return 1
+  fi
+
+  awk -F= '/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{
+    value=$2
+    sub(/^[[:space:]]*"/, "", value)
+    sub(/"[[:space:]]*$/, "", value)
+    sub(/^[[:space:]]*\047/, "", value)
+    sub(/\047[[:space:]]*$/, "", value)
+    print value
+    exit
+  }' "$HOME/.projects"
+}
+
+primary_project_code="$(get_primary_project_code 2>/dev/null || true)"
+primary_project_code="$(trim "$primary_project_code")"
+
+if [ -z "$primary_project_code" ]; then
+  exit 0
+fi
+
+project_dotfiles_dir="$HOME/${primary_project_code}.dotfiles"
+autoload_file="$project_dotfiles_dir/tmuxp/autoload"
+
+if [ ! -f "$autoload_file" ]; then
+  exit 0
+fi
+
+if [ ! -x "$tmux_session_script" ]; then
+  echo "tmux-session script not executable: $tmux_session_script" >&2
+  exit 1
+fi
+
+while IFS= read -r raw_line || [ -n "$raw_line" ]; do
+  line="${raw_line%%#*}"
+  line="$(trim "$line")"
+
+  if [ -z "$line" ]; then
+    continue
+  fi
+
+  workspace="${line%%:*}"
+  session="${line#*:}"
+  workspace="$(trim "$workspace")"
+  session="$(trim "$session")"
+
+  if [ -z "$workspace" ] || [ -z "$session" ] || [ "$workspace" = "$line" ]; then
+    echo "Skipping invalid autoload entry: $raw_line" >&2
+    continue
+  fi
+
+  i3-msg "workspace number $workspace" >/dev/null
+  wezterm start --always-new-process --cwd "$project_dotfiles_dir" -- zsh -lc "$tmux_session_script '$session'"
+done < "$autoload_file"

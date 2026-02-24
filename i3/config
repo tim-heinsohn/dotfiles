@@ -83,8 +83,8 @@ bindsym $mod+Return exec i3-sensible-terminal
 # Open workspace 5 with a tmuxp profile in WezTerm.
 bindsym $mod+Shift+Return workspace number 5; exec --no-startup-id wezterm start --always-new-process --cwd "$HOME/dotfiles" -- zsh -lc "$HOME/dotfiles/bin/tmux-session dotfiles"
 
-# Auto-start the dotfiles tmux session on workspace 5 at i3 startup.
-exec --no-startup-id sh -lc 'i3-msg "workspace number 5"; wezterm start --always-new-process --cwd "$HOME/dotfiles" -- zsh -lc "$HOME/dotfiles/bin/tmux-session dotfiles"'
+# Auto-start tmux sessions from $PRIMARY_PROJECT_CODE.dotfiles/tmuxp/autoload.
+exec --no-startup-id $HOME/dotfiles/bin/tmuxp-autoload
 
 # start a browser with a secondary profile – the first firefox instance should
 # not be opened with -no-remote though, to allow external links to be opened in
