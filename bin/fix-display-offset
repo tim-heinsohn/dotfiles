@@ -1,6 +1,79 @@
-#!/bin/bash
-# Fix display offset issue that prevents flameshot from capturing full screen
-# Issue: Intel i915 driver was adding Y offset of +286 to eDP-1, reducing usable screen space
-# This script resets the display positions to correct coordinates
+#!/usr/bin/env bash
+# fix-display-offset: Auto-configure internal/external display layout for i3
+#
+# Usage: fix-display-offset [internal-output]
+#
+# Description:
+# Keeps the laptop panel at 0x0 and, when an external monitor is connected,
+# enables it to the right of the laptop panel. If no external monitor is
+# connected, it falls back to laptop-only mode.
+#
+# Dependencies:
+# - xrandr
 
-xrandr --output eDP-1 --pos 0x0 --output DP-1-2 --pos 1920x0
+set -euo pipefail
+
+internal_output="${1:-eDP-1}"
+
+escape_i3_arg() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+get_connected_outputs() {
+  xrandr --query | awk '/ connected/ {print $1}'
+}
+
+pick_external_output() {
+  local out
+
+  for out in DP-1-2 DP-1 DP-2 DP-3 HDMI-1 HDMI-2; do
+    if get_connected_outputs | grep -qx "$out"; then
+      printf '%s\n' "$out"
+      return 0
+    fi
+  done
+
+  get_connected_outputs | grep -vx "$internal_output" | head -n 1 || true
+}
+
+if ! get_connected_outputs | grep -qx "$internal_output"; then
+  exit 0
+fi
+
+external_output=""
+for _ in {1..12}; do
+  external_output="$(pick_external_output)"
+  if [ -n "$external_output" ]; then
+    break
+  fi
+  sleep 1
+done
+
+if [ -n "$external_output" ]; then
+  xrandr \
+    --output "$internal_output" --primary --auto --pos 0x0 --rotate normal \
+    --output "$external_output" --auto --right-of "$internal_output" --rotate normal
+
+  if command -v i3-msg >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    focused_workspace="$(i3-msg -t get_workspaces | jq -r '.[] | select(.focused) | .name' | head -n 1)"
+
+    while IFS= read -r workspace_name; do
+      [ -n "$workspace_name" ] || continue
+      escaped_workspace="$(escape_i3_arg "$workspace_name")"
+      i3-msg "workspace --no-auto-back-and-forth \"$escaped_workspace\"; move workspace to output \"$external_output\"" >/dev/null
+    done < <(
+      i3-msg -t get_workspaces \
+        | jq -r '.[] | select((.num != 1) and (.name != "1")) | .name'
+    )
+
+    if [ -n "$focused_workspace" ]; then
+      escaped_focused="$(escape_i3_arg "$focused_workspace")"
+      i3-msg "workspace --no-auto-back-and-forth \"$escaped_focused\"" >/dev/null
+    fi
+  fi
+else
+  xrandr --output "$internal_output" --primary --auto --pos 0x0 --rotate normal
+fi
