@@ -164,4 +164,6 @@ if ! tmux has-session -t "$session_name" 2>/dev/null; then
   run_tmuxp load -d "$profile_path"
 fi
 
+tmux set-option -t "$session_name" @terminal_title "$profile" >/dev/null 2>&1 || true
+
 exec tmux attach -t "$session_name"
