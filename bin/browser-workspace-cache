@@ -7,8 +7,11 @@
 # Description:
 # Captures Firefox/Chromium window titles and their current i3 workspace,
 # stores them in a local cache, and can restore currently open windows to the
-# remembered workspace. Snapshot updates existing entries and never removes
-# entries for windows that are currently closed.
+# remembered workspace. Matching uses stable title prefixes by convention:
+# - Firefox: leading [..]
+# - Chromium/Chrome/Brave: leading (( .. ))
+# Snapshot updates existing entries and never removes entries for windows that
+# are currently closed.
 #
 # Dependencies:
 # - i3-msg
@@ -163,19 +166,47 @@ snapshot() {
   ensure_cache_file
 
   local existing windows updated
-  existing="$(jq -c '.' "$cache_file")"
+  existing="$(jq -c 'if type == "object" then . else {version: 1, updated_at: 0, entries: {}} end' "$cache_file")"
   windows="$(get_open_browser_windows)"
 
   updated="$(jq -n \
     --argjson existing "$existing" \
     --argjson windows "$windows" \
     '
+      def bracket_token($title):
+        if ($title | startswith("[")) then
+          ($title | index("]")) as $end
+          | if $end == null then "" else $title[0:($end + 1)] end
+        else
+          ""
+        end;
+
+      def paren_token($title):
+        if ($title | startswith("((")) then
+          ($title | index("))")) as $end
+          | if $end == null then "" else $title[0:($end + 2)] end
+        else
+          ""
+        end;
+
+      def title_token($class; $title):
+        ($class | ascii_downcase) as $class_lc
+        | if $class_lc == "firefox" then
+            bracket_token($title)
+          elif ($class_lc | test("(chromium|chrome|brave)")) then
+            paren_token($title)
+          else
+            ""
+          end
+        | if . == "" then $title else . end;
+
       ($existing.entries // {}) as $entries
       | reduce $windows[] as $w (
           {version: 1, updated_at: (now | floor), entries: $entries};
-          .entries[($w.class + "|" + $w.title)] = {
+          .entries[($w.class + "|" + title_token($w.class; $w.title))] = {
             class: $w.class,
             title: $w.title,
+            token: title_token($w.class; $w.title),
             workspace: $w.workspace,
             last_seen: (now | floor)
           }
@@ -202,10 +233,39 @@ restore() {
   moves="$(jq -r \
     --argjson windows "$windows" \
     '
+      def bracket_token($title):
+        if ($title | startswith("[")) then
+          ($title | index("]")) as $end
+          | if $end == null then "" else $title[0:($end + 1)] end
+        else
+          ""
+        end;
+
+      def paren_token($title):
+        if ($title | startswith("((")) then
+          ($title | index("))")) as $end
+          | if $end == null then "" else $title[0:($end + 2)] end
+        else
+          ""
+        end;
+
+      def title_token($class; $title):
+        ($class | ascii_downcase) as $class_lc
+        | if $class_lc == "firefox" then
+            bracket_token($title)
+          elif ($class_lc | test("(chromium|chrome|brave)")) then
+            paren_token($title)
+          else
+            ""
+          end
+        | if . == "" then $title else . end;
+
       .entries as $entries
       | $windows[]
-      | .key = (.class + "|" + .title)
-      | .target = ($entries[.key].workspace // "")
+      | .token = title_token(.class; .title)
+      | .token_key = (.class + "|" + .token)
+      | .exact_key = (.class + "|" + .title)
+      | .target = ($entries[.token_key].workspace // $entries[.exact_key].workspace // "")
       | select(.target != "")
       | select(.workspace != .target)
       | [.id, .workspace, .target, .class, .title] | @tsv

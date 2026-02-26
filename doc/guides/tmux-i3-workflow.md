@@ -16,6 +16,7 @@ windows, and panes inside WezTerm.
 
 At i3 startup, autoload entries are read from:
 
+- `~/dotfiles/tmuxp/autoload`
 - `~/${PRIMARY_PROJECT_CODE}.dotfiles/tmuxp/autoload`
 
 Each non-empty line uses this format:

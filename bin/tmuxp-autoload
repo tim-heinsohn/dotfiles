@@ -5,9 +5,10 @@
 # Usage: tmuxp-autoload
 #
 # Description:
-# Reads autoload session definitions from
-# ~/${PRIMARY_PROJECT_CODE}.dotfiles/tmuxp/autoload and starts each entry in
-# a fresh WezTerm window on the configured i3 workspace.
+# Reads autoload session definitions from:
+# - ~/dotfiles/tmuxp/autoload
+# - ~/${PRIMARY_PROJECT_CODE}.dotfiles/tmuxp/autoload
+# and starts each entry in a fresh WezTerm window on the configured i3 workspace.
 #
 # Dependencies:
 # - i3-msg
@@ -54,35 +55,46 @@ if [ -z "$primary_project_code" ]; then
 fi
 
 project_dotfiles_dir="$HOME/${primary_project_code}.dotfiles"
-autoload_file="$project_dotfiles_dir/tmuxp/autoload"
-
-if [ ! -f "$autoload_file" ]; then
-  exit 0
-fi
+main_dotfiles_dir="$HOME/dotfiles"
+main_autoload_file="$main_dotfiles_dir/tmuxp/autoload"
+project_autoload_file="$project_dotfiles_dir/tmuxp/autoload"
 
 if [ ! -x "$tmux_session_script" ]; then
   echo "tmux-session script not executable: $tmux_session_script" >&2
   exit 1
 fi
 
-while IFS= read -r raw_line || [ -n "$raw_line" ]; do
-  line="${raw_line%%#*}"
-  line="$(trim "$line")"
+process_autoload_file() {
+  local autoload_file="$1"
+  local cwd="$2"
 
-  if [ -z "$line" ]; then
-    continue
+  if [ ! -f "$autoload_file" ]; then
+    return 0
   fi
 
-  workspace="${line%%:*}"
-  session="${line#*:}"
-  workspace="$(trim "$workspace")"
-  session="$(trim "$session")"
+  while IFS= read -r raw_line || [ -n "$raw_line" ]; do
+    line="${raw_line%%#*}"
+    line="$(trim "$line")"
 
-  if [ -z "$workspace" ] || [ -z "$session" ] || [ "$workspace" = "$line" ]; then
-    echo "Skipping invalid autoload entry: $raw_line" >&2
-    continue
-  fi
+    if [ -z "$line" ]; then
+      continue
+    fi
 
-  i3-msg "workspace number $workspace" >/dev/null
-  wezterm start --always-new-process --cwd "$project_dotfiles_dir" -- zsh -lc "$tmux_session_script '$session'"
-done < "$autoload_file"
+    workspace="${line%%:*}"
+    session="${line#*:}"
+    workspace="$(trim "$workspace")"
+    session="$(trim "$session")"
+
+    if [ -z "$workspace" ] || [ -z "$session" ] || [ "$workspace" = "$line" ]; then
+      echo "Skipping invalid autoload entry: $raw_line" >&2
+      continue
+    fi
+
+    i3-msg "workspace number $workspace" >/dev/null
+    wezterm start --always-new-process --cwd "$cwd" -- zsh -lc "$tmux_session_script '$session'" &
+    sleep 0.2
+  done < "$autoload_file"
+}
+
+process_autoload_file "$main_autoload_file" "$main_dotfiles_dir"
+process_autoload_file "$project_autoload_file" "$project_dotfiles_dir"
