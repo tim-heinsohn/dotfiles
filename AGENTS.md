@@ -53,6 +53,17 @@ This repository uses **Bombadil** to manage dotfiles via symlinks.
 
 **After editing source files**, run `bombadil link` to update symlinks (or let posthooks handle it).
 
+### Agent Enforcement: Always Relink and Confirm
+
+This is mandatory whenever a changed file is Bombadil-managed
+(directly or via included config directories):
+
+1. Run `bombadil link` before finishing the task.
+2. Verify the relevant target file under `~/.config` or `~/.*` reflects the change.
+3. Explicitly report in the final response that relinking was done (or why it was not possible).
+
+Do not assume the user will run `bombadil link` later.
+
 ### Verification
 
 Check if a file is managed by Bombadil:
