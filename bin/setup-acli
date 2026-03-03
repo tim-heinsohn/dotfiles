@@ -1,8 +1,20 @@
 #!/bin/bash
-# https://developer.atlassian.com/cloud/acli/guides/install-linux/#install-binary-with-curl-on-linux
+#
+# setup-acli: Install or update Atlassian CLI
+#
+# Usage: setup-acli
+#
+# Description:
+# Install the Atlassian CLI (acli) from the official Linux binary URL.
+# Installs to /usr/local/bin when writable, otherwise falls back to ~/.local/bin.
+#
+# Dependencies:
+# - curl
+# - install
+
 set -euo pipefail
 
-# Install the Atlassian CLI (acli) via the official binary download.
+# https://developer.atlassian.com/cloud/acli/guides/install-linux/#install-binary-with-curl-on-linux
 
 ARCH=$(uname -m)
 case "$ARCH" in
