@@ -13,7 +13,6 @@
 # Dependencies:
 # - i3-msg
 # - wezterm
-# - zsh
 
 set -euo pipefail
 
@@ -90,8 +89,7 @@ process_autoload_file() {
       continue
     fi
 
-    i3-msg "workspace number $workspace" >/dev/null
-    wezterm start --always-new-process --cwd "$cwd" -- zsh -lc "$tmux_session_script '$session'" &
+    i3-msg "workspace number $workspace; exec --no-startup-id wezterm start --always-new-process --cwd '$cwd' -- '$tmux_session_script' '$session'" >/dev/null
     sleep 0.2
   done < "$autoload_file"
 }
