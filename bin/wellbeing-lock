@@ -6,7 +6,8 @@
 #
 # Description:
 # Checks for an active snooze. If none, warns via notify-send, waits 60s,
-# then locks the screen with i3lock-color showing a late night message.
+# then locks the screen using the centralized lock-screen script with
+# a late night message.
 #
 # Dependencies:
 # - i3lock-color
@@ -56,26 +57,13 @@ done
 CURRENT_TIME=$(date +"%H:%M")
 LOCK_MSG="It is $CURRENT_TIME. Why are you still here? Go to sleep."
 
-# Run i3lock
-i3lock \
+# Run centralized lock-screen wrapper
+~/dotfiles/bin/lock-screen \
     --nofork \
-    --blur=5 \
     --clock \
     --time-str="%H:%M:%S" \
     --date-str="Go to bed." \
     --greeter-text="$LOCK_MSG" \
     --greeter-pos="x+w/2:y+h/2+50" \
-    --time-pos="x+w/2:y+h/2-50" \
-    --time-color=ffffffff \
-    --date-color=ff0000ff \
-    --greeter-color=ff0000ff \
-    --ring-color=00000000 \
-    --inside-color=00000044 \
-    --line-uses-inside \
-    --keyhl-color=ff0000ff \
-    --bshl-color=00ff00ff \
-    --separator-color=00000000 \
-    --radius=100 \
-    --indicator \
-    --ignore-empty-password
+    --time-pos="x+w/2:y+h/2-50"
 

@@ -31,7 +31,7 @@ exec_always --no-startup-id $HOME/dotfiles/bin/fix-display-offset
 # xss-lock grabs a logind suspend inhibit lock and will use i3lock to lock the
 # screen before suspend. Use loginctl lock-session to lock your screen.
 # Use i3lock-color instead of standard i3lock, handled cleanly via xss-lock
-exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c 'i3lock --nofork; setxkbmap fr'
+exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c '~/dotfiles/bin/lock-screen --nofork; setxkbmap fr'
 
 # Notifications
 exec_always --no-startup-id systemctl --user start dunst.service
@@ -45,10 +45,10 @@ exec --no-startup-id systemctl --user start browser-workspace-restore.service
 
 # lock session
 # bindsym $mod+Shift+x exec --no-startup-id loginctl lock-session
-bindsym $mod+Shift+y exec "i3lock -c 35373A"
+bindsym $mod+Shift+y exec "~/dotfiles/bin/lock-screen"
 
 # auto lock the screen
-exec "xautolock -detectsleep -time 3 -locker \"i3lock -c 35373A\""
+exec "xautolock -detectsleep -time 3 -locker \"~/dotfiles/bin/lock-screen\""
 
 # reload Xmodmap
 bindsym $mod+x exec --no-startup-id xmodmap ~/.Xmodmap

@@ -1,0 +1,38 @@
+#!/bin/bash
+#
+# lock-screen: Unified i3lock-color wrapper for consistent styling
+#
+# Usage: lock-screen [additional i3lock options...]
+#
+# Description:
+# Centralizes the visual configuration for i3lock so manual locks,
+# sleep hooks, and automated scripts (like wellbeing-lock) share
+# the exact same look and feel.
+
+set -euo pipefail
+
+# These colors are RGBA (rrggbbaa)
+# Adjust these variables to better match your wallpaper!
+BAR_COLOR="00000077"
+KEYHL_COLOR="ffffffcc"
+BSHL_COLOR="ff0000cc"
+WRONG_COLOR="ff0000ff"
+VERIF_COLOR="00ff00ff"
+TEXT_COLOR="ffffffff"
+
+i3lock \
+    --bar-indicator \
+    --keylayout=2 \
+    -i /srv/Wallpapers/IMG_8905.JPG \
+    -F \
+    --bar-count=64 \
+    --bar-color="${BAR_COLOR}" \
+    --keyhl-color="${KEYHL_COLOR}" \
+    --bshl-color="${BSHL_COLOR}" \
+    --wrong-color="${WRONG_COLOR}" \
+    --verif-color="${VERIF_COLOR}" \
+    --layout-color="${TEXT_COLOR}" \
+    --time-color="${TEXT_COLOR}" \
+    --date-color="${TEXT_COLOR}" \
+    --greeter-color="${TEXT_COLOR}" \
+    "$@"
