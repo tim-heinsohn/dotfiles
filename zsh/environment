@@ -98,6 +98,11 @@ export REDIS_URL=redis://localhost:6379
 export F_BANK_TRANSACTIONS_PATH="$HOME/f.doc.2023/Banken/"
 export F_BANK_DOCUMENTS_PATH="$HOME/f.doc.2023/Steuern/Einkommensteuer/"
 
+# Fleet defaults
+export FLEET_DEFAULT_PROVIDER="gitlab"
+export FLEET_DEFAULT_VISIBILITY="private"
+export FLEET_DEFAULT_BRANCH="main"
+
 # Goose CLI/Desktop defaults when available
 if command -v goose-gui >/dev/null 2>&1 \
   || command -v goose-desktop >/dev/null 2>&1 \
