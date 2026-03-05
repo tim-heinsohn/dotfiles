@@ -50,7 +50,7 @@ nvim_lsp_setup = { source = "nvim/lua/lsp_setup.lua", target = ".config/nvim/lua
 # ============================================================
 # AI / Coding Assistants
 # ============================================================
-opencode = { source = "opencode/opencode.json", target = "~/.config/opencode/opencode.json" }
+# opencode = { source = "opencode/opencode.json", target = "~/.config/opencode/opencode.json" }
 opencode_smart_title = { source = "opencode/smart-title.jsonc", target = "~/.config/opencode/smart-title.jsonc" }
 
 # ============================================================
