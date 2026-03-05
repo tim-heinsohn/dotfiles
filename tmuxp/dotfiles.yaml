@@ -4,9 +4,9 @@ windows:
   - window_name: "#dot"
     panes:
       - opencode
-  - window_name: "dot_"
-    panes:
-      - nvim
   - window_name: "dot>"
     panes:
       -
+  - window_name: "dot_"
+    panes:
+      - nvim
