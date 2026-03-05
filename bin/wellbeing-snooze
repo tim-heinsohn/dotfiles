@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# wellbeing-snooze: Temporary bypass for the digital wellbeing lock.
+#
+# Usage: wellbeing-snooze [minutes]
+#
+# Description:
+# Creates a temporary lockfile to bypass the wellbeing-lock for the
+# specified number of minutes (default 15).
+#
+# Dependencies:
+# - coreutils
+
+set -euo pipefail
+
+SNOOZE_FILE="/tmp/wellbeing_snooze_until"
+SNOOZE_MINUTES=${1:-15}
+
+echo -n "Type 'I know it is late but I have to finish this' to activate snooze: "
+read -r CONFIRMATION
+
+if [[ "$CONFIRMATION" == "I know it is late but I have to finish this" ]]; then
+    SNOOZE_UNTIL=$(date -d "+$SNOOZE_MINUTES minutes" +%s)
+    echo "$SNOOZE_UNTIL" > "$SNOOZE_FILE"
+    echo "Snooze activated for $SNOOZE_MINUTES minutes."
+else
+    echo "Incorrect confirmation. Snooze denied."
+    exit 1
+fi

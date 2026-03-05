@@ -1,0 +1,14 @@
+[Unit]
+Description=Timer for Digital Wellbeing Screen Lock
+
+[Timer]
+# 22:15, 22:20, 22:25, 22:30
+OnCalendar=*-*-* 22:15,20,25,30:00
+# Every 3 mins from 22:33 to 22:59
+OnCalendar=*-*-* 22:33/3:00
+# Every 1 min from 23:00 to 05:59
+OnCalendar=*-*-* 23,00,01,02,03,04,05:*:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

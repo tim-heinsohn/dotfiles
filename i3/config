@@ -30,7 +30,11 @@ exec_always --no-startup-id $HOME/dotfiles/bin/fix-display-offset
 
 # xss-lock grabs a logind suspend inhibit lock and will use i3lock to lock the
 # screen before suspend. Use loginctl lock-session to lock your screen.
-exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c 'i3lock --nofork; setxkbmap fr'
+# Use i3lock-color instead of standard i3lock, handled cleanly via xss-lock
+exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c 'i3lock-color --nofork; setxkbmap fr'
+
+# Notifications
+exec_always --no-startup-id systemctl --user start dunst.service
 
 # Auto-start primary project browsers from ~/.projects.
 exec --no-startup-id sh -lc 'code="$(awk -F= '\''/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{v=$2; sub(/^[[:space:]]*"/, "", v); sub(/"[[:space:]]*$/, "", v); sub(/^[[:space:]]*\047/, "", v); sub(/\047[[:space:]]*$/, "", v); print v; exit}'\'' "$HOME/.projects" 2>/dev/null)"; [ -n "$code" ] && firefox -P "$code" || firefox'

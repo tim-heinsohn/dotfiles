@@ -34,14 +34,14 @@ for service_file in "${service_files[@]}"; do
     fi
 
     echo -e "\n=== Setting up $service_name ==="
-    systemctl --user enable --now "${service_name}"
-    systemctl --user status "${service_name}" --no-pager
+    systemctl --user enable --now "${service_name}" || true
+    systemctl --user status "${service_name}" --no-pager || true
 done
 
 # Enable/start and show status for each timer
 for timer_file in "${timer_files[@]}"; do
     timer_name=$(basename "$timer_file")
     echo -e "\n=== Setting up $timer_name ==="
-    systemctl --user enable --now "${timer_name}"
-    systemctl --user status "${timer_name}" --no-pager
+    systemctl --user enable --now "${timer_name}" || true
+    systemctl --user status "${timer_name}" --no-pager || true
 done

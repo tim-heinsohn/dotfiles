@@ -78,6 +78,12 @@ gpg_agent = { source = "gpg/gpg-agent", target = ".gnupg/gpg-agent.conf" }
 gopass_shared = { source = "gopass/config.shared", target = ".config/gopass/config.shared" }
 
 # ============================================================
+# Digital Wellbeing
+# ============================================================
+gammastep = { source = "gammastep/config.ini", target = ".config/gammastep/config.ini" }
+dunst = { source = "dunst/dunstrc", target = ".config/dunst/dunstrc" }
+
+# ============================================================
 # X11 / Input
 # ============================================================
 xinitrc = { source = "xinit/xinitrc", target = ".xinitrc" }

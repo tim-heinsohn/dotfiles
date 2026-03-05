@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# wellbeing-lock: Enforce digital wellbeing boundaries.
+#
+# Usage: wellbeing-lock
+#
+# Description:
+# Checks for an active snooze. If none, warns via notify-send, waits 60s,
+# then locks the screen with i3lock-color showing a late night message.
+#
+# Dependencies:
+# - i3lock-color
+# - libnotify
+
+set -euo pipefail
+
+SNOOZE_FILE="/tmp/wellbeing_snooze_until"
+
+check_snooze() {
+    local now
+    now=$(date +%s)
+    if [[ -f "$SNOOZE_FILE" ]]; then
+        local snooze_until
+        snooze_until=$(cat "$SNOOZE_FILE" 2>/dev/null || echo 0)
+        if [[ "$now" -lt "$snooze_until" ]]; then
+            return 0
+        else
+            rm -f "$SNOOZE_FILE" 2>/dev/null || true
+            return 1
+        fi
+    fi
+    return 1
+}
+
+if check_snooze; then
+    now=$(date +%s)
+    snooze_until=$(cat "$SNOOZE_FILE")
+    remaining=$(( (snooze_until - now) / 60 ))
+    echo "Snooze active for another $remaining minutes. Not locking."
+    exit 0
+fi
+
+# Send high urgency notification
+notify-send -u critical -t 60000 "DIGITAL WELLBEING" "It is late. System locking in 60 seconds. Save your work." || true
+
+# Wait 60s, checking for snooze updates
+for i in {1..60}; do
+    sleep 1
+    if check_snooze; then
+        echo "Snooze activated during countdown. Aborting lock."
+        exit 0
+    fi
+done
+
+# Prepare the lock message
+CURRENT_TIME=$(date +"%H:%M")
+LOCK_MSG="It is $CURRENT_TIME. Why are you still here? Go to sleep."
+
+# Run i3lock-color
+i3lock-color \
+    --nofork \
+    --blur=5 \
+    --clock \
+    --time-str="%H:%M:%S" \
+    --date-str="Go to bed." \
+    --greeter-text="$LOCK_MSG" \
+    --greeter-pos="x+w/2:y+h/2+50" \
+    --time-pos="x+w/2:y+h/2-50" \
+    --time-color=ffffffff \
+    --date-color=ff0000ff \
+    --greeter-color=ff0000ff \
+    --ring-color=00000000 \
+    --inside-color=00000044 \
+    --line-uses-inside \
+    --keyhl-color=ff0000ff \
+    --bshl-color=00ff00ff \
+    --separator-color=00000000 \
+    --radius=100 \
+    --indicator \
+    --ignore-empty-password
+

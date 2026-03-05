@@ -11,6 +11,8 @@ aur/hey-bin
     HTTP load generator, ApacheBench (ab) replacement.
 aur/html2md
     A command-line tool to convert HTML to Markdown.
+aur/i3lock-color
+    Improved i3lock with color support.
 aur/neovim-remote
     A tool to control Neovim instances from the command line.
 aur/nvm
@@ -121,6 +123,8 @@ extra/docker-buildx
     A Docker CLI plugin for extended build capabilities with BuildKit.
 extra/docker-compose
     Fast, isolated development environments using Docker.
+extra/dunst
+    Lightweight and customizable notification daemon.
 extra/easytag
     Simple application for viewing and editing tags in audio files.
 extra/eog
@@ -147,6 +151,8 @@ extra/fortune-mod
     The Fortune Cookie Program from BSD games.
 extra/fzf
     Command-line fuzzy finder.
+extra/gammastep
+    Adjust the color temperature of your screen according to your surroundings.
 extra/gcompris-qt
     A high quality educational software suite for children aged 2 to 10.
 extra/gimagereader-qt
@@ -193,6 +199,8 @@ extra/kwindowsystem
     Access to the windowing system.
 extra/libreoffice-fresh
     LibreOffice branch which contains new features and program enhancements.
+extra/libnotify
+    Desktop notification library.
 extra/lsof
     A utility to list open files.
 extra/libisoburn

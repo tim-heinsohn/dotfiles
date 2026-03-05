@@ -1,0 +1,9 @@
+[Unit]
+Description=Digital Wellbeing Screen Lock
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/t/dotfiles/bin/wellbeing-lock
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/t/.Xauthority
