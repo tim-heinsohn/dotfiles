@@ -56,8 +56,8 @@ done
 CURRENT_TIME=$(date +"%H:%M")
 LOCK_MSG="It is $CURRENT_TIME. Why are you still here? Go to sleep."
 
-# Run i3lock-color
-i3lock-color \
+# Run i3lock
+i3lock \
     --nofork \
     --blur=5 \
     --clock \
