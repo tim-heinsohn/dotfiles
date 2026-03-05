@@ -45,10 +45,10 @@ exec --no-startup-id systemctl --user start browser-workspace-restore.service
 
 # lock session
 # bindsym $mod+Shift+x exec --no-startup-id loginctl lock-session
-bindsym $mod+Shift+y exec "i3lock -c 35373A"
+bindsym $mod+Shift+y exec "i3lock-color -c 35373A"
 
 # auto lock the screen
-exec "xautolock -detectsleep -time 3 -locker \"i3lock -c 35373A\""
+exec "xautolock -detectsleep -time 3 -locker \"i3lock-color -c 35373A\""
 
 # reload Xmodmap
 bindsym $mod+x exec --no-startup-id xmodmap ~/.Xmodmap
