@@ -46,6 +46,7 @@ exec --no-startup-id systemctl --user start browser-workspace-restore.service
 # lock session
 # bindsym $mod+Shift+x exec --no-startup-id loginctl lock-session
 bindsym $mod+Shift+y exec "~/dotfiles/bin/lock-screen"
+bindsym $mod+Ctrl+y exec --no-startup-id sh -c '~/dotfiles/bin/lock-screen && systemctl suspend'
 
 # auto lock the screen
 exec "xautolock -detectsleep -time 3 -locker \"~/dotfiles/bin/lock-screen\""
