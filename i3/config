@@ -36,6 +36,9 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c '~/dotfiles/bin/loc
 # Notifications
 exec_always --no-startup-id systemctl --user start dunst.service
 
+# Night light / blue light filter
+exec_always --no-startup-id systemctl --user restart gammastep.service
+
 # Screenshot tool (system tray daemon)
 exec --no-startup-id flameshot
 
