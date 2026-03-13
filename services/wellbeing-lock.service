@@ -7,3 +7,4 @@ Type=oneshot
 ExecStart=/home/t/dotfiles/bin/wellbeing-lock
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/t/.Xauthority
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus

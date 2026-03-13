@@ -30,5 +30,6 @@ if [ -x "$HOME/mcp/bin/mcp" ]; then
   echo "Linked ~/bin/mcp -> ~/mcp/bin/mcp"
 fi
 
-# Print reminder for brightness control
+# Print reminders for manual setup steps
+echo "Run ~/dotfiles/services/setup to install and enable systemd user services."
 echo "Run ~/dotfiles/services/acpi/enable to enable brightness control."

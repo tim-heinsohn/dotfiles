@@ -41,8 +41,8 @@ if check_snooze; then
     exit 0
 fi
 
-# Send high urgency notification
-notify-send -u critical -t 60000 "DIGITAL WELLBEING" "It is late. System locking in 60 seconds. Save your work." || true
+# Send high urgency notification (best-effort — D-Bus may not be available in all contexts)
+notify-send -u critical -t 60000 "DIGITAL WELLBEING" "It is late. System locking in 60 seconds. Save your work." 2>/dev/null || true
 
 # Wait 60s, checking for snooze updates
 for i in {1..60}; do
