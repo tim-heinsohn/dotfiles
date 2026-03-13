@@ -1,0 +1,84 @@
+#!/bin/bash
+#
+# i3-startup: Sequenced startup for i3 session
+#
+# Usage: i3-startup
+#
+# Description:
+# Runs tasks in a deliberate order so that the GPG passphrase prompt is the
+# only window on screen when it appears, giving it uncontested keyboard focus.
+#
+#   1. gpg-prewarm  – one pinentry prompt, populates gpg-agent cache (8 h TTL)
+#   2. browsers     – Firefox + Chromium (may show their own password prompts,
+#                     but gpg cache is already warm so tmuxp shells stay silent)
+#   3. tmuxp-autoload – tmux sessions (shells source gopass secrets from cache)
+#
+# Dependencies:
+# - ~/dotfiles/bin/gpg-prewarm
+# - ~/dotfiles/bin/tmuxp-autoload
+# - firefox, chromium
+# - i3-msg
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# 1. Prime gpg-agent cache (blocking – must finish before anything else opens)
+# ---------------------------------------------------------------------------
+gpg_prewarm="$HOME/dotfiles/bin/gpg-prewarm"
+if [ -x "$gpg_prewarm" ]; then
+  "$gpg_prewarm" || true   # ESC / failure is non-fatal; shells will just skip gopass
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Browsers
+# ---------------------------------------------------------------------------
+_primary_project_code() {
+  if [ -n "${PRIMARY_PROJECT_CODE:-}" ]; then
+    printf '%s\n' "$PRIMARY_PROJECT_CODE"
+    return
+  fi
+  [ -f "$HOME/.projects" ] || return
+  awk -F= '/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{
+    v=$2
+    sub(/^[[:space:]]*"/, "", v); sub(/"[[:space:]]*$/, "", v)
+    sub(/^[[:space:]]*\047/, "", v); sub(/\047[[:space:]]*$/, "", v)
+    print v; exit
+  }' "$HOME/.projects"
+}
+
+code="$(_primary_project_code 2>/dev/null || true)"
+
+# Firefox
+if [ -n "$code" ]; then
+  firefox -P "$code" &
+else
+  firefox &
+fi
+
+# Chromium – map project name to profile directory
+if [ -n "$code" ] \
+    && [ -f "$HOME/.config/chromium/Local State" ] \
+    && command -v jq >/dev/null 2>&1; then
+  mapped="$(jq -r --arg name "$code" \
+    '[.profile.info_cache | to_entries[] | select(.value.name == $name) | .key][0] // empty' \
+    "$HOME/.config/chromium/Local State" 2>/dev/null || true)"
+  profile="${mapped:-$code}"
+else
+  profile="$code"
+fi
+if [ -n "$profile" ]; then
+  chromium --profile-directory="$profile" &
+else
+  chromium &
+fi
+
+# Restore browser windows to remembered workspaces
+systemctl --user start browser-workspace-restore.service || true
+
+# ---------------------------------------------------------------------------
+# 3. tmuxp sessions (gpg cache is now warm; shells will load secrets silently)
+# ---------------------------------------------------------------------------
+tmuxp_autoload="$HOME/dotfiles/bin/tmuxp-autoload"
+if [ -x "$tmuxp_autoload" ]; then
+  "$tmuxp_autoload"
+fi

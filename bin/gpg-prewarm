@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# gpg-prewarm: Prime the gpg-agent cache with a single decryption
+#
+# Usage: gpg-prewarm
+#
+# Description:
+# Runs one gopass show call so the user enters their GPG passphrase once.
+# All subsequent gopass/gpg calls in the same gpg-agent session are served
+# from cache (default-cache-ttl 28800 = 8 hours), producing no further prompts.
+#
+# Intended to run during i3 startup, before tmuxp sessions are launched, so that
+# the many shells opened by tmuxp never need to prompt for a passphrase.
+#
+# Dependencies:
+# - gopass
+# - gpg-agent (must already be running)
+
+set -euo pipefail
+
+# Only meaningful in a GUI session
+if [ -z "${DISPLAY:-}" ]; then
+  exit 0
+fi
+
+# gopass must be present
+if ! command -v gopass >/dev/null 2>&1; then
+  exit 0
+fi
+
+# If the agent already has a cached key (e.g. second login, screen-unlock),
+# a fast 'gopass ls' will succeed silently without prompting.
+if timeout 2s gopass ls >/dev/null 2>&1; then
+  # Cache is hot – nothing to do
+  exit 0
+fi
+
+# Cache is cold: perform one real decryption to prime it.
+# Using a small, always-present secret. If this fails (user presses ESC etc.)
+# we exit non-zero so callers know the cache is still cold.
+timeout 30s gopass show -o t/ai/claude/api-key >/dev/null

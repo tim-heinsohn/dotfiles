@@ -36,20 +36,21 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c '~/dotfiles/bin/loc
 # Notifications
 exec_always --no-startup-id systemctl --user start dunst.service
 
-# Auto-start primary project browsers from ~/.projects.
-exec --no-startup-id sh -lc 'code="$(awk -F= '\''/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{v=$2; sub(/^[[:space:]]*"/, "", v); sub(/"[[:space:]]*$/, "", v); sub(/^[[:space:]]*\047/, "", v); sub(/\047[[:space:]]*$/, "", v); print v; exit}'\'' "$HOME/.projects" 2>/dev/null)"; [ -n "$code" ] && firefox -P "$code" || firefox'
-exec --no-startup-id sh -lc 'code="$(awk -F= '\''/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{v=$2; sub(/^[[:space:]]*"/, "", v); sub(/"[[:space:]]*$/, "", v); sub(/^[[:space:]]*\047/, "", v); sub(/\047[[:space:]]*$/, "", v); print v; exit}'\'' "$HOME/.projects" 2>/dev/null)"; profile="$code"; if [ -n "$code" ] && [ -f "$HOME/.config/chromium/Local State" ] && command -v jq >/dev/null 2>&1; then mapped="$(jq -r --arg name "$code" '\''[.profile.info_cache | to_entries[] | select(.value.name == $name) | .key][0] // empty'\'' "$HOME/.config/chromium/Local State" 2>/dev/null)"; [ -n "$mapped" ] && profile="$mapped"; fi; [ -n "$profile" ] && chromium --profile-directory="$profile" || chromium'
+# Screenshot tool (system tray daemon)
+exec --no-startup-id flameshot
 
-# Restore browser windows to remembered workspaces after startup.
-exec --no-startup-id systemctl --user start browser-workspace-restore.service
+# Sequenced startup: gpg-prewarm first (gets focus, one prompt), then browsers,
+# then tmuxp sessions. Prevents the race where browsers steal focus from the
+# pinentry prompt and cause dozens of repeated GPG password dialogs.
+exec --no-startup-id $HOME/dotfiles/bin/i3-startup
 
 # lock session
 # bindsym $mod+Shift+x exec --no-startup-id loginctl lock-session
 bindsym $mod+Shift+y exec "~/dotfiles/bin/lock-screen"
 bindsym $mod+Ctrl+y exec --no-startup-id sh -c '~/dotfiles/bin/lock-screen && systemctl suspend'
 
-# auto lock the screen
-exec "xautolock -detectsleep -time 3 -locker \"~/dotfiles/bin/lock-screen\""
+# auto lock the screen using the same wrapper as the manual shortcut
+exec --no-startup-id xautolock -detectsleep -time 3 -locker "$HOME/dotfiles/bin/lock-screen"
 
 # reload Xmodmap
 bindsym $mod+x exec --no-startup-id xmodmap ~/.Xmodmap
@@ -87,9 +88,6 @@ bindsym $mod+Return exec i3-sensible-terminal
 
 # Open workspace 5 with a tmuxp profile in WezTerm.
 bindsym $mod+Shift+Return workspace number 5; exec --no-startup-id wezterm start --always-new-process --cwd "$HOME/dotfiles" -- zsh -lc "$HOME/dotfiles/bin/tmux-session dotfiles"
-
-# Auto-start tmux sessions from $PRIMARY_PROJECT_CODE.dotfiles/tmuxp/autoload.
-exec --no-startup-id $HOME/dotfiles/bin/tmuxp-autoload
 
 # start a browser with a secondary profile – the first firefox instance should
 # not be opened with -no-remote though, to allow external links to be opened in

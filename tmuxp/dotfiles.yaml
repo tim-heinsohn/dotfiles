@@ -10,3 +10,11 @@ windows:
   - window_name: "dot_"
     panes:
       - nvim
+  - window_name: "#p'agents"
+    start_directory: ~/personal/agents
+    panes:
+      - opencode
+  - window_name: "p'agents>"
+    start_directory: ~/personal/agents
+    panes:
+      -
