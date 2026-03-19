@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# tmuxp-autoload: Start tmuxp sessions from primary project config
+# tmuxp-autoload: Start tmuxp sessions from dotfiles autoload configs
 #
 # Usage: tmuxp-autoload
 #
 # Description:
 # Reads autoload session definitions from:
-# - ~/dotfiles/tmuxp/autoload
-# - ~/${PRIMARY_PROJECT_CODE}.dotfiles/tmuxp/autoload
+# - ~/dotfiles/tmuxp/autoload           (cwd: ~/dotfiles/)
+# - ~/*/dotfiles/tmuxp/autoload         (cwd: ~/*/  — fleet roots)
 # and starts each entry in a fresh WezTerm window on the configured i3 workspace.
 #
 # Dependencies:
@@ -24,39 +24,6 @@ trim() {
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s' "$value"
 }
-
-get_primary_project_code() {
-  if [ -n "${PRIMARY_PROJECT_CODE:-}" ]; then
-    printf '%s\n' "$PRIMARY_PROJECT_CODE"
-    return 0
-  fi
-
-  if [ ! -f "$HOME/.projects" ]; then
-    return 1
-  fi
-
-  awk -F= '/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{
-    value=$2
-    sub(/^[[:space:]]*"/, "", value)
-    sub(/"[[:space:]]*$/, "", value)
-    sub(/^[[:space:]]*\047/, "", value)
-    sub(/\047[[:space:]]*$/, "", value)
-    print value
-    exit
-  }' "$HOME/.projects"
-}
-
-primary_project_code="$(get_primary_project_code 2>/dev/null || true)"
-primary_project_code="$(trim "$primary_project_code")"
-
-if [ -z "$primary_project_code" ]; then
-  exit 0
-fi
-
-project_dotfiles_dir="$HOME/${primary_project_code}.dotfiles"
-main_dotfiles_dir="$HOME/dotfiles"
-main_autoload_file="$main_dotfiles_dir/tmuxp/autoload"
-project_autoload_file="$project_dotfiles_dir/tmuxp/autoload"
 
 if [ ! -x "$tmux_session_script" ]; then
   echo "tmux-session script not executable: $tmux_session_script" >&2
@@ -94,5 +61,16 @@ process_autoload_file() {
   done < "$autoload_file"
 }
 
-process_autoload_file "$main_autoload_file" "$main_dotfiles_dir"
-process_autoload_file "$project_autoload_file" "$project_dotfiles_dir"
+# Process the primary dotfiles first
+process_autoload_file "$HOME/dotfiles/tmuxp/autoload" "$HOME/dotfiles"
+
+# Process all fleet dotfiles: ~/*/dotfiles/tmuxp/autoload
+# cwd is the fleet root (~/*/), not the dotfiles subdir
+for autoload_file in "$HOME"/*/dotfiles/tmuxp/autoload; do
+  # Skip the primary dotfiles dir (already handled above)
+  fleet_root="${autoload_file%/dotfiles/tmuxp/autoload}"
+  if [ "$fleet_root" = "$HOME/dotfiles" ]; then
+    continue
+  fi
+  process_autoload_file "$autoload_file" "$fleet_root"
+done
