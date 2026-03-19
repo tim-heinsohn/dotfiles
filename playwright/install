@@ -9,6 +9,156 @@
 
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage: playwright/install [--verify-only]
+
+Options:
+  --verify-only   Run checks only; do not install or modify anything.
+  -h, --help      Show this help.
+EOF
+}
+
+VERIFY_ONLY=false
+case "${1:-}" in
+  "") ;;
+  --verify-only) VERIFY_ONLY=true ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1"
+    usage
+    exit 2
+    ;;
+esac
+
+resolve_playwright_version_for_revision() {
+  local target_revision="$1"
+  local candidates version detected_revision
+
+  candidates="$({
+    npm view playwright versions --json |
+      node -e 'const fs=require("fs"); const all=JSON.parse(fs.readFileSync(0,"utf8")); const stable=all.filter(v => /^\d+\.\d+\.\d+$/.test(v)); process.stdout.write(stable.reverse().slice(0, 30).join("\n"));'
+  } || true)"
+
+  if [[ -z "$candidates" ]]; then
+    return 1
+  fi
+
+  while IFS= read -r version; do
+    [[ -z "$version" ]] && continue
+    detected_revision="$({
+      npx -y "playwright@${version}" install --dry-run chromium 2>/dev/null |
+        sed -n 's/.*chromium-\([0-9][0-9]*\).*/\1/p' | head -n 1
+    } || true)"
+
+    if [[ "$detected_revision" == "$target_revision" ]]; then
+      printf '%s\n' "$version"
+      return 0
+    fi
+  done <<< "$candidates"
+
+  return 1
+}
+
+ensure_agent_browser_chromium() {
+  local err_file revision playwright_version
+  err_file="$(mktemp)"
+
+  if agent-browser open https://example.com >/dev/null 2>"$err_file"; then
+    agent-browser close >/dev/null || true
+    rm -f "$err_file"
+    return 0
+  fi
+
+  revision="$(sed -n 's#.*ms-playwright/chromium-\([0-9][0-9]*\)/.*#\1#p' "$err_file" | head -n 1 || true)"
+  if [[ -z "$revision" ]]; then
+    echo "  Warning: Could not determine required Chromium revision from agent-browser output"
+    echo "  Error output:"
+    sed 's/^/    /' "$err_file"
+    rm -f "$err_file"
+    return 1
+  fi
+
+  echo "  agent-browser expects chromium-$revision"
+  playwright_version="$(resolve_playwright_version_for_revision "$revision" || true)"
+  if [[ -z "$playwright_version" ]]; then
+    echo "  Warning: Could not map chromium-$revision to a Playwright npm version"
+    rm -f "$err_file"
+    return 1
+  fi
+
+  echo "  Installing with playwright@$playwright_version..."
+  npx -y "playwright@${playwright_version}" install chromium
+  rm -f "$err_file"
+}
+
+verify_agent_browser() {
+  local err_file revision matched_version
+  err_file="$(mktemp)"
+
+  if agent-browser open https://example.com >/dev/null 2>"$err_file"; then
+    echo "  agent-browser: OK"
+    agent-browser close >/dev/null || true
+    rm -f "$err_file"
+    return 0
+  fi
+
+  revision="$(sed -n 's#.*ms-playwright/chromium-\([0-9][0-9]*\)/.*#\1#p' "$err_file" | head -n 1 || true)"
+  if [[ -n "$revision" ]]; then
+    echo "  agent-browser: MISSING chromium-$revision"
+    matched_version="$(resolve_playwright_version_for_revision "$revision" || true)"
+    if [[ -n "$matched_version" ]]; then
+      echo "  Suggested fix: npx -y playwright@${matched_version} install chromium"
+    else
+      echo "  Suggested fix: install a Playwright version that provides chromium-$revision"
+    fi
+  else
+    echo "  agent-browser: FAILED"
+    sed 's/^/    /' "$err_file"
+  fi
+
+  rm -f "$err_file"
+  return 1
+}
+
+verify_installation() {
+  local ok=true
+
+  echo "Step 5: Verifying installation..."
+  echo "  Checking @playwright/mcp..."
+  if npm ls -g @playwright/mcp >/dev/null 2>&1; then
+    echo "  @playwright/mcp: OK"
+  else
+    echo "  Warning: @playwright/mcp not found globally"
+    ok=false
+  fi
+
+  echo "  Checking agent-browser..."
+  if ! verify_agent_browser; then
+    ok=false
+  fi
+
+  echo ""
+  echo "Manual verification:"
+  echo "  1. Test MCP server: mcp-server-playwright"
+  echo "  2. Test in Claude: 'Use playwright to open https://google.com'"
+  echo "  3. Test in OpenCode: agent-browser open https://google.com"
+
+  if [[ "$ok" == true ]]; then
+    return 0
+  fi
+  return 1
+}
+
+if [[ "$VERIFY_ONLY" == true ]]; then
+  echo "Running in verify-only mode (no changes will be made)."
+  verify_installation
+  exit $?
+fi
+
 # --- Installation Process ---
 
 # 1. Install System-Level Dependencies
@@ -35,22 +185,22 @@ echo "Step 3: Installing browser binaries..."
 
 # 3a. Install browsers for @playwright/mcp (global playwright)
 echo "  Installing browsers for @playwright/mcp..."
-npx playwright install chromium
-npx playwright install firefox
-npx playwright install webkit
-
-# 3b. Install chromium for agent-browser (bundled playwright-core)
-# This ensures the exact chromium revision agent-browser expects is present,
-# even if it differs from the global playwright version.
-echo "  Installing chromium for agent-browser..."
-AGENT_BROWSER_PW="$(npm root -g)/agent-browser/node_modules/playwright-core/cli.js"
-if [[ -f "$AGENT_BROWSER_PW" ]]; then
-  node "$AGENT_BROWSER_PW" install chromium
+MCP_PW="$(npm root -g)/@playwright/mcp/node_modules/playwright-core/cli.js"
+if [[ -f "$MCP_PW" ]]; then
+  node "$MCP_PW" install chromium firefox webkit
 else
-  echo "  Warning: agent-browser's bundled playwright-core not found at $AGENT_BROWSER_PW"
-  echo "  Falling back to: agent-browser install"
-  agent-browser install
+  echo "  Warning: @playwright/mcp bundled playwright-core not found, using latest playwright CLI"
+  npx -y playwright@latest install chromium firefox webkit
 fi
+
+# 3b. Install chromium for agent-browser.
+# agent-browser currently ships as a native binary and may not bundle a
+# local playwright-core CLI. Detect the required chromium revision from
+# runtime output and install the matching playwright package version.
+echo "  Installing chromium for agent-browser..."
+agent-browser install || true
+ensure_agent_browser_chromium || true
+agent-browser close >/dev/null || true
 
 
 # 4. Configure Claude Code
@@ -59,17 +209,7 @@ echo "Step 4: Configuring Claude Code..."
 claude mcp list | grep -q playwright || claude mcp add --scope=user playwright npx '@playwright/mcp@latest' || echo "Claude not found - run manually: claude mcp add playwright npx '@playwright/mcp@latest'"
 
 
-# 5. Verify the installation
-echo "Step 5: Verifying installation..."
-echo "  Checking @playwright/mcp..."
-npm ls -g @playwright/mcp 2>/dev/null || echo "  Warning: @playwright/mcp not found globally"
-echo "  Checking agent-browser..."
-agent-browser open https://example.com && agent-browser close && echo "  agent-browser: OK" || echo "  Warning: agent-browser test failed"
-echo ""
-echo "Manual verification:"
-echo "  1. Test MCP server: mcp-server-playwright"
-echo "  2. Test in Claude: 'Use playwright to open https://google.com'"
-echo "  3. Test in OpenCode: agent-browser open https://google.com"
+verify_installation || true
 
 
 echo ""
