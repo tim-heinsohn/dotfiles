@@ -6,9 +6,13 @@
 #
 # Description:
 # Reads autoload session definitions from:
-# - ~/dotfiles/tmuxp/autoload           (cwd: ~/dotfiles/)
-# - ~/*/dotfiles/tmuxp/autoload         (cwd: ~/*/  — fleet roots)
-# and starts each entry in a fresh WezTerm window on the configured i3 workspace.
+# - ~/dotfiles/tmuxp/autoload                  (cwd: ~/dotfiles/)
+# - ~/*.dotfiles/tmuxp/autoload                (cwd: fleet root or parent)
+# - ~/*/.../*.dotfiles/tmuxp/autoload           (cwd: fleet root)
+#
+# Discovery walks fleet roots (directories containing .fleet.yml) and finds
+# *.dotfiles vessels with tmuxp/autoload inside them. This covers top-level
+# dotfiles (~/ia.dotfiles) and fleet-nested ones (~/f/f.dotfiles).
 #
 # Dependencies:
 # - i3-msg
@@ -30,6 +34,9 @@ if [ ! -x "$tmux_session_script" ]; then
   exit 1
 fi
 
+# Track processed autoload files to avoid duplicates (via symlinks or overlapping globs)
+declare -A processed_files
+
 process_autoload_file() {
   local autoload_file="$1"
   local cwd="$2"
@@ -37,6 +44,14 @@ process_autoload_file() {
   if [ ! -f "$autoload_file" ]; then
     return 0
   fi
+
+  # Resolve to canonical path to prevent duplicate processing
+  local canonical
+  canonical="$(readlink -f "$autoload_file")"
+  if [ -n "${processed_files[$canonical]+x}" ]; then
+    return 0
+  fi
+  processed_files["$canonical"]=1
 
   while IFS= read -r raw_line || [ -n "$raw_line" ]; do
     line="${raw_line%%#*}"
@@ -61,16 +76,50 @@ process_autoload_file() {
   done < "$autoload_file"
 }
 
-# Process the primary dotfiles first
+# Derive the fleet root (directory containing .fleet.yml) for a dotfiles path.
+# Walks upward from the dotfiles dir. Returns the dotfiles parent if no manifest found.
+find_fleet_root() {
+  local dotfiles_dir="$1"
+  local dir="${dotfiles_dir%/*}"
+
+  while [ "$dir" != "$HOME" ] && [ "$dir" != "/" ]; do
+    if [ -f "$dir/.fleet.yml" ]; then
+      echo "$dir"
+      return 0
+    fi
+    dir="${dir%/*}"
+  done
+
+  # Fallback: use the parent of the dotfiles directory
+  echo "${dotfiles_dir%/*}"
+}
+
+# 1. Process the primary dotfiles first
 process_autoload_file "$HOME/dotfiles/tmuxp/autoload" "$HOME/dotfiles"
 
-# Process all fleet dotfiles: ~/*/dotfiles/tmuxp/autoload
-# cwd is the fleet root (~/*/), not the dotfiles subdir
-for autoload_file in "$HOME"/*/dotfiles/tmuxp/autoload; do
-  # Skip the primary dotfiles dir (already handled above)
-  fleet_root="${autoload_file%/dotfiles/tmuxp/autoload}"
-  if [ "$fleet_root" = "$HOME/dotfiles" ]; then
-    continue
+# 2. Process top-level *.dotfiles (e.g., ~/ia.dotfiles)
+shopt -s nullglob
+for dotfiles_dir in "$HOME"/*.dotfiles; do
+  autoload_file="$dotfiles_dir/tmuxp/autoload"
+  if [ -f "$autoload_file" ]; then
+    fleet_root="$(find_fleet_root "$dotfiles_dir")"
+    process_autoload_file "$autoload_file" "$fleet_root"
   fi
-  process_autoload_file "$autoload_file" "$fleet_root"
+done
+
+# 3. Process fleet-nested *.dotfiles (e.g., ~/f/f.dotfiles, ~/a/a.dotfiles)
+#    Walk fleet roots (dirs with .fleet.yml) and find *.dotfiles vessels inside
+for fleet_manifest in "$HOME"/*/.fleet.yml "$HOME"/*/*/.fleet.yml; do
+  [ -f "$fleet_manifest" ] || continue
+  fleet_root="${fleet_manifest%/.fleet.yml}"
+
+  for dotfiles_dir in "$fleet_root"/*.dotfiles \
+                      "$fleet_root"/*/*.dotfiles \
+                      "$fleet_root"/*/*/*.dotfiles; do
+    [ -d "$dotfiles_dir" ] || continue
+    autoload_file="$dotfiles_dir/tmuxp/autoload"
+    if [ -f "$autoload_file" ]; then
+      process_autoload_file "$autoload_file" "$fleet_root"
+    fi
+  done
 done

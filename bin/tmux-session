@@ -8,6 +8,13 @@
 # Loads tmuxp profile ~/dotfiles/tmuxp/<profile>.yaml when the related tmux
 # session does not already exist, then attaches to that session.
 #
+# Profile resolution searches:
+# - ~/dotfiles/tmuxp/                          (simple names)
+# - ~/<project>.dotfiles/tmuxp/                (top-level project dotfiles)
+# - ~/<project>.dev/tmuxp/                     (top-level project dev)
+# - ~/*/<project>.dotfiles/tmuxp/              (fleet-nested dotfiles)
+# - ~/*/*/<project>.dotfiles/tmuxp/            (deep fleet-nested dotfiles)
+#
 # Dependencies:
 # - tmux
 # - tmuxp
@@ -23,9 +30,27 @@ run_tmuxp() {
   )
 }
 
+# Find all project tmuxp directories for a given project prefix.
+# Searches top-level and fleet-nested *.dotfiles and *.dev directories.
+find_project_tmuxp_dirs() {
+  local project_prefix="$1"
+  shopt -s nullglob
+
+  # Top-level: ~/<project>.dotfiles and ~/<project>.dev
+  for dir in "$HOME/${project_prefix}.dotfiles" "$HOME/${project_prefix}.dev"; do
+    [ -d "$dir/tmuxp" ] && echo "$dir"
+  done
+
+  # Fleet-nested: ~/*/<project>.dotfiles and ~/*/*/<project>.dotfiles
+  for dir in "$HOME"/*/"${project_prefix}.dotfiles" \
+             "$HOME"/*/*/"${project_prefix}.dotfiles"; do
+    [ -d "$dir/tmuxp" ] && echo "$dir"
+  done
+}
+
 print_available_profiles() {
   shopt -s nullglob
-  
+
   # Main dotfiles sessions
   for file in "$HOME"/dotfiles/tmuxp/*.{yaml,yml}; do
     if [ -f "$file" ]; then
@@ -33,20 +58,27 @@ print_available_profiles() {
       echo "  ${base%.*}" >&2
     fi
   done
-  
-  # Project sessions (*.dotfiles and *.dev patterns)
-  for project_dir in "$HOME"/*.dotfiles "$HOME"/*.dev; do
-    if [ -d "$project_dir/tmuxp" ]; then
-      project_name="${project_dir##*/}"
-      project_name="${project_name%.*}"
-      
-      for file in "$project_dir/tmuxp"/*.{yaml,yml}; do
-        if [ -f "$file" ]; then
-          base="${file##*/}"
-          echo "  ${project_name}:${base%.*}" >&2
-        fi
-      done
-    fi
+
+  # Collect all project dotfiles directories (top-level and fleet-nested)
+  local -A seen_projects
+  for project_dir in "$HOME"/*.dotfiles "$HOME"/*.dev \
+                     "$HOME"/*/*.dotfiles "$HOME"/*/*/*.dotfiles; do
+    [ -d "$project_dir/tmuxp" ] || continue
+    project_name="${project_dir##*/}"
+    project_name="${project_name%.*}"
+
+    # Avoid listing the same project twice (symlinks, overlapping globs)
+    local canonical
+    canonical="$(readlink -f "$project_dir")"
+    [ -n "${seen_projects[$canonical]+x}" ] && continue
+    seen_projects["$canonical"]=1
+
+    for file in "$project_dir/tmuxp"/*.{yaml,yml}; do
+      if [ -f "$file" ]; then
+        base="${file##*/}"
+        echo "  ${project_name}:${base%.*}" >&2
+      fi
+    done
   done
 }
 
@@ -68,8 +100,9 @@ Session Behavior:
 
 Profile Format:
   <name>           Load from ~/dotfiles/tmuxp/<name>.yaml
-  <project>:<name> Load from ~/<project>.dotfiles/tmuxp/<name>.yaml
-                   or ~/<project>.dev/tmuxp/<name>.yaml
+  <project>:<name> Load from ~/<project>.dotfiles/tmuxp/<name>.yaml,
+                   ~/<project>.dev/tmuxp/<name>.yaml, or fleet-nested
+                   ~/*/<project>.dotfiles/tmuxp/<name>.yaml
 
 Options:
   -h, --help       Show this help message
@@ -77,6 +110,7 @@ Options:
 Examples:
   tmux-session dotfiles      # Launch main dotfiles session
   tmux-session ia:core-full  # Launch ia project session
+  tmux-session f:f           # Launch family fleet session
 
 EOF
   echo "Available profiles:" >&2
@@ -100,25 +134,22 @@ profile="$1"
 # Resolve profile path (supports project-prefixed sessions like "ia:core-full")
 resolve_profile_path() {
   local session="$1"
-  
+
   # Check if it's a project-prefixed session
   if [[ "$session" == *:* ]]; then
     local project_prefix="${session%%:*}"
     local session_name="${session#*:}"
-    
-    # Search for matching project directory
-    shopt -s nullglob
-    for project_dir in "$HOME/${project_prefix}.dotfiles" "$HOME/${project_prefix}.dev"; do
-      if [ -d "$project_dir/tmuxp" ]; then
-        for ext in yaml yml; do
-          local path="$project_dir/tmuxp/${session_name}.${ext}"
-          if [ -f "$path" ]; then
-            echo "$path"
-            return 0
-          fi
-        done
-      fi
-    done
+
+    # Search all matching project directories (top-level and fleet-nested)
+    while IFS= read -r project_dir; do
+      for ext in yaml yml; do
+        local path="$project_dir/tmuxp/${session_name}.${ext}"
+        if [ -f "$path" ]; then
+          echo "$path"
+          return 0
+        fi
+      done
+    done < <(find_project_tmuxp_dirs "$project_prefix")
   else
     # Main dotfiles session
     for ext in yaml yml; do
@@ -129,7 +160,7 @@ resolve_profile_path() {
       fi
     done
   fi
-  
+
   return 1
 }
 
