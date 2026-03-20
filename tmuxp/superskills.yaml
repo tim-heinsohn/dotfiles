@@ -10,3 +10,6 @@ windows:
   - window_name: "superskills_"
     panes:
       - nvim
+  - window_name: "superskills~"
+    panes:
+      - journalctl --user -u fetch-substack -f
