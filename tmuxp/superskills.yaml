@@ -1,0 +1,12 @@
+session_name: superskills
+start_directory: ~/superskills
+windows:
+  - window_name: "#superskills"
+    panes:
+      - opencode
+  - window_name: "superskills>"
+    panes:
+      -
+  - window_name: "superskills_"
+    panes:
+      - nvim
