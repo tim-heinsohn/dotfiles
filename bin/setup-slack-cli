@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# setup-slack-cli: Install or update the official Slack CLI (slack)
+#
+# Usage: setup-slack-cli
+#
+# Description:
+# Installs the official Slack CLI from the latest GitHub release.
+# This is the developer tool for CREATING and ADMINISTRATING Slack apps
+# (scaffolding, deploying, managing app manifests, etc.).
+# It is NOT a messaging client and does NOT send Slack messages.
+#
+# Releases: https://github.com/slackapi/slack-cli/releases/latest
+# Docs:     https://tools.slack.dev/slack-cli/
+#
+# Dependencies:
+# - curl
+# - tar
+# - install
+
+set -euo pipefail
+
+# https://github.com/slackapi/slack-cli/releases/latest
+# Only Linux x86_64 is supported; the release ships a single linux_64-bit asset.
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH (only x86_64 is supported)" >&2
+        exit 1
+        ;;
+esac
+
+DOWNLOAD_URL="https://github.com/slackapi/slack-cli/releases/latest/download/slack_cli_latest_linux_64-bit.tar.gz"
+TMP_DIR=$(mktemp -d)
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/slack-cli.tar.gz"
+tar -xzf "$TMP_DIR/slack-cli.tar.gz" -C "$TMP_DIR"
+
+INSTALL_DIR="/usr/local/bin"
+INSTALL_PATH="$INSTALL_DIR/slack"
+
+if [ -w "$INSTALL_DIR" ]; then
+    install -m 0755 "$TMP_DIR/bin/slack" "$INSTALL_PATH"
+elif command -v sudo >/dev/null 2>&1; then
+    sudo install -o root -g root -m 0755 "$TMP_DIR/bin/slack" "$INSTALL_PATH"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+    mkdir -p "$INSTALL_DIR"
+    INSTALL_PATH="$INSTALL_DIR/slack"
+    install -m 0755 "$TMP_DIR/bin/slack" "$INSTALL_PATH"
+    echo "Installed slack to $INSTALL_PATH"
+    echo "Ensure $INSTALL_DIR is on your PATH."
+    exit 0
+fi
+
+echo "Installed slack to $INSTALL_PATH"
+slack version
+
+# vi: ft=bash
