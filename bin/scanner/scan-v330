@@ -10,6 +10,7 @@ SCANNER_NAME="Epson Perfection V330"
 DEFAULT_OUTPUT_DIR="$HOME/Scans"
 FAKE_MODE="${SCAN_V330_FAKE:-}"
 SKIP_DETECT="${SCAN_V330_SKIP_DETECT:-}"
+WAIT_BUTTON="${SCAN_V330_WAIT_BUTTON:-}"
 
 # Default settings
 RESOLUTION=300
@@ -192,6 +193,9 @@ EOF
         cmd+=(--resolution "$RESOLUTION")
         cmd+=(--mode "$MODE")
         cmd+=(--format="$scanimage_format")
+        if [[ -n "$WAIT_BUTTON" ]]; then
+            cmd+=(--wait-for-button=yes)
+        fi
 
         # Execute scan
         if ! "${cmd[@]}" > "$actual_output"; then

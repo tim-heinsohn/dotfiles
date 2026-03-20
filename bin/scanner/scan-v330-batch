@@ -18,8 +18,7 @@ START_COUNT=1
 CREATE_PDF=true
 BUTTON_MODE=false
 MAX_PAGES=0        # 0 = unlimited (button mode only)
-BUTTON_POLL=0.5    # seconds between monitor-button polls
-DEVICE=""          # auto-detected when needed
+DEVICE=""          # passed through to scan-v330 when set
 
 # Colors
 GREEN='\033[0;32m'
@@ -169,50 +168,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---------------------------------------------------------------------------
-# Button-mode helpers
-# ---------------------------------------------------------------------------
-
-# Resolve EPKOWA device string (cached in $DEVICE)
-detect_device() {
-    if [[ -n "$DEVICE" ]]; then
-        return 0
-    fi
-    DEVICE=$(scanimage --formatted-device-list="%d%n" 2>/dev/null \
-        | grep -i epkowa | head -1 | tr -d '[:space:]') || true
-    if [[ -z "$DEVICE" ]]; then
-        log_error "No EPKOWA scanner found. Is the V330 connected?"
-        exit 1
-    fi
-    log_info "Using device: $DEVICE"
-}
-
-# Poll --monitor-button until it reports 'yes'.
-# Returns when the button has been pressed (and auto-clears on next poll).
-wait_for_button() {
-    log_info "Waiting for Start button press on scanner..."
-    while true; do
-        local state
-        state=$(scanimage -d "$DEVICE" --monitor-button 2>/dev/null \
-            | grep -i "monitor-button" | awk '{print $NF}') || true
-        if [[ "$state" == "yes" ]]; then
-            return 0
-        fi
-        sleep "$BUTTON_POLL"
-    done
-}
-
-# ---------------------------------------------------------------------------
 # Button mode (non-interactive)
 # ---------------------------------------------------------------------------
+# Uses scanimage --wait-for-button=yes: the scan command itself blocks until
+# the physical Start key is pressed, then immediately acquires the image.
+# No polling loop required.
 run_button_mode() {
-    detect_device
-
     echo -e "${GREEN}Epson V330 Batch Scanner — Button Mode${NC}"
     echo "Output directory: $OUTPUT_DIR"
     echo "Settings: ${RESOLUTION} DPI, $MODE, $FORMAT"
     [[ "$MAX_PAGES" -gt 0 ]] && echo "Max pages: $MAX_PAGES"
     echo
-    echo "Press the scanner Start key to scan each page."
+    echo "Place each page on the scanner and press the Start key to scan it."
     echo "Press Ctrl+C to finish and generate the combined PDF."
     echo
     echo "Starting with page $START_COUNT..."
@@ -234,14 +201,20 @@ run_button_mode() {
             break
         fi
 
-        wait_for_button
-
         local filename
         filename=$(printf "%s_%03d.%s" "$PREFIX" "$current_count" "$FORMAT")
         local filepath="$OUTPUT_DIR/$filename"
 
-        log_info "Button pressed — scanning page $current_count..."
-        if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
+        log_info "Page $current_count — waiting for Start button press..."
+
+        # Pass device override if set; SCAN_V330_WAIT_BUTTON tells scan-v330
+        # to add --wait-for-button=yes to the scanimage command.
+        local extra_args=()
+        [[ -n "$DEVICE" ]] && extra_args+=("--device" "$DEVICE")
+
+        if SCAN_V330_WAIT_BUTTON=1 \
+           "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" \
+           "${extra_args[@]}" "$filepath"; then
             log_info "✓ Saved: $filename"
             current_count=$((current_count + 1))
             successful_scans=$((successful_scans + 1))
