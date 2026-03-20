@@ -363,6 +363,8 @@ extra/traefik
     A modern HTTP reverse proxy and load balancer for deploying microservices.
 extra/ttf-firacode-nerd
     Patched font Fira (Fura) Code from nerd fonts library.
+extra/ttf-jetbrains-mono-nerd
+    Patched font JetBrains Mono from nerd fonts library.
 extra/typescript-language-server
     A language server for TypeScript with features like auto-completion.
 extra/unzip
