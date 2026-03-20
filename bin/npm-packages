@@ -15,6 +15,7 @@ declare -a NPM_PACKAGES=(
     "@atlaskit/editor-markdown-transformer"
     "@fission-ai/openspec@latest"
     "@google/gemini-cli"
+    "@googleworkspace/cli"
     "@mermaid-js/mermaid-cli"
     "@microsoft/compose-language-service"
     "@openai/codex"

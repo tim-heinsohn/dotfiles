@@ -1,0 +1,156 @@
+#!/bin/bash
+#
+# setup-gcloud: Install or update the Google Cloud CLI (gcloud)
+#
+# Usage: setup-gcloud [install|update]
+#
+# Description:
+# Installs the Google Cloud CLI to /opt/google-cloud-cli using the official
+# interactive installer script from dl.google.com. On subsequent runs with
+# 'update', uses 'gcloud components update' to update in place.
+#
+# The installer script is run non-interactively: it installs to
+# /opt/google-cloud-cli and adds shell completion hooks via
+# /etc/profile.d/google-cloud-sdk.sh (requires sudo for /opt and /etc writes).
+#
+# Dependencies:
+# - curl
+# - python3 (required by gcloud installer)
+# - sudo (for writing to /opt and /etc/profile.d)
+
+set -euo pipefail
+
+INSTALL_DIR="/opt/google-cloud-cli"
+PROFILE_D="/etc/profile.d/google-cloud-sdk.sh"
+INSTALLER_URL="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz"
+INSTALLER_URL_ARM="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-arm.tar.gz"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+detect_arch_url() {
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64) echo "$INSTALLER_URL" ;;
+        aarch64|arm64) echo "$INSTALLER_URL_ARM" ;;
+        *)
+            log "ERROR: Unsupported architecture: $arch"
+            exit 1
+            ;;
+    esac
+}
+
+do_update() {
+    if ! command -v gcloud >/dev/null 2>&1; then
+        log "gcloud not found; running install instead of update"
+        do_install
+        return
+    fi
+
+    local current_version
+    current_version=$(gcloud --version 2>/dev/null | head -1 | awk '{print $NF}')
+    log "Current gcloud version: $current_version"
+    log "Running: gcloud components update --quiet"
+
+    # gcloud components update requires write access to INSTALL_DIR
+    if [ -w "$INSTALL_DIR" ]; then
+        gcloud components update --quiet
+    else
+        log "INSTALL_DIR ($INSTALL_DIR) not writable by current user."
+        log "Run the following command manually:"
+        log "  sudo gcloud components update --quiet"
+        log "Or re-run this script with sudo."
+        exit 1
+    fi
+
+    local new_version
+    new_version=$(gcloud --version 2>/dev/null | head -1 | awk '{print $NF}')
+    log "Updated gcloud: $current_version -> $new_version"
+}
+
+do_install() {
+    if command -v gcloud >/dev/null 2>&1; then
+        log "gcloud is already installed ($(gcloud --version 2>/dev/null | head -1))"
+        log "Use '$0 update' to update it."
+        exit 0
+    fi
+
+    local url
+    url=$(detect_arch_url)
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap 'rm -rf "$tmp_dir"' EXIT
+
+    log "Downloading gcloud SDK from $url ..."
+    curl -fsSL "$url" -o "$tmp_dir/google-cloud-sdk.tar.gz"
+
+    log "Extracting ..."
+    tar -xzf "$tmp_dir/google-cloud-sdk.tar.gz" -C "$tmp_dir"
+
+    # The tarball extracts to google-cloud-sdk/
+    local sdk_dir="$tmp_dir/google-cloud-sdk"
+
+    log "Installing to $INSTALL_DIR (requires sudo) ..."
+    # Move SDK to /opt — requires sudo if /opt is not writable
+    if [ -w "$(dirname "$INSTALL_DIR")" ]; then
+        mv "$sdk_dir" "$INSTALL_DIR"
+    else
+        sudo mv "$sdk_dir" "$INSTALL_DIR"
+        sudo chown -R "$(id -un):$(id -gn)" "$INSTALL_DIR"
+    fi
+
+    # Run the bundled non-interactive installer
+    log "Running gcloud install.sh (non-interactive) ..."
+    "$INSTALL_DIR/install.sh" \
+        --quiet \
+        --usage-reporting false \
+        --path-update false \
+        --bash-completion false \
+        --rc-path /dev/null
+
+    # Install shell integration to /etc/profile.d for system-wide PATH
+    if [ ! -f "$PROFILE_D" ]; then
+        log "Installing shell profile to $PROFILE_D (requires sudo) ..."
+        sudo tee "$PROFILE_D" > /dev/null <<'EOF'
+# Google Cloud SDK
+if [ -f "/opt/google-cloud-cli/path.bash.inc" ]; then
+    source "/opt/google-cloud-cli/path.bash.inc"
+fi
+if [ -f "/opt/google-cloud-cli/completion.bash.inc" ]; then
+    source "/opt/google-cloud-cli/completion.bash.inc"
+fi
+EOF
+        log "Shell profile installed. Open a new shell or 'source $PROFILE_D' to activate."
+    fi
+
+    log "gcloud installation complete: $("$INSTALL_DIR/bin/gcloud" --version | head -1)"
+    log "Add $INSTALL_DIR/bin to your PATH if not already done via $PROFILE_D."
+}
+
+show_usage() {
+    echo "Usage: $0 [install|update]"
+    echo ""
+    echo "Commands:"
+    echo "  install  - Fresh install of gcloud to $INSTALL_DIR (default)"
+    echo "  update   - Update existing gcloud via 'gcloud components update'"
+}
+
+main() {
+    local command="${1:-install}"
+
+    case "$command" in
+        install) do_install ;;
+        update)  do_update ;;
+        -h|--help|help) show_usage; exit 0 ;;
+        *)
+            log "ERROR: Unknown command '$command'"
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
