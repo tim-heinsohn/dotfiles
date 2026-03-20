@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Epson V330 Batch Scanning with START Button Simulation
-# Monitors for scanner readiness and provides interactive batch scanning
+# Epson V330 Batch Scanning
+# Interactive mode: keyboard controls
+# Button mode (--button): Start key on scanner triggers each page scan
 
 set -euo pipefail
 
@@ -15,6 +16,10 @@ OUTPUT_DIR="$HOME/Scans/batch_$(date +%Y%m%d_%H%M%S)"
 PREFIX="scan"
 START_COUNT=1
 CREATE_PDF=true
+BUTTON_MODE=false
+MAX_PAGES=0        # 0 = unlimited (button mode only)
+BUTTON_POLL=0.5    # seconds between monitor-button polls
+DEVICE=""          # auto-detected when needed
 
 # Colors
 GREEN='\033[0;32m'
@@ -25,7 +30,7 @@ NC='\033[0m'
 
 usage() {
     cat << EOF
-Epson V330 Interactive Batch Scanner
+Epson V330 Batch Scanner
 
 Usage: $(basename "$0") [OPTIONS]
 
@@ -37,14 +42,18 @@ OPTIONS:
     -p, --prefix PREFIX     Filename prefix (default: scan)
     -s, --start NUM         Starting number (default: 1)
     --no-pdf                Skip combined PDF generation
+    --button                Non-interactive mode: press scanner Start key to
+                            trigger each page scan; Ctrl+C to finish
+    --count NUM             Stop after NUM pages (button mode only; default: unlimited)
+    --device DEV            Scanner device string (auto-detected if omitted)
     -h, --help              Show this help
 
-CONTROLS:
+INTERACTIVE CONTROLS (default mode):
     Enter    - Scan current page
     n        - Next page (increment counter)
-    p        - Previous page (decrement counter)  
+    p        - Previous page (decrement counter)
     r        - Rescan current page
-    q        - Quit batch scanning
+    q        - Quit and generate combined PDF
     s        - Skip to specific number
 
 EOF
@@ -135,6 +144,18 @@ while [[ $# -gt 0 ]]; do
             CREATE_PDF=false
             shift
             ;;
+        --button)
+            BUTTON_MODE=true
+            shift
+            ;;
+        --count)
+            MAX_PAGES="$2"
+            shift 2
+            ;;
+        --device)
+            DEVICE="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -147,114 +168,213 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ---------------------------------------------------------------------------
+# Button-mode helpers
+# ---------------------------------------------------------------------------
+
+# Resolve EPKOWA device string (cached in $DEVICE)
+detect_device() {
+    if [[ -n "$DEVICE" ]]; then
+        return 0
+    fi
+    DEVICE=$(scanimage --formatted-device-list="%d%n" 2>/dev/null \
+        | grep -i epkowa | head -1 | tr -d '[:space:]') || true
+    if [[ -z "$DEVICE" ]]; then
+        log_error "No EPKOWA scanner found. Is the V330 connected?"
+        exit 1
+    fi
+    log_info "Using device: $DEVICE"
+}
+
+# Poll --monitor-button until it reports 'yes'.
+# Returns when the button has been pressed (and auto-clears on next poll).
+wait_for_button() {
+    log_info "Waiting for Start button press on scanner..."
+    while true; do
+        local state
+        state=$(scanimage -d "$DEVICE" --monitor-button 2>/dev/null \
+            | grep -i "monitor-button" | awk '{print $NF}') || true
+        if [[ "$state" == "yes" ]]; then
+            return 0
+        fi
+        sleep "$BUTTON_POLL"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Button mode (non-interactive)
+# ---------------------------------------------------------------------------
+run_button_mode() {
+    detect_device
+
+    echo -e "${GREEN}Epson V330 Batch Scanner — Button Mode${NC}"
+    echo "Output directory: $OUTPUT_DIR"
+    echo "Settings: ${RESOLUTION} DPI, $MODE, $FORMAT"
+    [[ "$MAX_PAGES" -gt 0 ]] && echo "Max pages: $MAX_PAGES"
+    echo
+    echo "Press the scanner Start key to scan each page."
+    echo "Press Ctrl+C to finish and generate the combined PDF."
+    echo
+    echo "Starting with page $START_COUNT..."
+
+    local current_count=$START_COUNT
+    local successful_scans=0
+
+    # Ensure clean finish on Ctrl+C
+    trap 'echo; log_info "Interrupted — finishing up..."; \
+          create_combined_pdf; \
+          print_summary "$current_count" "$successful_scans"; \
+          exit 0' INT TERM
+
+    while true; do
+        # Stop after MAX_PAGES if set
+        if [[ "$MAX_PAGES" -gt 0 ]] && \
+           [[ $((current_count - START_COUNT)) -ge "$MAX_PAGES" ]]; then
+            log_info "Reached page limit ($MAX_PAGES). Done."
+            break
+        fi
+
+        wait_for_button
+
+        local filename
+        filename=$(printf "%s_%03d.%s" "$PREFIX" "$current_count" "$FORMAT")
+        local filepath="$OUTPUT_DIR/$filename"
+
+        log_info "Button pressed — scanning page $current_count..."
+        if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
+            log_info "✓ Saved: $filename"
+            current_count=$((current_count + 1))
+            successful_scans=$((successful_scans + 1))
+        else
+            log_error "✗ Scan failed for page $current_count"
+        fi
+    done
+
+    create_combined_pdf
+    print_summary "$current_count" "$successful_scans"
+}
+
+# ---------------------------------------------------------------------------
+# Interactive mode (original)
+# ---------------------------------------------------------------------------
+run_interactive_mode() {
+    echo -e "${GREEN}Epson V330 Batch Scanner${NC}"
+    echo "Output directory: $OUTPUT_DIR"
+    echo "Settings: ${RESOLUTION} DPI, $MODE, $FORMAT"
+    echo
+    echo "Controls:"
+    echo "  Enter - Scan page"
+    echo "  n     - Next page"
+    echo "  p     - Previous page"
+    echo "  r     - Rescan page"
+    echo "  s     - Skip to number"
+    echo "  q     - Quit"
+    echo
+    echo "Starting with page $START_COUNT..."
+
+    local current_count=$START_COUNT
+    local successful_scans=0
+
+    while true; do
+        # Generate filename
+        local filename
+        filename=$(printf "%s_%03d.%s" "$PREFIX" "$current_count" "$FORMAT")
+        local filepath="$OUTPUT_DIR/$filename"
+
+        log_prompt "Page $current_count - Place document and press Enter to scan (or n/p/r/s/q): "
+
+        # Read single character without requiring Enter
+        local key
+        if ! read -r -n 1 -s key; then
+            echo
+            log_info "Input closed; ending batch"
+            break
+        fi
+        echo  # newline
+
+        case "$key" in
+            $'\n'|"")
+                # Scan current page
+                log_info "Scanning page $current_count..."
+                if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
+                    log_info "✓ Saved: $filename"
+                    current_count=$((current_count + 1))
+                    successful_scans=$((successful_scans + 1))
+                else
+                    log_error "✗ Scan failed for page $current_count"
+                fi
+                ;;
+            n|N)
+                current_count=$((current_count + 1))
+                log_info "Advanced to page $current_count"
+                ;;
+            p|P)
+                if [[ $current_count -gt 1 ]]; then
+                    current_count=$((current_count - 1))
+                    log_info "Went back to page $current_count"
+                else
+                    log_warn "Already at first page"
+                fi
+                ;;
+            r|R)
+                log_info "Rescanning page $current_count..."
+                if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
+                    log_info "✓ Rescanned: $filename"
+                    if [[ ! -f "$filepath" ]]; then
+                        successful_scans=$((successful_scans + 1))
+                    fi
+                else
+                    log_error "✗ Rescan failed"
+                fi
+                ;;
+            s|S)
+                log_prompt "Enter page number: "
+                local new_count
+                read -r new_count
+                if [[ "$new_count" =~ ^[0-9]+$ ]] && [[ $new_count -gt 0 ]]; then
+                    current_count=$new_count
+                    log_info "Skipped to page $current_count"
+                else
+                    log_error "Invalid page number"
+                fi
+                ;;
+            q|Q)
+                create_combined_pdf
+                log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
+                print_summary "$current_count" "$successful_scans"
+                exit 0
+                ;;
+            *)
+                log_warn "Unknown command: $key"
+                ;;
+        esac
+    done
+
+    create_combined_pdf
+    print_summary "$current_count" "$successful_scans"
+}
+
+print_summary() {
+    local current_count=$1
+    local successful_scans=$2
+    log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
+    echo
+    echo "Summary:"
+    echo "  Attempted pages: $((current_count - START_COUNT))"
+    echo "  Successful scans: $successful_scans"
+    echo "  Files in: $OUTPUT_DIR"
+    ls -la "$OUTPUT_DIR" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-echo -e "${GREEN}Epson V330 Batch Scanner${NC}"
-echo "Output directory: $OUTPUT_DIR"
-echo "Settings: ${RESOLUTION} DPI, $MODE, $FORMAT"
-echo
-echo "Controls:"
-echo "  Enter - Scan page"
-echo "  n     - Next page"
-echo "  p     - Previous page"
-echo "  r     - Rescan page"
-echo "  s     - Skip to number"
-echo "  q     - Quit"
-echo
-echo "Starting with page $START_COUNT..."
-
-current_count=$START_COUNT
-successful_scans=0
-
-while true; do
-    # Generate filename
-    filename=$(printf "%s_%03d.%s" "$PREFIX" "$current_count" "$FORMAT")
-    filepath="$OUTPUT_DIR/$filename"
-    
-    log_prompt "Page $current_count - Place document and press Enter to scan (or n/p/r/s/q): "
-    
-    # Read single character without requiring Enter
-    if ! read -r -n 1 -s key; then
-        echo
-        log_info "Input closed; ending batch"
-        break
-    fi
-    echo  # newline
-    
-    case "$key" in
-        $'\n'|"")
-            # Scan current page
-            log_info "Scanning page $current_count..."
-            if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
-                log_info "✓ Saved: $filename"
-                current_count=$((current_count + 1))
-                successful_scans=$((successful_scans + 1))
-            else
-                log_error "✗ Scan failed for page $((current_count))"
-            fi
-            ;;
-        n|N)
-            # Next page
-            current_count=$((current_count + 1))
-            log_info "Advanced to page $current_count"
-            ;;
-        p|P)
-            # Previous page
-            if [[ $current_count -gt 1 ]]; then
-                current_count=$((current_count - 1))
-                log_info "Went back to page $current_count"
-            else
-                log_warn "Already at first page"
-            fi
-            ;;
-        r|R)
-            # Rescan current page
-            log_info "Rescanning page $current_count..."
-            if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
-                log_info "✓ Rescanned: $filename"
-                # Only increment successful_scans if this was a new scan
-                if [[ ! -f "$filepath" ]]; then
-                    successful_scans=$((successful_scans + 1))
-                fi
-            else
-                log_error "✗ Rescan failed"
-            fi
-            ;;
-        s|S)
-            # Skip to specific number
-            log_prompt "Enter page number: "
-            read -r new_count
-            if [[ "$new_count" =~ ^[0-9]+$ ]] && [[ $new_count -gt 0 ]]; then
-                current_count=$new_count
-                log_info "Skipped to page $current_count"
-            else
-                log_error "Invalid page number"
-            fi
-            ;;
-        q|Q)
-            # Quit
-            create_combined_pdf
-            log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
-            echo
-            echo "Summary:"
-            echo "  Attempted pages: $((current_count - START_COUNT))"
-            echo "  Successful scans: $successful_scans"
-            echo "  Files in: $OUTPUT_DIR"
-            ls -la "$OUTPUT_DIR" 2>/dev/null || true
-            exit 0
-            ;;
-        *)
-            log_warn "Unknown command: $key"
-            ;;
-    esac
-done
-
-create_combined_pdf
-log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
-echo
-echo "Summary:"
-echo "  Attempted pages: $((current_count - START_COUNT))"
-echo "  Successful scans: $successful_scans"
-echo "  Files in: $OUTPUT_DIR"
-ls -la "$OUTPUT_DIR" 2>/dev/null || true
+if [[ "$BUTTON_MODE" == "true" ]]; then
+    run_button_mode
+else
+    run_interactive_mode
+fi
