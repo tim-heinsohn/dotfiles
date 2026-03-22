@@ -1,0 +1,7 @@
+[Default Applications]
+x-scheme-handler/bruno=bruno.desktop
+x-scheme-handler/discord-647066573147996161=discord-647066573147996161.desktop
+x-scheme-handler/sgnl=signal.desktop
+x-scheme-handler/signalcaptcha=signal.desktop
+audio/mpeg=vlc.desktop
+text/html=firefox-developer-edition.desktop

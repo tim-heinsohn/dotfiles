@@ -96,6 +96,7 @@ xmodmap = { source = "xmodmap/xmodmap", target = ".Xmodmap" }
 # ============================================================
 flameshot =  { source = "utils/flameshot/flameshot.ini", target = "~/.config/flameshot/flameshot.ini" }
 gemini_settings = { source = "gemini/settings.json", target = ".gemini/settings.json" }
+mimeapps = { source = "xdg/mimeapps.list", target = ".config/mimeapps.list" }
 
 # NOTE: copy manually: "zsh/p10k.zsh" to ".p10k.zsh"
 # NOTE: p10k.claude.zsh includes zsh parameter length syntax `${#...}`
