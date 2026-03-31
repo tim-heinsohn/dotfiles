@@ -5,6 +5,9 @@
 # map keys
 [[ -f ~/.Xmodmap ]] && xmodmap ~/.Xmodmap
 setxkbmap fr
+xset r on
+xset r 22
+xset r rate 250 35
 
 # start Gnome keyring
 if [ -f /usr/bin/gnome-keyring-daemon ]; then

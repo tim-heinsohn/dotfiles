@@ -19,8 +19,8 @@ font pango:Iosevka Term 11
 # https://wiki.archlinux.org/index.php/XDG_Autostart
 exec --no-startup-id dex --autostart --environment i3
 
-# Preserve keyboard layout.
-exec_always --no-startup-id setxkbmap fr
+# Preserve keyboard layout and ensure key repeat is enabled.
+exec_always --no-startup-id sh -c 'setxkbmap fr; xset r on; xset r 22; xset r rate 250 35'
 
 # Fix display offset issue (Intel i915 driver bug with multiple monitors)
 exec_always --no-startup-id $HOME/dotfiles/bin/fix-display-offset
@@ -31,7 +31,7 @@ exec_always --no-startup-id $HOME/dotfiles/bin/fix-display-offset
 # xss-lock grabs a logind suspend inhibit lock and will use i3lock to lock the
 # screen before suspend. Use loginctl lock-session to lock your screen.
 # Use i3lock-color instead of standard i3lock, handled cleanly via xss-lock
-exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c '~/dotfiles/bin/lock-screen --nofork; setxkbmap fr'
+exec --no-startup-id xss-lock --transfer-sleep-lock -- sh -c '~/dotfiles/bin/lock-screen --nofork; setxkbmap fr; xset r on; xset r 22; xset r rate 250 35'
 
 # Notifications
 exec_always --no-startup-id systemctl --user start dunst.service
