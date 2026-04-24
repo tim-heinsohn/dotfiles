@@ -37,6 +37,29 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+clear_opencode_cached_binary() {
+    local root cached_binary
+
+    if ! root="$(npm root -g 2>/dev/null)"; then
+        log "⚠ Unable to determine npm root; skipping opencode cache cleanup"
+        return
+    fi
+
+    cached_binary="$root/opencode-ai/bin/.opencode"
+    if [ -e "$cached_binary" ]; then
+        rm -f "$cached_binary"
+        log "Removed cached opencode binary to force platform binary discovery"
+    fi
+}
+
+maybe_clear_opencode_cached_binary() {
+    local package="$1"
+
+    if [[ "$package" == opencode-ai* ]]; then
+        clear_opencode_cached_binary
+    fi
+}
+
 get_global_npm_package_version() {
     local package="$1"
 
@@ -152,6 +175,7 @@ retry_clean_install() {
 
     if npm install -g "$package"; then
         log "✓ Successfully reinstalled $package after cleanup"
+        maybe_clear_opencode_cached_binary "$package"
     else
         log "✗ Clean reinstall of $package failed"
     fi
@@ -165,6 +189,7 @@ install_packages() {
         cleanup_stale_npm_dirs "$package" >/dev/null
         if npm install -g "$package"; then
             log "✓ Successfully installed $package"
+            maybe_clear_opencode_cached_binary "$package"
         else
             log "✗ Failed to install $package"
         fi
@@ -180,6 +205,7 @@ update_packages() {
             cleanup_stale_npm_dirs "$package" >/dev/null
             if npm update -g "$package"; then
                 log "✓ Successfully updated $package"
+                maybe_clear_opencode_cached_binary "$package"
             else
                 log "⚠ Update failed; retrying $package with clean reinstall"
                 retry_clean_install "$package"
@@ -188,6 +214,7 @@ update_packages() {
             log "⚠ $package not installed, installing..."
             if npm install -g "$package"; then
                 log "✓ Successfully installed $package"
+                maybe_clear_opencode_cached_binary "$package"
             else
                 log "✗ Failed to install $package"
             fi
@@ -204,6 +231,7 @@ install_or_update_packages() {
             cleanup_stale_npm_dirs "$package" >/dev/null
             if npm update -g "$package"; then
                 log "✓ Successfully updated $package"
+                maybe_clear_opencode_cached_binary "$package"
             else
                 log "⚠ Update failed; retrying $package with clean reinstall"
                 retry_clean_install "$package"
@@ -213,6 +241,7 @@ install_or_update_packages() {
             cleanup_stale_npm_dirs "$package" >/dev/null
             if npm install -g "$package"; then
                 log "✓ Successfully installed $package"
+                maybe_clear_opencode_cached_binary "$package"
             else
                 log "✗ Failed to install $package"
             fi
