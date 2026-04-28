@@ -10,3 +10,8 @@ pinentry-program /usr/local/bin/pinentry-wrapper
 
 # Cache settings
 default-cache-ttl 28800  # Remember unused keys for 28800 seconds (8 hours)
+
+# Allow callers to use --pinentry-mode loopback (reads passphrase from their
+# own TTY instead of spawning a pinentry program). Used by gpg-prewarm to
+# avoid the X11 focus race at i3 startup.
+allow-loopback-pinentry

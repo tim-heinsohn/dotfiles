@@ -31,7 +31,29 @@ browser-workspace-cache restore-wait
 
 # Print cached entries
 browser-workspace-cache show
+
+# Preview entries older than 60 days that would be removed
+browser-workspace-cache prune 60
+
+# Apply the prune after reviewing the dry run
+browser-workspace-cache prune 60 --apply
 ```
+
+## Safe Cleanup Workflow
+
+If the cache has become inconsistent or stale, clean it up in this order:
+
+1. Put any browser windows you still care about on the correct workspaces.
+2. Run `browser-workspace-cache snapshot` to refresh `last_seen` for currently open windows.
+3. Run `browser-workspace-cache prune 60` to preview which old entries would be removed.
+4. If the preview looks correct, run `browser-workspace-cache prune 60 --apply`.
+
+Notes:
+
+- `prune` is a dry run by default.
+- `prune` removes only entries whose `last_seen` is older than the chosen day threshold.
+- `prune --apply` creates a timestamped backup next to the cache file before writing changes.
+- Start with a conservative threshold if snapshots may have been broken for a while.
 
 ## Safety Against Startup Races
 

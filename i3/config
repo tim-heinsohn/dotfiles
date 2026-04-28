@@ -115,7 +115,7 @@ bindsym $mod+d exec --no-startup-id rofi -modes 'dict:dict' -theme DarkBlue -sho
 bindsym $mod+c exec --no-startup-id rofi -show calc -theme DarkBlue -modi calc -no-show-match -no-sort > /dev/null
 
 # password manager
-bindsym $mod+p exec --no-startup-id rofi-pass --root $HOME/ia.dev/architecture/apps/ia.passwords:$HOME/ia.dev/architecture/apps/ia.otp:$HOME/.password-store -theme DarkBlue
+bindsym $mod+p exec --no-startup-id rofi-pass --root $HOME/.password-store:$HOME/ia.dev/architecture/apps/ia.passwords:$HOME/ia.dev/architecture/apps/ia.otp -theme DarkBlue
 bindsym $mod+Shift+p exec --no-startup-id rofi-pass --root $HOME/ia.dev/architecture/apps/ia.passwords -theme DarkBlue
 bindsym $mod+Shift+o exec --no-startup-id rofi-pass --root $HOME/ia.dev/architecture/apps/ia.otp -theme DarkBlue
 

@@ -2,40 +2,87 @@
 #
 # gpg-prewarm: Prime the gpg-agent cache with a single decryption
 #
-# Usage: gpg-prewarm
+# Usage: gpg-prewarm [--inner]
 #
 # Description:
-# Runs one gopass show call so the user enters their GPG passphrase once.
+# Ensures the user enters their GPG passphrase exactly once on login.
 # All subsequent gopass/gpg calls in the same gpg-agent session are served
 # from cache (default-cache-ttl 28800 = 8 hours), producing no further prompts.
 #
-# Intended to run during i3 startup, before tmuxp sessions are launched, so that
-# the many shells opened by tmuxp never need to prompt for a passphrase.
+# Modes:
+#   (no flag)  Outer mode: checks cache; if cold, opens a WezTerm window
+#              running gpg-prewarm --inner and blocks until it closes.
+#
+#   --inner    Inner mode: runs inside the terminal. Uses gpg directly with
+#              --pinentry-mode loopback so gpg reads the passphrase from the
+#              terminal's own TTY. No pinentry program is spawned at all,
+#              eliminating all X11 focus-race issues.
+#              Requires allow-loopback-pinentry in gpg-agent.conf.
 #
 # Dependencies:
-# - gopass
-# - gpg-agent (must already be running)
+# - gpg (with allow-loopback-pinentry in ~/.gnupg/gpg-agent.conf)
+# - gopass  (for the cache-hot check only)
+# - wezterm (outer mode only)
 
 set -euo pipefail
+
+GPG_FILE="$HOME/.password-store/t/ai/claude/api-key.gpg"
 
 # Only meaningful in a GUI session
 if [ -z "${DISPLAY:-}" ]; then
   exit 0
 fi
 
-# gopass must be present
+# ---------------------------------------------------------------------------
+# INNER MODE – runs inside the WezTerm window
+# ---------------------------------------------------------------------------
+if [ "${1:-}" = "--inner" ]; then
+  # If another process already warmed the cache, nothing to do.
+  if gpg --batch --quiet --pinentry-mode loopback \
+       --decrypt "$GPG_FILE" >/dev/null 2>&1; then
+    echo "GPG cache already warm. This window will close."
+    sleep 1
+    exit 0
+  fi
+
+  echo "Enter your GPG passphrase to unlock secrets for this session."
+  echo "(This window will close automatically on success.)"
+  echo ""
+
+  export GPG_TTY=$(tty)
+
+  if gpg --batch --quiet --pinentry-mode loopback \
+       --decrypt "$GPG_FILE" >/dev/null; then
+    echo ""
+    echo "Passphrase accepted. This window will close."
+    sleep 1
+    exit 0
+  else
+    echo ""
+    echo "Passphrase not accepted. Secrets will not load in tmux sessions."
+    echo "Press Enter to close."
+    read -r
+    exit 1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# OUTER MODE – check cache then open terminal if needed
+# ---------------------------------------------------------------------------
+
+# gopass must be present for the cache-hot check
 if ! command -v gopass >/dev/null 2>&1; then
   exit 0
 fi
 
-# If the agent already has a cached key (e.g. second login, screen-unlock),
-# a fast 'gopass ls' will succeed silently without prompting.
+# Fast check: if cache is already hot, skip the terminal.
 if timeout 2s gopass ls >/dev/null 2>&1; then
-  # Cache is hot – nothing to do
   exit 0
 fi
 
-# Cache is cold: perform one real decryption to prime it.
-# Using a small, always-present secret. If this fails (user presses ESC etc.)
-# we exit non-zero so callers know the cache is still cold.
-timeout 30s gopass show -o t/ai/claude/api-key >/dev/null
+# Cache is cold. Open a WezTerm window running inner mode and wait for it.
+# wezterm start blocks until the process inside exits.
+wezterm start \
+  --always-new-process \
+  --class "gpg-prewarm" \
+  -- "$0" --inner
