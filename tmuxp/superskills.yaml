@@ -12,4 +12,7 @@ windows:
       - nvim
   - window_name: "superskills~"
     panes:
-      - journalctl --user -u fetch-substack -f
+      - pane_title: sb
+        shell_command: journalctl --user -u fetch-substack -f
+      - pane_title: yt
+        shell_command: journalctl --user -u fetch-youtube -f

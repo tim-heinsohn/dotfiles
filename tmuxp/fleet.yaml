@@ -5,8 +5,8 @@ windows:
     panes:
       - watch -c -n 5 fleet status --deep -c
   - window_name: "#fleet"
-    panes:
-      - opencode
+    # panes:
+    #   - opencode
   - window_name: "fleet>"
     panes:
       -

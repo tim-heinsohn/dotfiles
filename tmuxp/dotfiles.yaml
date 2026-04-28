@@ -2,8 +2,8 @@ session_name: dotfiles
 start_directory: ~/dotfiles
 windows:
   - window_name: "#dot"
-    panes:
-      - opencode
+    # panes:
+    #   - opencode
   - window_name: "dot>"
     panes:
       -
@@ -12,8 +12,8 @@ windows:
       - nvim
   - window_name: "#p'agents"
     start_directory: ~/personal/agents
-    panes:
-      - opencode
+    # panes:
+    #   - opencode
   - window_name: "p'agents>"
     start_directory: ~/personal/agents
     panes:
