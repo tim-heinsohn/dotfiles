@@ -2,7 +2,7 @@
 #
 # browser-workspace-cache: Cache and restore browser window workspaces in i3
 #
-# Usage: browser-workspace-cache [snapshot|restore|restore-wait|show]
+# Usage: browser-workspace-cache [snapshot|restore|restore-wait|show|prune]
 #
 # Description:
 # Captures Firefox/Chromium window titles and their current i3 workspace,
@@ -31,7 +31,19 @@ restore_stable_interval_sec="${BWC_RESTORE_STABLE_INTERVAL_SEC:-2}"
 restore_max_wait_sec="${BWC_RESTORE_MAX_WAIT_SEC:-180}"
 
 usage() {
-  echo "Usage: browser-workspace-cache [snapshot|restore|restore-wait|show]" >&2
+  cat >&2 <<'EOF'
+Usage:
+  browser-workspace-cache snapshot
+  browser-workspace-cache restore
+  browser-workspace-cache restore-wait
+  browser-workspace-cache show
+  browser-workspace-cache prune [days] [--apply]
+
+Notes:
+  - prune is a dry run by default.
+  - prune removes entries whose last_seen is older than [days].
+  - prune writes a timestamped backup before applying changes.
+EOF
 }
 
 require_cmd() {
@@ -84,6 +96,28 @@ acquire_lock() {
     exit 0
   fi
   trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+}
+
+command_needs_lock() {
+  local cmd="$1"
+  shift || true
+
+  case "$cmd" in
+    snapshot|restore|restore-wait)
+      return 0
+      ;;
+    prune)
+      for arg in "$@"; do
+        if [ "$arg" = "--apply" ]; then
+          return 0
+        fi
+      done
+      return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 youngest_browser_uptime() {
@@ -308,26 +342,132 @@ show_cache() {
   ' "$cache_file"
 }
 
+backup_cache() {
+  local backup_file timestamp
+
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+  backup_file="${cache_file}.bak.${timestamp}"
+  cp "$cache_file" "$backup_file"
+  echo "$backup_file"
+}
+
+prune_cache() {
+  if [ ! -f "$cache_file" ]; then
+    echo "No cache file found at $cache_file" >&2
+    exit 1
+  fi
+
+  local max_age_days=60
+  local apply_changes=0
+  local arg
+
+  while [ "$#" -gt 0 ]; do
+    arg="$1"
+    case "$arg" in
+      --apply)
+        apply_changes=1
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        if [[ "$arg" =~ ^[0-9]+$ ]]; then
+          max_age_days="$arg"
+        else
+          echo "Unknown prune argument: $arg" >&2
+          usage
+          exit 1
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  local now_ts cutoff_ts prune_count keep_count
+  now_ts="$(date +%s)"
+  cutoff_ts=$((now_ts - (max_age_days * 86400)))
+
+  prune_count="$(jq \
+    --argjson cutoff "$cutoff_ts" \
+    '
+      [.entries[] | select((.last_seen // 0) < $cutoff)]
+      | length
+    ' "$cache_file")"
+
+  keep_count="$(jq \
+    --argjson cutoff "$cutoff_ts" \
+    '
+      [.entries[] | select((.last_seen // 0) >= $cutoff)]
+      | length
+    ' "$cache_file")"
+
+  echo "Prune threshold: entries older than ${max_age_days} day(s) ($(date -d "@$cutoff_ts" '+%Y-%m-%d %H:%M:%S %Z'))."
+  echo "Would remove $prune_count cached entr$( [ "$prune_count" -eq 1 ] && echo "y" || echo "ies" ); keep $keep_count."
+
+  if [ "$prune_count" -gt 0 ]; then
+    jq -r \
+      --argjson cutoff "$cutoff_ts" \
+      '
+        .entries
+        | to_entries
+        | map(select((.value.last_seen // 0) < $cutoff))
+        | sort_by(.value.last_seen // 0)
+        | .[]
+        | "[\(.value.class)] \(.value.title) -> \(.value.workspace) (last seen: \((.value.last_seen // 0) | todate))"
+      ' "$cache_file"
+  fi
+
+  if [ "$apply_changes" -eq 0 ]; then
+    echo "Dry run only. Re-run with --apply to write the pruned cache."
+    return 0
+  fi
+
+  local backup_file tmp_file
+  backup_file="$(backup_cache)"
+  tmp_file="$(mktemp "${cache_file}.tmp.XXXXXX")"
+
+  jq \
+    --argjson cutoff "$cutoff_ts" \
+    '
+      .entries |= with_entries(select((.value.last_seen // 0) >= $cutoff))
+      | .updated_at = (now | floor)
+    ' "$cache_file" > "$tmp_file"
+
+  mv "$tmp_file" "$cache_file"
+  echo "Pruned cache written to $cache_file"
+  echo "Backup saved to $backup_file"
+}
+
 main() {
-  require_cmd i3-msg
   require_cmd jq
 
   local cmd="${1:-snapshot}"
-  acquire_lock
+  shift || true
+
+  if command_needs_lock "$cmd" "$@"; then
+    acquire_lock
+  fi
 
   case "$cmd" in
     snapshot)
+      require_cmd i3-msg
       snapshot
       ;;
     restore)
+      require_cmd i3-msg
       restore
       mark_restore_time
       ;;
     restore-wait)
+      require_cmd i3-msg
       restore_wait
       ;;
     show)
       show_cache
+      ;;
+    prune)
+      prune_cache "$@"
       ;;
     *)
       usage
