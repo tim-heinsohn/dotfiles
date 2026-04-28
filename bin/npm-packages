@@ -19,11 +19,13 @@ declare -a NPM_PACKAGES=(
     "@mermaid-js/mermaid-cli"
     "@microsoft/compose-language-service"
     "@openai/codex"
+    "@openchamber/web" # openchamber serve --foreground --host 0.0.0.0 --port 3000 --ui-password "xxx"
     "@spotlightjs/spotlight"
+    "@termli-dev/cli"
     "@usebruno/cli"
     "agent-browser"
-    "bash-language-server"
     "backlog.md"
+    "bash-language-server"
     "codebuff"
     "dockerfile-language-server-nodejs"
     "happy-coder"
@@ -303,6 +305,10 @@ install_opencode_smart_title_local() {
     fi
 
     # Install dependencies
+    # Ensure AI SDK and dependencies are updated for OpenCode compatibility
+    log "Updating dependencies to match OpenCode AI SDK requirements..."
+    npm install ai@latest @ai-sdk/openai@latest
+    
     if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
         if npm ci; then
             log "Dependencies installed for opencode-smart-title (npm ci)"

@@ -137,6 +137,8 @@ sudo usermod -aG audio "$USER" &&
 sudo systemctl enable --now acpid &&
 sudo systemctl enable --now bluetooth &&
 sudo systemctl enable --now docker &&
+sudo systemctl enable --now tailscaled &&
+# NOTE: after install, run `sudo tailscale up` to authenticate the device
 # sudo systemctl enable --now qotd &&
 
 # Setup disk health monitoring

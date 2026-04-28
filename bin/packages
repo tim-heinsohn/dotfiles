@@ -17,8 +17,10 @@ aur/neovim-remote
     A tool to control Neovim instances from the command line.
 aur/nvm
     A version manager for node.js, installed per-user, and invoked per-shell.
-aur/opencode-desktop-bin 1.2.10-1 (+5 2.49)
-    OpenCode desktop client
+aur/ocrmypdf
+    A tool to add an OCR text layer to scanned PDF files, allowing them to be searched
+aur/openwork
+    An Open source alternative to Claude Cowork.
 aur/pg_top
     A 'top' like tool for PostgreSQL.
 aur/pgvector 0.8.1-1 (+10 1.46)
@@ -61,6 +63,8 @@ core/sudo
     Give certain users the ability to run some commands as root.
 core/syslinux
     Collection of boot loaders that boot from FAT, ext2/3/4 and btrfs filesystems, from CDs and via PXE.
+extra/tailscale
+    Zero config VPN for building secure networks.
 extra/acpid
     A flexible and extensible daemon for delivering ACPI events.
 extra/aichat
@@ -161,6 +165,8 @@ extra/git
     The fast distributed version control system.
 extra/git-delta 0.18.2-6 (3.4 MiB 9.2 MiB)
     Syntax-highlighting pager for git and diff output.
+extra/git-filter-repo
+    Quickly rewrite git repository history.
 extra/github-cli
     GitHub's official command line tool.
 extra/glab
@@ -233,6 +239,8 @@ extra/nvme-cli
     NVMe management command line interface for NVMe SSD health monitoring and diagnostics.
 extra/obs-studio
     Free and open source software for video recording and live streaming.
+extra/obsidian 1.12.4-1 (6.2 MiB 23.2 MiB)
+    A powerful knowledge base that works on top of a local folder of plain text Markdown files.
 extra/p7zip
     A file archiver with a high compression ratio.
 extra/pacman-contrib
