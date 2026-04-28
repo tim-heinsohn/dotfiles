@@ -3,10 +3,10 @@
   "enabled": true,
 
   // Enable debug logging to ~/.config/opencode/logs/smart-title/YYYY-MM-DD.log
-  "debug": false,
+  "debug": true,
 
   // Optional: Specify a model to use for title generation
-  // "model": "anthropic/claude-haiku-4-5",
+  "model": "google/gemini-3.1-flash-lite-preview",
 
   // Update title every N idle events (default: 1)
   "updateThreshold": 1,
