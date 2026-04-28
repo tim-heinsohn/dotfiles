@@ -90,8 +90,17 @@ detect_scanner() {
     
     if [[ -z "$scanner_info" ]]; then
         log_error "Epson Perfection V330 scanner not found"
-        echo "Available scanners:"
-        scanimage -L
+        log_error "Please connect the scanner via USB and make sure it is powered on."
+        if command -v lsusb &>/dev/null; then
+            local usb_epson
+            usb_epson=$(lsusb 2>/dev/null | grep -i epson || true)
+            if [[ -z "$usb_epson" ]]; then
+                log_error "No Epson device found on USB (lsusb shows no Epson entry)."
+            else
+                log_warn "Epson device visible on USB but not recognized by SANE: $usb_epson"
+                log_warn "Try running: scanner-epson-v330-setup"
+            fi
+        fi
         exit 1
     fi
     
