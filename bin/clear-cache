@@ -161,7 +161,9 @@ run_if_present uv uv cache clean >/dev/null
 # yay cache
 run_if_present yay yay -Scc --noconfirm >/dev/null
 
-clear_playwright_cache
+if $INTENSE; then
+  clear_playwright_cache
+fi
 clear_pip_cache
 clear_spotify_cache
 clear_go_cache
