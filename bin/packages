@@ -37,6 +37,8 @@ aur/spotrec
     Spotify desktop client recorder for PulseAudio.
 aur/spotify
     A digital music service that gives you access to millions of songs.
+aur/witr-bin
+    A Linux CLI tool that explains the causal chain behind running processes.
 aur/xlayoutdisplay
     Detects and arranges linux display outputs, using XRandR.
 aur/yin-yang
