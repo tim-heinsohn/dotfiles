@@ -187,11 +187,11 @@ run_button_mode() {
     local current_count=$START_COUNT
     local successful_scans=0
 
-    # Ensure clean finish on Ctrl+C
+    # Ensure clean finish on Ctrl+C or terminal close
     trap 'echo; log_info "Interrupted — finishing up..."; \
           create_combined_pdf; \
           print_summary "$current_count" "$successful_scans"; \
-          exit 0' INT TERM
+          exit 0' INT TERM HUP
 
     while true; do
         # Stop after MAX_PAGES if set
@@ -248,6 +248,12 @@ run_interactive_mode() {
     local current_count=$START_COUNT
     local successful_scans=0
 
+    # Ensure clean finish on Ctrl+C or terminal close
+    trap 'echo; log_info "Interrupted — finishing up..."; \
+          create_combined_pdf; \
+          print_summary "$current_count" "$successful_scans"; \
+          exit 0' INT TERM HUP
+
     while true; do
         # Generate filename
         local filename
@@ -303,7 +309,11 @@ run_interactive_mode() {
             s|S)
                 log_prompt "Enter page number: "
                 local new_count
-                read -r new_count
+                if ! read -r new_count; then
+                    echo
+                    log_info "Input closed; ending batch"
+                    break
+                fi
                 if [[ "$new_count" =~ ^[0-9]+$ ]] && [[ $new_count -gt 0 ]]; then
                     current_count=$new_count
                     log_info "Skipped to page $current_count"
