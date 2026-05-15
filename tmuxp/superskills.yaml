@@ -1,9 +1,15 @@
 session_name: superskills
-start_directory: ~/superskills
+start_directory: ~/p/superskills
 windows:
   - window_name: "#superskills"
     panes:
-      - opencode
+      - # opencode
+  - window_name: "#superskills"
+    panes:
+      - # opencode
+  - window_name: "#superskills"
+    panes:
+      - # opencode
   - window_name: "superskills>"
     panes:
       -

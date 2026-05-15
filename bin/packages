@@ -97,6 +97,8 @@ extra/bluez-utils
     Development and debugging utilities for the Bluetooth protocol stack.
 extra/blueman
     GTK+ Bluetooth Manager.
+extra/btop 1.4.7-1 (597.6 KiB 1.7 MiB)
+    A monitor of system resources, bpytop ported to C++.
 extra/brightnessctl
     A program to read and control device brightness.
 extra/caddy
@@ -233,6 +235,8 @@ extra/network-manager-applet
     Applet for managing network connections.
 extra/npm
     JavaScript package manager.
+extra/noto-fonts-emoji
+    Google Noto emoji fonts.
 extra/ntfs-3g
     NTFS filesystem driver and utilities.
 extra/ntp
