@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# setup-bun: Install or update Bun
+#
+# Usage: setup-bun
+#
+# Description:
+# Installs Bun from a pinned GitHub release.
+# Downloads the platform-specific zip archive and verifies its SHA256
+# checksum against the release SHASUMS256.txt.
+#
+# Dependencies:
+# - curl
+# - unzip
+# - sha256sum (Linux) or shasum (macOS)
+
+set -euo pipefail
+
+VERSION="bun-v1.3.13"
+REPO="oven-sh/bun"
+INSTALL_DIR="$HOME/.local/bin"
+
+case "$(uname -s)" in
+    Darwin) os="darwin" ;;
+    Linux)  os="linux" ;;
+    *)      echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+
+case "$(uname -m)" in
+    x86_64|amd64)   arch="x64" ;;
+    arm64|aarch64)  arch="aarch64" ;;
+    *)              echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+asset_name="bun-${os}-${arch}.zip"
+download_url="https://github.com/${REPO}/releases/download/${VERSION}/${asset_name}"
+checksum_url="https://github.com/${REPO}/releases/download/${VERSION}/SHASUMS256.txt"
+
+TMP_DIR=$(mktemp -d)
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+echo "Downloading Bun ${VERSION} for ${os}-${arch}..."
+curl -fsSL -o "$TMP_DIR/bun.zip" "$download_url"
+curl -fsSL -o "$TMP_DIR/SHASUMS256.txt" "$checksum_url"
+
+expected_checksum=$(grep "${asset_name}$" "$TMP_DIR/SHASUMS256.txt" | cut -d' ' -f1)
+
+if [ -z "$expected_checksum" ]; then
+    echo "Could not find checksum for ${asset_name} in SHASUMS256.txt" >&2
+    exit 1
+fi
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    actual_checksum=$(shasum -a 256 "$TMP_DIR/bun.zip" | cut -d' ' -f1)
+else
+    actual_checksum=$(sha256sum "$TMP_DIR/bun.zip" | cut -d' ' -f1)
+fi
+
+if [ "$actual_checksum" != "$expected_checksum" ]; then
+    echo "Checksum verification failed!" >&2
+    exit 1
+fi
+
+unzip -q "$TMP_DIR/bun.zip" -d "$TMP_DIR"
+
+mkdir -p "$INSTALL_DIR"
+mv "$TMP_DIR/bun-${os}-${arch}/bun" "$INSTALL_DIR/bun"
+chmod +x "$INSTALL_DIR/bun"
+
+echo "Installed Bun ${VERSION} to ${INSTALL_DIR}/bun"

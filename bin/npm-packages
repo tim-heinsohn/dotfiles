@@ -30,6 +30,7 @@ declare -a NPM_PACKAGES=(
     "happy-coder"
     "markmap-cli"
     "opencode-ai"
+    "openspecui"
     "pyright"
     "vscode-langservers-extracted"
 )
