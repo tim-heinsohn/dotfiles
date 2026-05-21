@@ -1,0 +1,201 @@
+#!/bin/bash
+#
+# setup-open-design: Install, update, or uninstall Open Design
+#
+# Usage:
+#   setup-open-design                  Install or update
+#   setup-open-design --uninstall      Remove repo, Docker stack, and data
+#   setup-open-design -h | --help      Show this help
+#
+# Description:
+# Clones or updates the Open Design repository, ensures Node.js 24
+# and pnpm are available, and installs dependencies. Falls back to
+# the official Docker compose setup if the native install fails.
+#
+# Environment:
+#   OPEN_DESIGN_DIR    Target directory (default: ~/open-design)
+#
+# Dependencies:
+# - git
+# - Node.js ~24
+# - corepack (bundled with Node.js)
+# - docker + docker compose (for Docker fallback / uninstall)
+
+set -euo pipefail
+
+REPO="https://github.com/nexu-io/open-design.git"
+OPEN_DESIGN_DIR="${OPEN_DESIGN_DIR:-$HOME/open-design}"
+
+log() {
+  printf 'setup-open-design: %s\n' "$1"
+}
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    log "missing required command: $1"
+    exit 1
+  fi
+}
+
+ensure_node_24() {
+  local node_version
+  node_version="$(node --version 2>/dev/null || echo 'none')"
+
+  if [[ "$node_version" == v24.* ]]; then
+    log "Node.js ${node_version} is active"
+    return 0
+  fi
+
+  # Try nvm if available
+  if [ -s "/usr/share/nvm/init-nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    source "/usr/share/nvm/init-nvm.sh"
+  elif [ -s "$HOME/.nvm/nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.nvm/nvm.sh"
+  fi
+
+  if command -v nvm >/dev/null 2>&1; then
+    nvm use 24 >/dev/null 2>&1 || nvm install 24
+    node_version="$(node --version)"
+    if [[ "$node_version" == v24.* ]]; then
+      log "Node.js ${node_version} activated via nvm"
+      return 0
+    fi
+  fi
+
+  log "Node.js 24 is required but not found (found: ${node_version})"
+  log "Install Node.js 24 (e.g. via nvm) and rerun."
+  exit 1
+}
+
+ensure_repo() {
+  if [ -d "${OPEN_DESIGN_DIR}/.git" ]; then
+    log "Updating Open Design repository"
+    git -C "${OPEN_DESIGN_DIR}" fetch --prune
+    git -C "${OPEN_DESIGN_DIR}" pull --ff-only
+  elif [ -e "${OPEN_DESIGN_DIR}" ]; then
+    log "Error: ${OPEN_DESIGN_DIR} exists but is not a git repository." >&2
+    log "Remove or move it, or set OPEN_DESIGN_DIR to a different path." >&2
+    exit 1
+  else
+    log "Cloning Open Design repository"
+    git clone "${REPO}" "${OPEN_DESIGN_DIR}"
+  fi
+}
+
+uninstall() {
+  if [ ! -d "${OPEN_DESIGN_DIR}" ]; then
+    log "Nothing to uninstall: ${OPEN_DESIGN_DIR} does not exist"
+    return 0
+  fi
+
+  # Stop and remove the Docker stack (containers + volume = full data loss)
+  if [ -f "${OPEN_DESIGN_DIR}/deploy/docker-compose.yml" ] || \
+     [ -f "${OPEN_DESIGN_DIR}/deploy/compose.yml" ]; then
+    if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+      log "Stopping Docker stack and removing volumes"
+      ( cd "${OPEN_DESIGN_DIR}/deploy" && docker compose down -v --remove-orphans ) || true
+    fi
+  fi
+
+  log "Removing ${OPEN_DESIGN_DIR}"
+  rm -rf "${OPEN_DESIGN_DIR}"
+
+  log "Uninstall complete"
+  log "Note: pnpm's global store is shared with other projects and was left intact."
+  log "      Run 'pnpm store prune' manually if you want to reclaim that space."
+}
+
+print_help() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    --uninstall)
+      uninstall
+      exit 0
+      ;;
+    "")
+      ;;
+    *)
+      fail "Unknown argument: $1 (try --help)"
+      ;;
+  esac
+
+  require_cmd git
+  require_cmd node
+
+  ensure_node_24
+  ensure_repo
+
+  cd "${OPEN_DESIGN_DIR}"
+
+  log "Enabling corepack"
+  corepack enable
+
+  log "Verifying pnpm version"
+  corepack pnpm --version
+
+  # Prevent JS heap OOM during large workspace install / build.
+  # Open Design is a 21-project pnpm workspace with heavy postinstall
+  # scripts (electron, next, better-sqlite3). We set this aggressively.
+  export NODE_OPTIONS="--max-old-space-size=16384"
+
+  # Verify the flag is actually being picked up by Node.js
+  local heap_limit
+  heap_limit="$(node -e 'console.log(Math.round(require("v8").getHeapStatistics().heap_size_limit / 1024 / 1024))')"
+  log "V8 heap limit: ${heap_limit} MiB"
+  if [[ "$heap_limit" -lt 8192 ]]; then
+    log "Warning: heap limit looks low (${heap_limit} MiB); NODE_OPTIONS may not propagate to pnpm."
+  fi
+
+  # Clean any corrupted store entries that may trigger pnpm's
+  # "invalid array length" V8 bug during content-store indexing.
+  log "Pruning pnpm store"
+  corepack pnpm store prune >/dev/null 2>&1 || true
+
+  log "Installing dependencies (this may take a few minutes)"
+  # --child-concurrency=1            keep parallel script pressure low
+  # --no-optional                    skip heavy optional native addons
+  # --config.package-import-method=copy
+  #     avoids the hardlink/clone code path that has been triggering
+  #     a V8 "invalid array length" crash on Open Design's
+  #     app-builder-bin alpha tarball.
+  if corepack pnpm install \
+       --child-concurrency=1 \
+       --no-optional \
+       --config.package-import-method=copy; then
+    log "Building daemon CLI"
+    corepack pnpm --filter @open-design/daemon build
+    log "Open Design ready at ${OPEN_DESIGN_DIR}"
+    log "Start with: cd ${OPEN_DESIGN_DIR} && pnpm tools-dev run web"
+    return 0
+  fi
+
+  log "Native pnpm install failed — falling back to Docker setup"
+  if ! command -v docker >/dev/null 2>&1; then
+    fail "Docker not installed; cannot fall back. See https://github.com/nexu-io/open-design/blob/main/QUICKSTART.md"
+  fi
+  if ! docker compose version >/dev/null 2>&1; then
+    fail "Docker Compose v2 not available; cannot fall back."
+  fi
+
+  log "Starting Open Design via docker compose (deploy/docker-compose.yml)"
+  ( cd "${OPEN_DESIGN_DIR}/deploy" && docker compose up -d )
+
+  log "Open Design running at http://localhost:7456"
+  log "Manage with: cd ${OPEN_DESIGN_DIR}/deploy && docker compose {logs,restart,down}"
+}
+
+fail() {
+  printf 'setup-open-design: %s\n' "$1" >&2
+  exit 1
+}
+
+main "$@"
