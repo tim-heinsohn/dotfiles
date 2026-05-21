@@ -1,0 +1,128 @@
+#!/bin/bash
+#
+# swap-temp: Enable or disable a temporary swap file
+#
+# Usage: swap-temp on [SIZE] | swap-temp off
+#
+# Description:
+# Creates a temporary swap file, activates it, and cleans it up on request.
+# Nothing is persisted to /etc/fstab; the swap file is removed on "off".
+#
+# Examples:
+#   swap-temp on        # create and enable a 8G temporary swap file
+#   swap-temp on 16G    # create and enable a 16G temporary swap file
+#   swap-temp off       # disable and remove the temporary swap file
+#
+# Dependencies:
+# - fallocate (or dd as fallback)
+# - sudo
+
+set -euo pipefail
+
+SWAPFILE="/swapfile-temp"
+DEFAULT_SIZE="8G"
+
+# Abort if the swapfile would live on a RAM-backed filesystem (tmpfs).
+assert_not_tmpfs() {
+  local dir
+  dir="$(dirname "$SWAPFILE")"
+  local fs_type
+  fs_type="$(findmnt -n -o FSTYPE -T "$dir" 2>/dev/null || stat -f -c %T "$dir" 2>/dev/null || true)"
+
+  if [[ "$fs_type" == "tmpfs" ]]; then
+    fail "$dir is on tmpfs (RAM). A swap file must be on disk.\nSet SWAPFILE to a disk-backed path, e.g. SWAPFILE=/var/lib/swapfile-temp $0 on"
+  fi
+}
+
+log() {
+  printf 'swap-temp: %s\n' "$1"
+}
+
+fail() {
+  printf 'swap-temp: %s\n' "$1" >&2
+  exit 1
+}
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") on [SIZE] | off
+
+  on [SIZE]   Create and enable a temporary swap file (default: ${DEFAULT_SIZE})
+  off         Disable and remove the temporary swap file
+EOF
+}
+
+cmd_on() {
+  local size="${1:-$DEFAULT_SIZE}"
+
+  assert_not_tmpfs
+
+  if swapon --show=NAME --noheadings 2>/dev/null | awk '{$1=$1;print}' | grep -Fxq "$SWAPFILE"; then
+    log "Already active: $SWAPFILE"
+    log "Current swap status:"
+    swapon --show
+    return 0
+  fi
+
+  if [[ -e "$SWAPFILE" ]]; then
+    log "Removing stale $SWAPFILE"
+    sudo rm -f "$SWAPFILE"
+  fi
+
+  log "Creating $SWAPFILE (${size})"
+  if command -v fallocate >/dev/null 2>&1; then
+    sudo fallocate -l "$size" "$SWAPFILE"
+  else
+    log "fallocate not available; using dd (slower)"
+    sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count="$(numfmt --from=iec "$size")" status=progress
+  fi
+
+  sudo chmod 600 "$SWAPFILE"
+  sudo mkswap "$SWAPFILE" >/dev/null
+  sudo swapon "$SWAPFILE"
+
+  log "Temporary swap enabled"
+  free -h
+}
+
+cmd_off() {
+  if [[ -e "$SWAPFILE" ]]; then
+    # Always attempt swapoff first; if detection missed it we still
+    # need to deactivate before rm can succeed (active swap = EPERM).
+    log "Disabling $SWAPFILE (if active)"
+    sudo swapoff "$SWAPFILE" 2>/dev/null || true
+
+    log "Removing $SWAPFILE"
+    sudo rm -f "$SWAPFILE"
+  fi
+
+  log "Temporary swap disabled"
+  free -h
+}
+
+main() {
+  if [[ $# -lt 1 ]]; then
+    usage >&2
+    exit 1
+  fi
+
+  case "$1" in
+    on)
+      shift
+      cmd_on "${1:-}"
+      ;;
+    off)
+      cmd_off
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
