@@ -1,0 +1,108 @@
+#!/bin/bash
+#
+# setup-rtk: Install or update rtk (AI coding assistant CLI)
+#
+# Usage: setup-rtk
+#
+# Description:
+# Installs rtk from a pinned GitHub release with checksum verification.
+# Downloads the platform-specific tarball and verifies its SHA256
+# checksum against the release checksums.txt.
+#
+# Version is pinned for reproducibility and supply-chain safety.
+# To update: change VERSION below, verify the new checksums.txt,
+# and re-run this script.
+#
+# Dependencies:
+# - curl
+# - tar
+# - sha256sum (Linux) or shasum (macOS)
+
+set -euo pipefail
+
+VERSION="v0.42.0"
+REPO="rtk-ai/rtk"
+BINARY_NAME="rtk"
+INSTALL_DIR="${RTK_INSTALL_DIR:-$HOME/.local/bin}"
+
+case "$(uname -s)" in
+    Darwin) OS="darwin" ;;
+    Linux)  OS="linux" ;;
+    *)      echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+
+case "$(uname -m)" in
+    x86_64|amd64)  ARCH="x86_64" ;;
+    arm64|aarch64) ARCH="aarch64" ;;
+    *)             echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+case "$OS" in
+    linux)
+        case "$ARCH" in
+            x86_64)  TARGET="x86_64-unknown-linux-musl" ;;
+            aarch64) TARGET="aarch64-unknown-linux-gnu" ;;
+        esac
+        ;;
+    darwin)
+        TARGET="${ARCH}-apple-darwin"
+        ;;
+esac
+
+asset_name="${BINARY_NAME}-${TARGET}.tar.gz"
+download_url="https://github.com/${REPO}/releases/download/${VERSION}/${asset_name}"
+checksums_url="https://github.com/${REPO}/releases/download/${VERSION}/checksums.txt"
+
+TMP_DIR=$(mktemp -d)
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+echo "Downloading rtk ${VERSION} for ${TARGET}..."
+curl -fsSL -o "$TMP_DIR/${asset_name}" "$download_url"
+curl -fsSL -o "$TMP_DIR/checksums.txt" "$checksums_url"
+
+echo "Verifying checksum..."
+expected_checksum=$(grep "${asset_name}$" "$TMP_DIR/checksums.txt" | awk '{print $1}')
+
+if [ -z "$expected_checksum" ]; then
+    echo "Could not find checksum for ${asset_name} in checksums.txt" >&2
+    exit 1
+fi
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    actual_checksum=$(shasum -a 256 "$TMP_DIR/${asset_name}" | awk '{print $1}')
+else
+    actual_checksum=$(sha256sum "$TMP_DIR/${asset_name}" | awk '{print $1}')
+fi
+
+if [ "$actual_checksum" != "$expected_checksum" ]; then
+    echo "Checksum verification failed!" >&2
+    exit 1
+fi
+
+echo "Checksum OK. Verifying archive paths..."
+if tar -tzf "$TMP_DIR/${asset_name}" | grep -qE '^/|(^|/)\.\.(/|$)'; then
+    echo "Archive contains unsafe paths (absolute or directory traversal) -- refusing to extract" >&2
+    exit 1
+fi
+
+echo "Extracting..."
+tar -xzf "$TMP_DIR/${asset_name}" -C "$TMP_DIR"
+
+mkdir -p "$INSTALL_DIR"
+mv "$TMP_DIR/${BINARY_NAME}" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/${BINARY_NAME}"
+
+echo "Installed rtk ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
+
+if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+    echo "Verification: $("$BINARY_NAME" --version)"
+else
+    echo "Warning: ${INSTALL_DIR} is not on your PATH. Add it to your shell profile:"
+    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+fi
+
+# vi: ft=bash

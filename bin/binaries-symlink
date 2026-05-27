@@ -3,6 +3,19 @@
 # Ensure ~/bin directory exists
 mkdir -p ~/bin
 
+# Remove stale symlinks for setup scripts (they are run on-demand, not added to PATH)
+for link in ~/bin/setup-*; do
+    if [ -L "$link" ]; then
+        target=$(readlink "$link")
+        case "$target" in
+            */dotfiles/*setup-*)
+                rm -f "$link"
+                echo "Removed stale symlink: $link"
+                ;;
+        esac
+    fi
+done
+
 # Loop through each file in $DOTFILES_DIR/bin
 for file in "$DOTFILES_DIR"/bin/* "$DOTFILES_DIR"/bin/live-usb/* "$DOTFILES_DIR"/bin/printer/* "$DOTFILES_DIR"/bin/scanner/*; do
     # Skip directories - only symlink regular files
@@ -12,6 +25,14 @@ for file in "$DOTFILES_DIR"/bin/* "$DOTFILES_DIR"/bin/live-usb/* "$DOTFILES_DIR"
 
     # Get the base name of the file
     filename=$(basename "$file")
+
+    # Skip setup scripts (they are run on-demand, not added to PATH)
+    case "$filename" in
+        setup-*)
+            continue
+            ;;
+    esac
+
     echo "Symlinking $file in ~/bin"
 
     # Create symbolic link in ~/bin
