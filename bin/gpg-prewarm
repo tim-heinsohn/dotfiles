@@ -1,45 +1,73 @@
 #!/bin/bash
 #
-# gpg-prewarm: Prime the gpg-agent cache with a single decryption
+# gpg-prewarm: Prime the gpg-agent cache for every known keygrip
 #
 # Usage: gpg-prewarm [--inner]
 #
 # Description:
-# Ensures the user enters their GPG passphrase exactly once on login.
-# All subsequent gopass/gpg calls in the same gpg-agent session are served
-# from cache (default-cache-ttl 28800 = 8 hours), producing no further prompts.
+# Ensures the user enters their GPG passphrase(s) exactly once on login.
+# gpg-agent's cache is keyed by KEYGRIP — warming one secret key does NOT
+# warm another. This system uses at least two distinct stores:
+#
+#   ~/.password-store           personal store, recipient smile@friendsoft.de
+#   ~/ia/passwords              work store, two team-shared recipients
+#
+# A single test file would only warm one keygrip; .envrc files in project
+# directories that read from the other store would then hit a cold cache
+# during tmuxp fan-out and trigger the pinentry-rofi storm. This script
+# probes one representative file per store and prompts (in a single
+# WezTerm window) for the passphrase. The user's personal password
+# happens to unlock both the personal and the team-shared work keys, so
+# in practice one passphrase entry suffices.
 #
 # Modes:
-#   (no flag)  Outer mode: checks cache; if cold, opens a WezTerm window
-#              running gpg-prewarm --inner and blocks until it closes.
+#   (no flag)  Outer mode: checks every probe file's cache state; if any
+#              is cold, opens a WezTerm window running gpg-prewarm --inner
+#              and blocks until it closes.
 #
-#   --inner    Inner mode: runs inside the terminal. Uses gpg directly with
-#              --pinentry-mode loopback so gpg reads the passphrase from the
-#              terminal's own TTY. No pinentry program is spawned at all,
-#              eliminating all X11 focus-race issues.
+#   --inner    Inner mode: runs inside the terminal. Prompts once for the
+#              passphrase, then attempts to decrypt every cold probe file
+#              via --pinentry-mode loopback + --passphrase-fd, feeding the
+#              same passphrase to each. No pinentry program is spawned at
+#              all, so there are no X11 focus-race issues.
 #              Requires allow-loopback-pinentry in gpg-agent.conf.
+#
+# Adding a new store:
+#   When a new gopass store / .gpg-id with a different secret key is
+#   introduced (e.g. once the migration to fully personal keys lands and
+#   the team-shared keys are retired), append one stable leaf file from
+#   that store to GPG_TEST_FILES below. Inversely, redundant entries
+#   (multiple files that resolve to the same keygrip) are harmless — the
+#   second decrypt is a no-op cache hit.
 #
 # Dependencies:
 # - gpg (with allow-loopback-pinentry in ~/.gnupg/gpg-agent.conf)
-# - gopass  (for the cache-hot check only)
 # - wezterm (outer mode only)
 
 set -euo pipefail
 
-GPG_FILE="$HOME/.password-store/t/ai/claude/api-key.gpg"
+# One probe file per distinct keygrip in use. Order does not matter; each
+# file is tried independently and a missing file is silently skipped so
+# the script keeps working on machines that don't have the work store.
+GPG_TEST_FILES=(
+  "$HOME/.password-store/t/ai/claude/api-key.gpg"   # personal: smile@friendsoft.de
+  "$HOME/ia/passwords/it-handy.gpg"                  # work: 1C0A6AB…, 6C64FDB…
+)
+
+# Reference file for the loopback sanity check (must exist on every host
+# that runs this script; the personal store is always present).
+GPG_SANITY_FILE="${GPG_TEST_FILES[0]}"
 
 # Sanity check: loopback pinentry must be allowed by the *running* agent.
-# If the agent was started before the config was symlinked (e.g. right after
-# a reboot) it will reject --pinentry-mode loopback and the prewarm fails
-# silently, leaving the cache cold and causing a pinentry storm.
+# If the agent was started before the config was symlinked (e.g. right
+# after a reboot) it will reject --pinentry-mode loopback and the prewarm
+# fails silently, leaving the cache cold and causing a pinentry storm.
 # gpgconf reports the option as 'no-allow-loopback-pinentry' even when it
 # is effectively allowed, so we test loopback directly instead.
 if ! gpg --batch --quiet --pinentry-mode loopback \
-        --decrypt "$GPG_FILE" </dev/null >/dev/null 2>&1; then
-  # If it fails with "pinentry-mode loopback not allowed" we know the config
-  # is stale; any other error (e.g. missing key) means loopback itself works.
+        --decrypt "$GPG_SANITY_FILE" </dev/null >/dev/null 2>&1; then
   _err=$(gpg --batch --quiet --pinentry-mode loopback \
-             --decrypt "$GPG_FILE" </dev/null 2>&1)
+             --decrypt "$GPG_SANITY_FILE" </dev/null 2>&1)
   if printf '%s' "$_err" | grep -qi 'loopback.*not allowed\|not allowed.*loopback'; then
     echo "gpg-prewarm: ERROR: allow-loopback-pinentry is NOT active in gpg-agent." >&2
     echo "             The agent is probably running with an old/missing config." >&2
@@ -47,6 +75,38 @@ if ! gpg --batch --quiet --pinentry-mode loopback \
     exit 1
   fi
 fi
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# Is a single probe file already cached in gpg-agent?
+# Returns 0 when the decrypt succeeds with no passphrase input (warm),
+# 1 otherwise (cold, missing, or any other error).
+_is_warm() {
+  gpg --batch --quiet --pinentry-mode loopback \
+      --decrypt "$1" </dev/null >/dev/null 2>&1
+}
+
+# Are ALL existing probe files cached? Missing files are skipped, not
+# treated as failures, so removing a store does not break startup.
+_all_warm() {
+  local f
+  for f in "${GPG_TEST_FILES[@]}"; do
+    [ -f "$f" ] || continue
+    _is_warm "$f" || return 1
+  done
+  return 0
+}
+
+# Decrypt a single file using the captured passphrase. Suppresses output;
+# the caller checks exit status.
+_decrypt_with_passphrase() {
+  local file=$1 passphrase=$2
+  printf '%s' "$passphrase" | gpg --batch --quiet \
+       --pinentry-mode loopback --passphrase-fd 0 \
+       --decrypt "$file" >/dev/null 2>&1
+}
 
 # Only meaningful in a GUI session
 if [ -z "${DISPLAY:-}" ]; then
@@ -57,30 +117,62 @@ fi
 # INNER MODE – runs inside the WezTerm window
 # ---------------------------------------------------------------------------
 if [ "${1:-}" = "--inner" ]; then
-  # If another process already warmed the cache, nothing to do.
-  if gpg --batch --quiet --pinentry-mode loopback \
-       --decrypt "$GPG_FILE" >/dev/null 2>&1; then
-    echo "GPG cache already warm. This window will close."
+  if _all_warm; then
+    echo "GPG cache already warm for all known keys. This window will close."
     sleep 1
     exit 0
   fi
 
-  echo "Enter your GPG passphrase to unlock secrets for this session."
-  echo "(This window will close automatically on success.)"
-  echo ""
-
   export GPG_TTY=$(tty)
 
-  if gpg --batch --quiet --pinentry-mode loopback \
-       --decrypt "$GPG_FILE" >/dev/null; then
-    echo ""
-    echo "Passphrase accepted. This window will close."
+  echo "Enter your GPG passphrase to unlock secrets for this session."
+  echo "(One entry covers personal + work keys when they share a passphrase.)"
+  echo ""
+  printf 'Passphrase: '
+  IFS= read -rs PASSPHRASE
+  echo ""
+  echo ""
+
+  if [ -z "$PASSPHRASE" ]; then
+    echo "No passphrase entered. Aborting."
+    echo "Press Enter to close."
+    read -r
+    exit 1
+  fi
+
+  failed_keys=()
+  for f in "${GPG_TEST_FILES[@]}"; do
+    if [ ! -f "$f" ]; then
+      continue
+    fi
+    label="${f#$HOME/}"
+    if _is_warm "$f"; then
+      printf '  [warm]   %s\n' "$label"
+      continue
+    fi
+    if _decrypt_with_passphrase "$f" "$PASSPHRASE"; then
+      printf '  [ok]     %s\n' "$label"
+    else
+      printf '  [FAIL]   %s\n' "$label"
+      failed_keys+=("$label")
+    fi
+  done
+
+  unset PASSPHRASE
+
+  echo ""
+  if [ "${#failed_keys[@]}" -eq 0 ]; then
+    echo "All keys unlocked. This window will close."
     sleep 1
     exit 0
   else
+    echo "The following keys did NOT unlock with the entered passphrase:"
+    for k in "${failed_keys[@]}"; do
+      echo "  - $k"
+    done
     echo ""
-    echo "Passphrase not accepted. Secrets will not load in tmux sessions."
-    echo "Press Enter to close."
+    echo "Secrets backed by those keys will not load in tmux sessions."
+    echo "Press Enter to close (or re-run gpg-prewarm to try again)."
     read -r
     exit 1
   fi
@@ -90,20 +182,13 @@ fi
 # OUTER MODE – check cache then open terminal if needed
 # ---------------------------------------------------------------------------
 
-# Fast check: if cache is already hot, skip the terminal.
-# We use a loopback decrypt attempt because gopass ls does NOT require
-# GPG decryption and therefore always returns quickly even when the cache
-# is cold, causing the prewarm to be skipped and leaving the cache cold for
-# the shell storm that follows.  Redirecting stdin from /dev/null guarantees
-# that a cold cache fails immediately instead of trying to read a passphrase
-# from a non-existent TTY.
-if gpg --batch --quiet --pinentry-mode loopback \
-     --decrypt "$GPG_FILE" >/dev/null 2>&1 < /dev/null; then
+# Fast check: if every known keygrip is already warm, skip the terminal.
+if _all_warm; then
   exit 0
 fi
 
-# Cache is cold. Open a WezTerm window running inner mode and wait for it.
-# wezterm start blocks until the process inside exits.
+# At least one keygrip is cold. Open a WezTerm window running inner mode
+# and wait for it. `wezterm start` blocks until the process inside exits.
 wezterm start \
   --always-new-process \
   --class "gpg-prewarm" \
