@@ -26,22 +26,29 @@ if [ "${VSCODE_RESOLVING_ENVIRONMENT:-}" = "1" ]; then
   return 0
 fi
 
-# Check if gopass is available and working
+# Check if gopass is available
 if ! command -v gopass >/dev/null 2>&1; then
   echo "⚠️  Gopass not found - skipping all secret loading" >&2
   export SKIP_GOPASS_LOAD=1
   return 1
 fi
 
-# Try a quick test operation with timeout
-# Use 'ls' as it requires GPG but is fast
-if ! timeout 3s gopass ls >/dev/null 2>&1; then
-  echo "⚠️  Gopass/GPG not accessible - skipping all secret loading" >&2
-  echo "   (Keyboard layout issue? Try: setxkbmap fr)" >&2
-  export SKIP_GOPASS_LOAD=1
-  return 1
+# Check whether the GPG cache is actually warm.
+# gopass ls does NOT decrypt anything, so it always succeeds quickly and
+# tells us nothing about the cache state.  We must attempt a real decrypt
+# with loopback pinentry (which never spawns a GUI dialog) to know if the
+# passphrase is cached.  Redirecting stdin from /dev/null so a cold cache
+# fails immediately instead of hanging on a TTY prompt in every shell.
+GPG_TEST_FILE="$HOME/.password-store/t/ai/claude/api-key.gpg"
+if [ -f "$GPG_TEST_FILE" ]; then
+  if gpg --batch --quiet --pinentry-mode loopback \
+       --decrypt "$GPG_TEST_FILE" >/dev/null 2>&1 < /dev/null; then
+    export SKIP_GOPASS_LOAD=0
+    return 0
+  fi
 fi
 
-# Gopass is working - allow loads
-export SKIP_GOPASS_LOAD=0
-return 0
+# Cache is cold or inaccessible - skip loads to avoid a pinentry storm
+echo "⚠️  GPG cache cold - skipping secret loading (run gpg-prewarm to unlock)" >&2
+export SKIP_GOPASS_LOAD=1
+return 1

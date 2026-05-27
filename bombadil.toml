@@ -26,6 +26,7 @@ zsh_environment = { source = "zsh/environment", target = ".zsh/environment" }
 zsh_functions = { source = "zsh/functions", target = ".zsh/functions" }
 zsh_p10k_custom = { source = "zsh/p10k.custom.zsh", target = ".zsh/p10k.custom.zsh" }
 zsh_sheldon = { source = "zsh/plugins.toml", target = ".config/sheldon/plugins.toml" }
+zsh_gopass_gatekeeper = { source = "zsh/lib/gopass-gatekeeper.sh", target = ".zsh/lib/gopass-gatekeeper.sh" }
 
 # ============================================================
 # Version Control

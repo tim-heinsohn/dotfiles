@@ -23,7 +23,8 @@ cd ~/.config && mkdir -p \
 
 mkdir -p \
   ~/.gnupg \
-  ~/.zsh
+  ~/.zsh \
+  ~/.zsh/lib
 
 # Install pinentry wrapper if changed (skip if not interactive)
 WRAPPER_SOURCE="$HOME/dotfiles/gpg/pinentry-wrapper"

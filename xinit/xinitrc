@@ -9,6 +9,11 @@ xset r on
 xset r 22
 xset r rate 250 35
 
+# Ensure gpg-agent has picked up the current config (allow-loopback-pinentry,
+# pinentry-program, cache TTL).  After a reboot the agent may have started
+# from an older / missing config before Bombadil linked the dotfiles.
+gpg-connect-agent reloadagent /bye >/dev/null 2>&1 || true
+
 # start Gnome keyring
 if [ -f /usr/bin/gnome-keyring-daemon ]; then
   dbus-update-activation-environment --systemd DISPLAY

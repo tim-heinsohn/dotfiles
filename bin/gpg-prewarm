@@ -28,6 +28,26 @@ set -euo pipefail
 
 GPG_FILE="$HOME/.password-store/t/ai/claude/api-key.gpg"
 
+# Sanity check: loopback pinentry must be allowed by the *running* agent.
+# If the agent was started before the config was symlinked (e.g. right after
+# a reboot) it will reject --pinentry-mode loopback and the prewarm fails
+# silently, leaving the cache cold and causing a pinentry storm.
+# gpgconf reports the option as 'no-allow-loopback-pinentry' even when it
+# is effectively allowed, so we test loopback directly instead.
+if ! gpg --batch --quiet --pinentry-mode loopback \
+        --decrypt "$GPG_FILE" </dev/null >/dev/null 2>&1; then
+  # If it fails with "pinentry-mode loopback not allowed" we know the config
+  # is stale; any other error (e.g. missing key) means loopback itself works.
+  _err=$(gpg --batch --quiet --pinentry-mode loopback \
+             --decrypt "$GPG_FILE" </dev/null 2>&1)
+  if printf '%s' "$_err" | grep -qi 'loopback.*not allowed\|not allowed.*loopback'; then
+    echo "gpg-prewarm: ERROR: allow-loopback-pinentry is NOT active in gpg-agent." >&2
+    echo "             The agent is probably running with an old/missing config." >&2
+    echo "             Fix: gpg-connect-agent KILLAGENT /bye" >&2
+    exit 1
+  fi
+fi
+
 # Only meaningful in a GUI session
 if [ -z "${DISPLAY:-}" ]; then
   exit 0
@@ -70,13 +90,15 @@ fi
 # OUTER MODE – check cache then open terminal if needed
 # ---------------------------------------------------------------------------
 
-# gopass must be present for the cache-hot check
-if ! command -v gopass >/dev/null 2>&1; then
-  exit 0
-fi
-
 # Fast check: if cache is already hot, skip the terminal.
-if timeout 2s gopass ls >/dev/null 2>&1; then
+# We use a loopback decrypt attempt because gopass ls does NOT require
+# GPG decryption and therefore always returns quickly even when the cache
+# is cold, causing the prewarm to be skipped and leaving the cache cold for
+# the shell storm that follows.  Redirecting stdin from /dev/null guarantees
+# that a cold cache fails immediately instead of trying to read a passphrase
+# from a non-existent TTY.
+if gpg --batch --quiet --pinentry-mode loopback \
+     --decrypt "$GPG_FILE" >/dev/null 2>&1 < /dev/null; then
   exit 0
 fi
 
