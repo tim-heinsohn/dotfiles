@@ -11,6 +11,17 @@ pinentry-program /usr/local/bin/pinentry-wrapper
 # Cache settings
 default-cache-ttl 28800  # Remember unused keys for 28800 seconds (8 hours)
 
+# Allow the secure-memory pool to grow on demand. The default pool is
+# only ~32 KiB; under concurrent RSA-4096 decrypts (e.g. several tmuxp
+# panes loading direnv .envrc files with many `gopass show` calls in
+# parallel) it exhausts and decrypts start failing with
+#   gpg: Entschlüsselung fehlgeschlagen: Nicht genügend Hauptspeicher verfügbar
+#   (GPG_ERR_ENOMEM)
+# even when the keygrip is already cached. Each value here is the size
+# in bytes to add to the secmem pool when an allocation would otherwise
+# fail. Available since GnuPG 2.2.21.
+auto-expand-secmem 65536
+
 # Allow callers to use --pinentry-mode loopback (reads passphrase from their
 # own TTY instead of spawning a pinentry program). Used by gpg-prewarm to
 # avoid the X11 focus race at i3 startup.

@@ -1,113 +1,53 @@
 #!/bin/bash
 #
-# i3-startup: Sequenced startup for i3 session
+# i3-startup: Login-time priming for the i3 session
 #
 # Usage: i3-startup
 #
 # Description:
-# Runs tasks in a deliberate order so that the GPG passphrase prompt is the
-# only window on screen when it appears, giving it uncontested keyboard focus.
+# Runs once per i3 session to prime the gpg-agent cache so that any
+# manually-launched tmuxp session ($mod+M -> rofi-tmuxp) or terminal
+# afterwards finds gopass-backed secrets already unlocked.
 #
-#   1. gpg-prewarm  – one pinentry prompt, populates gpg-agent cache (8 h TTL)
-#                     HARD GATE: if this fails (ESC, missing key, agent broken)
-#                     the script aborts before opening any terminal or browser.
-#                     Rationale: tmuxp fans out ~16 zsh shells, and several
-#                     project .envrc files call `gopass show` via direnv. With
-#                     a cold cache that produces a pinentry-rofi storm that
-#                     makes the session unusable. The gopass-gatekeeper in
-#                     zshrc is a second safety net (sets SKIP_GOPASS_LOAD=1),
-#                     but stopping here avoids losing all secrets silently.
-#   2. browsers     – Firefox + Chromium (do NOT call gopass; safe after gate)
-#   3. tmuxp-autoload – tmux sessions (shells source gopass secrets from cache)
+# This script used to also autostart browsers and tmuxp profiles. That
+# turned out to be the root cause of the boot-time pinentry-rofi storm
+# AND of the "Nicht genügend Hauptspeicher verfügbar" decrypt failures:
+# tmuxp fanned out ~16 zsh shells in parallel, each running direnv on
+# project .envrc files with up to 30 `gopass show` calls, hammering
+# gpg-agent's small secure-memory pool. Even with a fully warm cache
+# the agent could not service that load and rejected many decrypts.
 #
-# Recovery after a hard-gate abort:
-#   - Open a terminal manually ($mod+Return) and run:
-#       gpg-prewarm && ~/dotfiles/bin/i3-startup
-#     to resume the normal sequence.
+# Autostart of browsers and tmuxp has therefore been removed. Launch
+# them on demand:
+#   browsers : $mod+b (Firefox), or via dex/desktop entry
+#   sessions : $mod+M (rofi-tmuxp) picks a single profile to load
+#
+# The single gpg-prewarm pass remains so that the very first manual
+# launch is silent and fast.
 #
 # Dependencies:
 # - ~/dotfiles/bin/gpg-prewarm
-# - ~/dotfiles/bin/tmuxp-autoload
-# - firefox, chromium
 # - notify-send (libnotify) for the failure toast (optional)
-# - i3-msg
 
 set -euo pipefail
 
 _notify() {
-  # Best-effort user notification; never fail the script if it's unavailable.
   command -v notify-send >/dev/null 2>&1 || return 0
   notify-send -u "${1:-normal}" -t "${2:-10000}" "$3" "${4:-}" 2>/dev/null || true
 }
 
-# ---------------------------------------------------------------------------
-# 1. Prime gpg-agent cache (HARD GATE – aborts the rest of startup on failure)
-# ---------------------------------------------------------------------------
+# Prime gpg-agent cache. Failure (ESC, missing key, agent broken) is
+# non-fatal — there is no autostart fan-out to gate any more, so we just
+# inform the user that gopass secrets will not be available silently and
+# let them recover by running gpg-prewarm manually when ready.
 gpg_prewarm="$HOME/dotfiles/bin/gpg-prewarm"
 if [ -x "$gpg_prewarm" ]; then
   if ! "$gpg_prewarm"; then
-    echo "i3-startup: gpg-prewarm failed; aborting browser + tmuxp launch." >&2
-    echo "             Recover with: gpg-prewarm && ~/dotfiles/bin/i3-startup" >&2
-    _notify critical 0 \
-      "GPG prewarm failed — session not started" \
-      "Browsers and tmuxp sessions were NOT launched to avoid a pinentry storm.
-
-Recover with:
-  gpg-prewarm && ~/dotfiles/bin/i3-startup"
-    exit 0
+    echo "i3-startup: gpg-prewarm did not unlock all keys." >&2
+    echo "             Re-run with: gpg-prewarm" >&2
+    _notify normal 8000 \
+      "GPG prewarm skipped" \
+      "Secrets backed by gopass will prompt on first use.
+Re-run with: gpg-prewarm"
   fi
-fi
-
-# ---------------------------------------------------------------------------
-# 2. Browsers
-# ---------------------------------------------------------------------------
-_primary_project_code() {
-  if [ -n "${PRIMARY_PROJECT_CODE:-}" ]; then
-    printf '%s\n' "$PRIMARY_PROJECT_CODE"
-    return
-  fi
-  [ -f "$HOME/.projects" ] || return
-  awk -F= '/^[[:space:]]*export[[:space:]]+PRIMARY_PROJECT_CODE=/{
-    v=$2
-    sub(/^[[:space:]]*"/, "", v); sub(/"[[:space:]]*$/, "", v)
-    sub(/^[[:space:]]*\047/, "", v); sub(/\047[[:space:]]*$/, "", v)
-    print v; exit
-  }' "$HOME/.projects"
-}
-
-code="$(_primary_project_code 2>/dev/null || true)"
-
-# Firefox
-if [ -n "$code" ]; then
-  firefox -P "$code" &
-else
-  firefox &
-fi
-
-# Chromium – map project name to profile directory
-if [ -n "$code" ] \
-    && [ -f "$HOME/.config/chromium/Local State" ] \
-    && command -v jq >/dev/null 2>&1; then
-  mapped="$(jq -r --arg name "$code" \
-    '[.profile.info_cache | to_entries[] | select(.value.name == $name) | .key][0] // empty' \
-    "$HOME/.config/chromium/Local State" 2>/dev/null || true)"
-  profile="${mapped:-$code}"
-else
-  profile="$code"
-fi
-if [ -n "$profile" ]; then
-  chromium --profile-directory="$profile" &
-else
-  chromium &
-fi
-
-# Restore browser windows to remembered workspaces
-systemctl --user start browser-workspace-restore.service || true
-
-# ---------------------------------------------------------------------------
-# 3. tmuxp sessions (gpg cache is now warm; shells will load secrets silently)
-# ---------------------------------------------------------------------------
-tmuxp_autoload="$HOME/dotfiles/bin/tmuxp-autoload"
-if [ -x "$tmuxp_autoload" ]; then
-  "$tmuxp_autoload"
 fi
