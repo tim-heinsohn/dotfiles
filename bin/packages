@@ -7,9 +7,11 @@ aur/bruno-bin
     Opensource API Client for Exploring and Testing APIs.
 aur/google-chrome
     A browser that combines a minimal design with sophisticated technology.
-aur/hey-bin
+aur/herdr-bin
+    Supervise multiple coding agents in one terminal.
+ aur/hey-bin
     HTTP load generator, ApacheBench (ab) replacement.
-aur/html2md
+ aur/html2md
     A command-line tool to convert HTML to Markdown.
 aur/i3lock-color
     Improved i3lock with color support.

@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# setup-yay: Yay AUR helper installer with idempotency
+#
+# Usage: setup-yay
+#
+# Description:
+# Installs the yay AUR helper from source if not already present.
+#
+# Dependencies:
+# - git
+# - base-devel (makepkg)
+#
+# <https://github.com/Jguer/yay>
+
+set -euo pipefail
+
+# Check if yay is already installed and functional
+if command -v yay &> /dev/null; then
+    if yay --version &> /dev/null; then
+        echo "yay is already installed at $(which yay)"
+        echo "Version: $(yay --version | head -1)"
+        exit 0
+    else
+        echo "yay is installed but broken (likely needs rebuild after pacman upgrade)"
+        echo "Rebuilding yay..."
+    fi
+fi
+
+echo "Installing yay AUR helper..."
+
+# Create downloads directory
+DOWNLOADS_DIR="$HOME/Downloads"
+mkdir -p "$DOWNLOADS_DIR"
+cd "$DOWNLOADS_DIR"
+
+# Install dependencies
+echo "Installing dependencies..."
+sudo pacman -S --needed --noconfirm git base-devel
+
+# Handle existing yay directory
+YAY_DIR="$DOWNLOADS_DIR/yay"
+if [ -d "$YAY_DIR" ]; then
+    echo "Removing existing yay directory..."
+    rm -rf "$YAY_DIR"
+fi
+
+# Clone and build yay
+echo "Cloning yay repository..."
+git clone https://aur.archlinux.org/yay.git
+
+echo "Building and installing yay..."
+cd yay
+makepkg -si --noconfirm --force
+
+# Verify installation
+if command -v yay &> /dev/null; then
+    echo "yay successfully installed!"
+    echo "Version: $(yay --version | head -1)"
+    echo "Location: $(which yay)"
+else
+    echo "Error: yay installation failed - command not found" >&2
+    exit 1
+fi
+
+echo "yay installation complete."

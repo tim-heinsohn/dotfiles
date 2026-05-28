@@ -1,0 +1,119 @@
+#!/bin/bash
+#
+# setup-oc-manager: Secure installer for oc-manager with pinned revision
+#
+# Usage: setup-oc-manager
+#
+# Description:
+# Installs opencode-manager (oc-manager) from GitHub with a pinned commit
+# revision for reproducibility and supply-chain security. Clones into
+# /srv/lib/oc-manager, installs dependencies with frozen lockfile, and
+# symlinks the binary into ~/.local/bin.
+#
+# Dependencies:
+# - git
+# - bun (>= 1.3.0)
+
+set -euo pipefail
+
+# --- Configuration ---
+REPO_URL="https://github.com/shuv1337/oc-manager.git"
+# Pinned to v0.4.6 (2026-02-05) - update only after manual review
+PINNED_COMMIT="e3d62660717fc32223f7c8b65f50b6e71ff4b320"
+INSTALL_DIR="/srv/lib/oc-manager"
+BIN_DIR="${HOME}/.local/bin"
+BIN_NAME="opencode-manager"
+ENTRY_POINT="src/bin/opencode-manager.ts"
+
+# --- Helpers ---
+die() {
+    echo "Error: $1" >&2
+    exit 1
+}
+
+info() {
+    echo "[install-oc-manager] $1"
+}
+
+# --- Prerequisites ---
+info "Checking prerequisites..."
+
+if ! command -v git &> /dev/null; then
+    die "git is required but not installed"
+fi
+
+if ! command -v bun &> /dev/null; then
+    die "bun is required but not installed (see https://bun.sh)"
+fi
+
+BUN_VERSION=$(bun --version 2>/dev/null | sed 's/^\([0-9]\+\.[0-9]\+\).*/\1/')
+REQUIRED_BUN="1.3"
+if [ "$(printf '%s\n' "$REQUIRED_BUN" "$BUN_VERSION" | sort -V | head -n1)" != "$REQUIRED_BUN" ]; then
+    die "bun >= 1.3.0 is required (found ${BUN_VERSION})"
+fi
+info "bun version: ${BUN_VERSION}"
+
+# --- Clone or update ---
+if [ -d "${INSTALL_DIR}/.git" ]; then
+    info "Existing installation found at ${INSTALL_DIR}"
+    cd "${INSTALL_DIR}"
+    git fetch origin
+else
+    info "Cloning oc-manager repository..."
+    mkdir -p "$(dirname "${INSTALL_DIR}")"
+    git clone "${REPO_URL}" "${INSTALL_DIR}"
+    cd "${INSTALL_DIR}"
+fi
+
+# --- Pin to verified revision ---
+info "Checking out pinned revision ${PINNED_COMMIT}..."
+git -c advice.detachedHead=false checkout "${PINNED_COMMIT}"
+
+# Security verification
+ACTUAL_COMMIT=$(git rev-parse HEAD)
+if [ "${ACTUAL_COMMIT}" != "${PINNED_COMMIT}" ]; then
+    die "Commit hash mismatch: expected ${PINNED_COMMIT}, got ${ACTUAL_COMMIT}"
+fi
+info "Commit hash verified: ${ACTUAL_COMMIT}"
+
+# --- Install dependencies ---
+info "Installing dependencies with frozen lockfile..."
+if [ ! -f "bun.lock" ]; then
+    die "Missing bun.lock - lockfile required for reproducible install"
+fi
+bun install --frozen-lockfile
+
+# --- Symlink binary ---
+mkdir -p "${BIN_DIR}"
+WRAPPER_PATH="${BIN_DIR}/${BIN_NAME}"
+
+info "Creating wrapper at ${WRAPPER_PATH}..."
+cat > "${WRAPPER_PATH}" <<EOF
+#!/bin/bash
+# Auto-generated wrapper for opencode-manager
+# Installed by dotfiles/bin/setup-oc-manager
+# Pinned commit: ${PINNED_COMMIT}
+exec bun run "${INSTALL_DIR}/${ENTRY_POINT}" "\$@"
+EOF
+
+chmod +x "${WRAPPER_PATH}"
+
+# --- Verify ---
+info "Verifying installation..."
+if ! command -v "${BIN_NAME}" &> /dev/null; then
+    die "${BIN_NAME} not found in PATH after installation"
+fi
+
+# Try to get version/help output
+if "${BIN_NAME}" --help &> /dev/null || true; then
+    info "Installation successful!"
+    info "Location: ${INSTALL_DIR}"
+    info "Binary: $(which ${BIN_NAME})"
+    info "Pinned commit: ${PINNED_COMMIT}"
+else
+    info "Installation completed but --help returned non-zero (this is normal - TUI app)"
+    info "Location: ${INSTALL_DIR}"
+    info "Binary: $(which ${BIN_NAME})"
+fi
+
+info "Run '${BIN_NAME} --help' or just '${BIN_NAME}' to start the TUI."

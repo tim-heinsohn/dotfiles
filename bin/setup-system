@@ -81,7 +81,7 @@ ln -sf "${DOTFILES_DIR}/bombadil.toml" "$HOME/.config/bombadil.toml" &&
 cd "${DOTFILES_DIR}" &&
 "${DOTFILES_DIR}/bin/setup-wallpapers" &&
 "${DOTFILES_DIR}/aider/install" &&
-"${DOTFILES_DIR}/aur/yay-install" &&
+"${DOTFILES_DIR}/bin/setup-yay" &&
 "${DOTFILES_DIR}/bin/packages-install" &&
 "${DOTFILES_DIR}/docker/docker-group-setup" &&
 "${DOTFILES_DIR}/ruby/rvm-setup" &&
