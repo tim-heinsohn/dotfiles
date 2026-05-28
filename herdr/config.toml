@@ -32,23 +32,23 @@ name = "vesper"
 # Accepted syntax: plain keys, ctrl/shift/alt/cmd/super modifiers, and special keys like enter/tab/esc/left/right/up/down
 # Most reliable bindings are plain keys, ctrl+letter, esc/tab/enter, and function keys.
 # alt+..., cmd/super, and punctuation-with-modifiers may depend on your terminal/tmux setup.
-# prefix = "ctrl+b"
+prefix = "ctrl+b"
 
 # Navigate-mode actions
-# new_workspace = "n"
-# rename_workspace = "shift+n"
-# close_workspace = "shift+d"
-# previous_workspace = "" # optional, unset by default
-# next_workspace = ""     # optional, unset by default
+new_workspace = "shift+c"
+rename_workspace = ";"
+#close_workspace = ""
+previous_workspace = "shift+p" # optional, unset by default
+next_workspace = "shift+n"     # optional, unset by default
 # previous_agent = ""     # optional, unset by default
 # next_agent = ""         # optional, unset by default
-# detach = ""             # optional explicit detach shortcut in server/client mode
-# reload_config = ""      # optional shortcut to reload config.toml without restarting
+detach = "d"             # optional explicit detach shortcut in server/client mode
+reload_config = "shift+r"      # optional shortcut to reload config.toml without restarting
 # open_notification_target = "" # optional shortcut to jump to the visible notification target
-# new_tab = "c"
-# rename_tab = ""         # optional, unset by default
-# previous_tab = ""       # optional, unset by default
-# next_tab = ""           # optional, unset by default
+new_tab = "c"
+rename_tab = ","         # optional, unset by default
+previous_tab = "p"       # optional, unset by default
+next_tab = "n"           # optional, unset by default
 # close_tab = ""          # optional, unset by default
 # rename_pane = ""        # optional, unset by default
 # edit_scrollback = ""    # optional, opens focused pane scrollback in $EDITOR
@@ -85,14 +85,14 @@ name = "vesper"
 # Capture mouse input for Herdr's mouse UI.
 # Set false to let the terminal handle normal clicks, such as Cmd-clicking URLs.
 # Pane apps like lazygit and btop can still receive mouse when they request it.
-# mouse_capture = true
+mouse_capture = true
 
 # Ask for confirmation before closing a workspace
-# confirm_close = true
+confirm_close = true
 
 # Ask for a tab name before creating a new tab.
 # Set false to create tabs immediately with generated names.
-# prompt_new_tab_name = true
+prompt_new_tab_name = true
 
 # Show detected/reported agent labels in split pane borders when no manual pane name is set.
 # show_agent_labels_on_pane_borders = false
