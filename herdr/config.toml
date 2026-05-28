@@ -34,34 +34,45 @@ name = "vesper"
 # alt+..., cmd/super, and punctuation-with-modifiers may depend on your terminal/tmux setup.
 prefix = "ctrl+b"
 
+# NOTE:
+# The live docs at herdr.dev are outdated. The real parser expects values to be
+# the key you press after the prefix, not the full shortcut. It splits on + for
+# modifiers, but prefix is not a recognized modifier token.
+# So change every prefix+... to just the post-prefix part
+
 # Navigate-mode actions
-new_workspace = "shift+c"
+new_workspace = "shift+n"
 rename_workspace = ";"
-#close_workspace = ""
-previous_workspace = "shift+p" # optional, unset by default
-next_workspace = "shift+n"     # optional, unset by default
-# previous_agent = ""     # optional, unset by default
-# next_agent = ""         # optional, unset by default
-detach = "d"             # optional explicit detach shortcut in server/client mode
+close_workspace = "shift+x"
+# detach = ""             # optional explicit detach shortcut in server/client mode
 reload_config = "shift+r"      # optional shortcut to reload config.toml without restarting
 # open_notification_target = "" # optional shortcut to jump to the visible notification target
 new_tab = "c"
 rename_tab = ","         # optional, unset by default
-previous_tab = "p"       # optional, unset by default
-next_tab = "n"           # optional, unset by default
-# close_tab = ""          # optional, unset by default
+close_tab = "x"          # optional, unset by default
 # rename_pane = ""        # optional, unset by default
 # edit_scrollback = ""    # optional, opens focused pane scrollback in $EDITOR
+# split_vertical = "v"
+# split_horizontal = "-"
+close_pane = "ctrl+shift+x"
+# zoom = "f"             # legacy alias: fullscreen
+# resize_mode = "r"
+# toggle_sidebar = "b"
+
+# Terminal-direct bindings. Those fire without the prefix!
+#
+#   So never assign single letters here.
+#   Note: the `herdr --default-config` does not reveal this.
+next_tab = "alt+n"           # optional, unset by default
+previous_tab = "alt+p"       # optional, unset by default
+# previous_workspace = "" # optional, unset by default
+# next_workspace = ""     # optional, unset by default
 # focus_pane_left = ""    # optional, unset by default
 # focus_pane_down = ""    # optional, unset by default
 # focus_pane_up = ""      # optional, unset by default
 # focus_pane_right = ""   # optional, unset by default
-# split_vertical = "v"
-# split_horizontal = "-"
-# close_pane = "x"
-# zoom = "f"             # legacy alias: fullscreen
-# resize_mode = "r"
-# toggle_sidebar = "b"
+# previous_agent = ""     # optional, unset by default
+# next_agent = ""         # optional, unset by default
 
 # Custom prefix-mode commands. Press prefix, then the configured key.
 # type = "shell" runs detached in the background.
@@ -70,6 +81,21 @@ next_tab = "n"           # optional, unset by default
 # key = "g"
 # type = "pane"
 # command = "lazygit"
+
+# Optional modifier-only shortcuts expanded over number keys 1-9.
+# Empty means disabled. Examples: "ctrl", "ctrl+shift", "alt".
+# [keys.indexed]
+# tabs = ""       # e.g. "ctrl" makes ctrl+1..9 switch tabs
+# workspaces = "" # e.g. "ctrl+shift" makes ctrl+shift+1..9 switch workspaces
+# agents = ""     # e.g. "alt" makes alt+1..9 focus agent rows
+
+# Custom prefix-mode commands. Press prefix, then the configured key.
+# type = "shell" runs detached in the background.
+# type = "pane" opens a temporary pane and closes it when the command exits.
+[[keys.command]]
+key = "w"
+type = "shell"
+command = "$HOME/bin/herdr-session-store ${HERDR_SESSION:-default}"
 
 # Optional modifier-only shortcuts expanded over number keys 1-9.
 # Empty means disabled. Examples: "ctrl", "ctrl+shift", "alt".
@@ -138,3 +164,39 @@ delivery = "herdr"
 # Maximum scrollback buffer size in bytes retained per pane terminal.
 # Matches Ghostty's default scrollback-limit behavior.
 # scrollback_limit_bytes = 10000000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
