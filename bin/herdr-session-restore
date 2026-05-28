@@ -1,0 +1,176 @@
+#!/bin/bash
+#
+# herdr-session-restore: Open or attach to a herdr session
+#
+# Usage: herdr-session-restore [OPTIONS] [SESSION_NAME]
+#
+# Description:
+#   Resolves a herdr session restore script and runs it, then attaches.
+#
+#   Searches for restore scripts in:
+#   - ~/.config/herdr/store/<name>               (machine-local stored sessions)
+#
+#   With -a|--all, restores every available session in a new terminal.
+#   Without arguments and without -a, presents an fzf picker over available
+#   sessions.
+#
+# Dependencies:
+#   - herdr
+#   - jq (used by restore scripts)
+#   - fzf (for interactive selection)
+#   - rofi-sensible-terminal (for -a batch restore)
+
+set -euo pipefail
+
+# Extract session names from herdr's tabular output.
+_herdr_session_names() {
+  herdr session list 2>/dev/null | awk '{print $1}' | grep -v '^NAME$' || true
+}
+
+print_help() {
+  cat <<'EOF'
+herdr-session-restore: Launch or attach to herdr-managed sessions
+
+Usage: herdr-session-restore [OPTIONS] [SESSION_NAME]
+
+Description:
+  Opens or attaches to a herdr session. If a restore script exists for
+  the session, it is executed first to create workspaces, tabs, and
+  panes idempotently.
+
+  With -a|--all, restores every available session in a new terminal.
+  Without arguments and without -a, presents an fzf picker.
+
+Session Behavior:
+  - If session doesn't exist: Runs restore script, then attaches
+  - If session exists (not attached): Attaches to it
+  - If session exists (already attached): Creates a second client attachment
+
+Session Format:
+  <name>           Session from ~/.config/herdr/store/<name>
+                   (machine-local stored sessions)
+
+Options:
+  -a, --all        Restore all available sessions (opens a terminal per session)
+  -h, --help       Show this help message
+
+Examples:
+  herdr-session-restore dotfiles      # Launch stored dotfiles session
+  herdr-session-restore work          # Launch stored work session
+  herdr-session-restore               # Pick a session via fzf
+  herdr-session-restore -a            # Restore all sessions in new terminals
+
+See also:
+  bin/herdr-session-store - Save a running session to a restore script
+  bin/rofi-herdr          - Interactive Rofi launcher
+EOF
+}
+
+ALL=false
+SESSION_NAME=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -a|--all) ALL=true; shift ;;
+    -h|--help) print_help; exit 0 ;;
+    -*) echo "Unknown option: $1" >&2; exit 1 ;;
+    *) SESSION_NAME="$1"; shift ;;
+  esac
+done
+
+# List all available sessions (stored + running)
+get_available_sessions() {
+  local -A seen_sessions
+
+  # Machine-local stored sessions
+  shopt -s nullglob
+  for file in "$HOME"/.config/herdr/store/*; do
+    if [ -f "$file" ] && [ ! -d "$file" ]; then
+      base="${file##*/}"
+      if [ -z "${seen_sessions[$base]+x}" ]; then
+        echo "$base"
+        seen_sessions["$base"]=1
+      fi
+    fi
+  done
+
+  # Running sessions (append if not already listed)
+  if command -v herdr >/dev/null 2>&1; then
+    while IFS= read -r running || [ -n "$running" ]; do
+      [ -n "$running" ] || continue
+      if [ -z "${seen_sessions[$running]+x}" ]; then
+        echo "$running"
+      fi
+    done < <(_herdr_session_names)
+  fi
+}
+
+# Resolve session name to a restore script path
+resolve_session_script() {
+  local session="$1"
+  local stored_path="$HOME/.config/herdr/store/${session}"
+  if [ -f "$stored_path" ]; then
+    echo "$stored_path"
+    return 0
+  fi
+  return 1
+}
+
+# Core restore logic for a single session.
+# Uses exec when it is the last thing this process will do.
+restore_one() {
+  local session="$1"
+  local do_exec="${2:-true}"
+
+  local script_path
+  script_path=$(resolve_session_script "$session" 2>/dev/null || true)
+
+  export HERDR_SESSION="$session"
+
+  if [ -n "${script_path:-}" ] && [ -f "$script_path" ]; then
+    bash "$script_path"
+  fi
+
+  if [ "$do_exec" = "true" ]; then
+    exec herdr --session "$session"
+  else
+    herdr --session "$session"
+  fi
+}
+
+if [ "$ALL" = true ]; then
+  if ! command -v rofi-sensible-terminal >/dev/null 2>&1; then
+    echo "rofi-sensible-terminal is required for -a batch restore." >&2
+    exit 1
+  fi
+
+  mapfile -t sessions < <(get_available_sessions | sort -u)
+  if [ ${#sessions[@]} -eq 0 ]; then
+    echo "No herdr sessions found." >&2
+    exit 1
+  fi
+
+  for s in "${sessions[@]}"; do
+    [ -n "$s" ] || continue
+    rofi-sensible-terminal -e "$0" "$s" &
+    sleep 0.3
+  done
+  exit 0
+fi
+
+if [ -n "$SESSION_NAME" ]; then
+  restore_one "$SESSION_NAME" true
+fi
+
+# Interactive fzf selection
+if ! command -v fzf >/dev/null 2>&1; then
+  echo "fzf is required for interactive selection. Install it or pass a session name." >&2
+  exit 1
+fi
+
+selected=$(get_available_sessions | sort -u | fzf --prompt="herdr session to restore> " || true)
+if [ -z "$selected" ]; then
+  exit 0
+fi
+
+restore_one "$selected" true

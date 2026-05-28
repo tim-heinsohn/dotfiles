@@ -115,12 +115,15 @@ bindsym $mod+d exec --no-startup-id rofi -modes 'dict:dict' -theme DarkBlue -sho
 bindsym $mod+c exec --no-startup-id rofi -show calc -theme DarkBlue -modi calc -no-show-match -no-sort > /dev/null
 
 # password manager
-bindsym $mod+p exec --no-startup-id rofi-pass --root $HOME/.password-store:$HOME/ia/ia.passwords:$HOME/ia/ia.otp -theme DarkBlue
-bindsym $mod+Shift+p exec --no-startup-id rofi-pass --root $HOME/ia/ia.passwords -theme DarkBlue
-bindsym $mod+Shift+o exec --no-startup-id rofi-pass --root $HOME/ia/ia.otp -theme DarkBlue
+bindsym $mod+p exec --no-startup-id rofi-pass --root $HOME/.password-store:$HOME/ia/passwords:$HOME/ia/ia.otp -theme DarkBlue
+bindsym $mod+Shift+p exec --no-startup-id rofi-pass --root $HOME/ia/passwords -theme DarkBlue
+bindsym $mod+Shift+o exec --no-startup-id rofi-pass --root $HOME/ia/otp -theme DarkBlue
 
 # tmuxp session selector
 bindsym $mod+m exec --no-startup-id $HOME/dotfiles/bin/rofi-tmuxp
+
+# herdr session selector
+bindsym $mod+Shift+m exec --no-startup-id $HOME/dotfiles/bin/rofi-herdr
 
 # change focus
 bindsym $mod+h focus left

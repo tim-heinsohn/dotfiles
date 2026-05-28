@@ -1,0 +1,101 @@
+#!/bin/bash
+#
+# rofi-herdr: Rofi launcher for herdr sessions
+#
+# Usage: rofi-herdr
+#
+# Description:
+#   Shows a Rofi menu with available herdr sessions from:
+#   - ~/.config/herdr/store/           (machine-local stored sessions)
+#
+#   Also lists currently running herdr sessions.
+#
+# Dependencies:
+#   - rofi
+#   - herdr
+
+set -euo pipefail
+
+# Extract session names from herdr's tabular output.
+_herdr_session_names() {
+  herdr session list 2>/dev/null | awk '{print $1}' | grep -v '^NAME$' || true
+}
+
+print_help() {
+  cat <<'EOF'
+rofi-herdr: Rofi launcher for herdr sessions
+
+Usage: rofi-herdr [OPTIONS]
+
+Description:
+  Interactive Rofi menu to select and launch herdr sessions. Discovers
+  stored sessions from ~/.config/herdr/store/.
+
+Session Behavior:
+  - If session doesn't exist: Runs restore script and attaches
+  - If session exists (not attached): Attaches to it
+  - If session exists (already attached): Creates a second client attachment
+
+Options:
+  -h, --help       Show this help message
+
+Keybinding:
+  This script is meant to be bound to a keyboard shortcut in your window
+  manager (e.g., i3). See i3/config for the binding configuration.
+
+See also:
+  bin/herdr-session-restore - CLI version for direct session launching
+  bin/herdr-session-store   - Save a running session to a restore script
+EOF
+}
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  print_help
+  exit 0
+fi
+
+get_sessions() {
+  local sessions=()
+  local -A seen_sessions
+
+  # Machine-local stored sessions
+  shopt -s nullglob
+  for file in "$HOME"/.config/herdr/store/*; do
+    if [ -f "$file" ] && [ ! -d "$file" ]; then
+      base="${file##*/}"
+      sessions+=("$base")
+      seen_sessions["$base"]=1
+    fi
+  done
+
+  # Running sessions (append if not already listed)
+  if command -v herdr >/dev/null 2>&1; then
+    while IFS= read -r running || [ -n "$running" ]; do
+      [ -n "$running" ] || continue
+      if [ -z "${seen_sessions[$running]+x}" ]; then
+        sessions+=("$running")
+      fi
+    done < <(_herdr_session_names)
+  fi
+
+  printf '%s\n' "${sessions[@]}" | sort -u
+}
+
+launch_session() {
+  local session="$1"
+  local restore_script="$HOME/dotfiles/bin/herdr-session-restore"
+  exec rofi-sensible-terminal -e "$restore_script" "$session"
+}
+
+sessions=$(get_sessions)
+
+if [ -z "$sessions" ]; then
+  notify-send "herdr" "No herdr sessions found"
+  exit 1
+fi
+
+selected=$(echo "$sessions" | rofi -dmenu -i -p "herdr session" -matching fuzzy)
+
+if [ -n "$selected" ]; then
+  launch_session "$selected"
+fi
