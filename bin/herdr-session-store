@@ -85,52 +85,63 @@ store_session() {
     echo "# Idempotent helpers"
     echo "_ws_exists() {"
     echo '  local label="$1"'
-    echo '  herdr --session "${HERDR_SESSION}" workspace list --json 2>/dev/null | jq -e ".[] | select(.label == \"\$label\")" >/dev/null 2>&1'
+    echo '  herdr --session "${HERDR_SESSION}" workspace list 2>/dev/null | jq -e ".result.workspaces[] | select(.label == \"\$label\")" >/dev/null 2>&1'
     echo "}"
     echo ""
     echo "_tab_exists() {"
     echo '  local ws_id="$1" label="$2"'
-    echo '  herdr --session "${HERDR_SESSION}" tab list --workspace "\$ws_id" --json 2>/dev/null | jq -e ".[] | select(.label == \"\$label\")" >/dev/null 2>&1'
+    echo '  herdr --session "${HERDR_SESSION}" tab list --workspace "\$ws_id" 2>/dev/null | jq -e ".result.tabs[] | select(.label == \"\$label\")" >/dev/null 2>&1'
     echo "}"
     echo ""
     echo "_get_ws_id() {"
     echo '  local label="$1"'
-    echo '  herdr --session "${HERDR_SESSION}" workspace list --json 2>/dev/null | jq -r ".[] | select(.label == \"\$label\") | .id"'
+    echo '  herdr --session "${HERDR_SESSION}" workspace list 2>/dev/null | jq -r ".result.workspaces[] | select(.label == \"\$label\") | .workspace_id"'
     echo "}"
     echo ""
 
     local workspaces_json
-    workspaces_json=$(herdr --session "$name" workspace list --json 2>/dev/null | jq '.' 2>/dev/null || echo '[]')
+    workspaces_json=$(herdr --session "$name" workspace list 2>/dev/null || true)
 
-    while IFS= read -r ws; do
-      local ws_label ws_cwd ws_id tabs_json tab_label tab_cwd
-      ws_label=$(echo "$ws" | jq -r '.label // empty')
-      ws_cwd=$(echo "$ws" | jq -r '.cwd // empty')
+    if [ -z "$workspaces_json" ] || [ "$workspaces_json" = "null" ]; then
+      echo "# Warning: no workspace data returned for session '$name'" >&2
+      workspaces_json='{}'
+    fi
 
+    local found_workspaces=0
+
+    while IFS=$'\t' read -r ws_id ws_label; do
       [ -n "$ws_label" ] || continue
+      found_workspaces=1
 
       printf '\n# Workspace: %s\n' "$ws_label"
       printf 'if ! _ws_exists %q; then\n' "$ws_label"
-      printf '  herdr --session "${HERDR_SESSION}" workspace create --cwd %q --label %q --no-focus\n' "$ws_cwd" "$ws_label"
+      printf '  herdr --session "${HERDR_SESSION}" workspace create --label %q --no-focus\n' "$ws_label"
       printf 'fi\n'
       printf 'WS_ID=$(_get_ws_id %q)\n' "$ws_label"
 
-      ws_id=$(echo "$ws" | jq -r '.id')
-      tabs_json=$(herdr --session "$name" tab list --workspace "$ws_id" --json 2>/dev/null | jq '.' 2>/dev/null || echo '[]')
+      local tabs_json
+      tabs_json=$(herdr --session "$name" tab list --workspace "$ws_id" 2>/dev/null || true)
 
-      while IFS= read -r tab; do
-        tab_label=$(echo "$tab" | jq -r '.label // empty')
-        tab_cwd=$(echo "$tab" | jq -r '.cwd // empty')
+      if [ -z "$tabs_json" ] || [ "$tabs_json" = "null" ]; then
+        tabs_json='{}'
+      fi
 
+      while IFS=$'\t' read -r tab_label; do
         [ -n "$tab_label" ] || continue
 
         printf '\n# Tab: %s\n' "$tab_label"
         printf 'if [ -n "\$WS_ID" ] && [ "\$WS_ID" != "null" ] && ! _tab_exists "\$WS_ID" %q; then\n' "$tab_label"
-        printf '  herdr --session "${HERDR_SESSION}" tab create --workspace "\$WS_ID" --cwd %q --label %q --no-focus\n' "$tab_cwd" "$tab_label"
+        printf '  herdr --session "${HERDR_SESSION}" tab create --workspace "\$WS_ID" --label %q --no-focus\n' "$tab_label"
         printf 'fi\n'
-      done < <(echo "$tabs_json" | jq -c '.[]' 2>/dev/null || true)
+      done < <(echo "$tabs_json" | jq -r '.result.tabs[]? | "\(.label)"' 2>/dev/null || true)
 
-    done < <(echo "$workspaces_json" | jq -c '.[]' 2>/dev/null || true)
+    done < <(echo "$workspaces_json" | jq -r '.result.workspaces[]? | "\(.workspace_id)\t\(.label)"' 2>/dev/null || true)
+
+    if [ "$found_workspaces" -eq 0 ]; then
+      echo ""
+      echo "# Warning: no workspaces found. Raw JSON was:"
+      echo "# $workspaces_json" | sed 's/^/# /'
+    fi
 
   } > "$outfile"
 
