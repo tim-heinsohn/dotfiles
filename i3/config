@@ -117,7 +117,7 @@ bindsym $mod+c exec --no-startup-id rofi -show calc -theme DarkBlue -modi calc -
 # password manager
 bindsym $mod+p exec --no-startup-id rofi-pass --root $HOME/.password-store:$HOME/ia/passwords:$HOME/ia/ia.otp -theme DarkBlue
 bindsym $mod+Shift+p exec --no-startup-id rofi-pass --root $HOME/ia/passwords -theme DarkBlue
-bindsym $mod+Shift+o exec --no-startup-id rofi-pass --root $HOME/ia/otp -theme DarkBlue
+bindsym $mod+Shift+o exec --no-startup-id $HOME/dotfiles/bin/rofi-otp
 
 # tmuxp session selector
 bindsym $mod+m exec --no-startup-id $HOME/dotfiles/bin/rofi-tmuxp

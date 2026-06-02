@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# rofi-otp: Rofi launcher for OTP codes via gopass
+#
+# Usage: rofi-otp
+#
+# Description:
+# Shows a Rofi menu with OTP secrets from the inaudito-otp gopass store.
+# On selection, retrieves the OTP code via gopass, copies it to clipboard,
+# and types it at the current cursor position.
+#
+# Dependencies:
+# - rofi
+# - gopass
+# - xclip
+# - xdotool
+
+set -euo pipefail
+
+STORE_NAME="inaudito-otp"
+
+# List OTP secrets using gopass
+list_secrets() {
+    gopass ls --flat "$STORE_NAME" 2>/dev/null | sed "s|^$STORE_NAME/||"
+}
+
+# Main
+secrets=$(list_secrets | sort)
+
+if [ -z "$secrets" ]; then
+    notify-send "rofi-otp" "No OTP secrets found"
+    exit 1
+fi
+
+selected=$(echo "$secrets" | rofi -dmenu -i -p "OTP" -theme DarkBlue)
+
+if [ -n "$selected" ]; then
+    otp=$(gopass otp -o "$STORE_NAME/$selected" 2>/dev/null) || {
+        notify-send "rofi-otp" "Failed to retrieve OTP for $selected"
+        exit 1
+    }
+
+    printf '%s' "$otp" | xclip -selection clipboard
+    xdotool type --clearmodifiers "$otp"
+    notify-send "rofi-otp" "OTP typed and copied to clipboard"
+fi
