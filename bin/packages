@@ -141,6 +141,8 @@ extra/eog
     Eye of Gnome: An image viewing and cataloging program.
 extra/evince
     Document viewer (PDF, PostScript, XPS, djvu, dvi, tiff, cbr, cbz, cb7, cbt).
+extra/eslint
+    An AST-based pattern checker for JavaScript.
 extra/evolution
     A personal information management application with mail, calendar and contacts.
 extra/fd
