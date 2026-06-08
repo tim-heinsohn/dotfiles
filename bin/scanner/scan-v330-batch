@@ -19,6 +19,7 @@ CREATE_PDF=true
 BUTTON_MODE=false
 MAX_PAGES=0        # 0 = unlimited (button mode only)
 DEVICE=""          # passed through to scan-v330 when set
+KEEP_IMAGES=false  # keep individual image files after PDF creation
 
 # Colors
 GREEN='\033[0;32m'
@@ -41,6 +42,7 @@ OPTIONS:
     -p, --prefix PREFIX     Filename prefix (default: scan)
     -s, --start NUM         Starting number (default: 1)
     --no-pdf                Skip combined PDF generation
+    --keep                  Keep individual image files after PDF creation
     --button                Non-interactive mode: press scanner Start key to
                             trigger each page scan; Ctrl+C to finish
     --count NUM             Stop after NUM pages (button mode only; default: unlimited)
@@ -76,7 +78,7 @@ log_error() {
 
 create_combined_pdf() {
     if [[ "$CREATE_PDF" != "true" ]]; then
-        return
+        return 1
     fi
 
     local pdf_file="$OUTPUT_DIR/${PREFIX}_combined.pdf"
@@ -89,7 +91,7 @@ create_combined_pdf() {
 
     if [[ ${#image_files[@]} -eq 0 ]]; then
         log_warn "No images found to combine into PDF"
-        return
+        return 1
     fi
 
     log_info "Creating combined PDF with ${#image_files[@]} pages..."
@@ -97,19 +99,47 @@ create_combined_pdf() {
     if command -v img2pdf &> /dev/null; then
         if img2pdf --output "$pdf_file" "${image_files[@]}"; then
             log_info "✓ Created: $pdf_file"
+            return 0
         else
             log_error "Failed to create PDF with img2pdf"
+            return 1
         fi
     elif command -v convert &> /dev/null; then
         if convert "${image_files[@]}" "$pdf_file"; then
             log_info "✓ Created: $pdf_file"
+            return 0
         else
             log_error "Failed to create PDF with ImageMagick"
+            return 1
         fi
     else
         log_error "Neither img2pdf nor ImageMagick available for PDF creation"
         log_info "Install with: yay -S img2pdf"
+        return 1
     fi
+}
+
+cleanup_temp_images() {
+    if [[ "$KEEP_IMAGES" == "true" ]]; then
+        return
+    fi
+
+    if [[ "$CREATE_PDF" != "true" ]]; then
+        return
+    fi
+
+    local pdf_file="$OUTPUT_DIR/${PREFIX}_combined.pdf"
+    if [[ ! -f "$pdf_file" ]]; then
+        return
+    fi
+
+    log_info "Removing temporary image files..."
+    local removed=0
+    while IFS= read -r -d '' file; do
+        rm -f "$file"
+        removed=$((removed + 1))
+    done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0)
+    log_info "Removed $removed temporary image file(s)"
 }
 
 # Parse arguments
@@ -141,6 +171,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-pdf)
             CREATE_PDF=false
+            shift
+            ;;
+        --keep)
+            KEEP_IMAGES=true
             shift
             ;;
         --button)
@@ -190,6 +224,7 @@ run_button_mode() {
     # Ensure clean finish on Ctrl+C or terminal close
     trap 'echo; log_info "Interrupted — finishing up..."; \
           create_combined_pdf; \
+          cleanup_temp_images; \
           print_summary "$current_count" "$successful_scans"; \
           exit 0' INT TERM HUP
 
@@ -224,6 +259,7 @@ run_button_mode() {
     done
 
     create_combined_pdf
+    cleanup_temp_images
     print_summary "$current_count" "$successful_scans"
 }
 
@@ -251,6 +287,7 @@ run_interactive_mode() {
     # Ensure clean finish on Ctrl+C or terminal close
     trap 'echo; log_info "Interrupted — finishing up..."; \
           create_combined_pdf; \
+          cleanup_temp_images; \
           print_summary "$current_count" "$successful_scans"; \
           exit 0' INT TERM HUP
 
@@ -323,6 +360,7 @@ run_interactive_mode() {
                 ;;
             q|Q)
                 create_combined_pdf
+                cleanup_temp_images
                 log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
                 print_summary "$current_count" "$successful_scans"
                 exit 0
@@ -334,6 +372,7 @@ run_interactive_mode() {
     done
 
     create_combined_pdf
+    cleanup_temp_images
     print_summary "$current_count" "$successful_scans"
 }
 
