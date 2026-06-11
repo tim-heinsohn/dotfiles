@@ -8,9 +8,9 @@
 #   setup-open-design -h | --help      Show this help
 #
 # Description:
-# Clones or updates the Open Design repository, ensures Node.js 24
-# and pnpm are available, and installs dependencies. Falls back to
-# the official Docker compose setup if the native install fails.
+#   Clones or updates the Open Design repository, ensures Node.js 24
+#   and pnpm are available, and installs dependencies. Falls back to
+#   the official Docker compose setup if the native install fails.
 #
 # Environment:
 #   OPEN_DESIGN_DIR    Target directory (default: ~/open-design)
@@ -46,7 +46,6 @@ ensure_node_24() {
     return 0
   fi
 
-  # Try nvm if available
   if [ -s "/usr/share/nvm/init-nvm.sh" ]; then
     # shellcheck source=/dev/null
     source "/usr/share/nvm/init-nvm.sh"
@@ -65,7 +64,6 @@ ensure_node_24() {
   fi
 
   log "Node.js 24 is required but not found (found: ${node_version})"
-  log "Install Node.js 24 (e.g. via nvm) and rerun."
   exit 1
 }
 
@@ -76,7 +74,6 @@ ensure_repo() {
     git -C "${OPEN_DESIGN_DIR}" pull --ff-only
   elif [ -e "${OPEN_DESIGN_DIR}" ]; then
     log "Error: ${OPEN_DESIGN_DIR} exists but is not a git repository." >&2
-    log "Remove or move it, or set OPEN_DESIGN_DIR to a different path." >&2
     exit 1
   else
     log "Cloning Open Design repository"
@@ -90,7 +87,6 @@ uninstall() {
     return 0
   fi
 
-  # Stop and remove the Docker stack (containers + volume = full data loss)
   if [ -f "${OPEN_DESIGN_DIR}/deploy/docker-compose.yml" ] || \
      [ -f "${OPEN_DESIGN_DIR}/deploy/compose.yml" ]; then
     if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
@@ -111,6 +107,36 @@ print_help() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
 }
 
+configure_pnpm_memory() {
+  # Dynamically size Node heap based on available RAM, capped at 16 GB
+  local available_kb heap_mb
+  available_kb=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+  if [ "$available_kb" -gt 0 ]; then
+    heap_mb=$(( available_kb / 1024 * 3 / 4 ))
+  else
+    heap_mb=8192
+  fi
+  if [ "$heap_mb" -gt 16384 ]; then
+    heap_mb=16384
+  elif [ "$heap_mb" -lt 4096 ]; then
+    heap_mb=4096
+  fi
+
+  # Write to .npmrc so pnpm and its workers reliably pick it up.
+  # Using project-level .npmrc is safer than relying on ENV propagation.
+  if [ -f ".npmrc" ]; then
+    if ! grep -q "^node-options=.*max-old-space-size" .npmrc 2>/dev/null; then
+      echo "node-options=--max-old-space-size=${heap_mb}" >> .npmrc
+    fi
+  else
+    echo "node-options=--max-old-space-size=${heap_mb}" > .npmrc
+  fi
+
+  # Also export for direct node invocations
+  export NODE_OPTIONS="--max-old-space-size=${heap_mb}"
+  log "V8 heap limit set to ${heap_mb} MiB"
+}
+
 main() {
   case "${1:-}" in
     -h|--help)
@@ -124,7 +150,8 @@ main() {
     "")
       ;;
     *)
-      fail "Unknown argument: $1 (try --help)"
+      log "Unknown argument: $1 (try --help)"
+      exit 1
       ;;
   esac
 
@@ -142,18 +169,12 @@ main() {
   log "Verifying pnpm version"
   corepack pnpm --version
 
-  # Prevent JS heap OOM during large workspace install / build.
-  # Open Design is a 21-project pnpm workspace with heavy postinstall
-  # scripts (electron, next, better-sqlite3). We set this aggressively.
-  export NODE_OPTIONS="--max-old-space-size=16384"
+  configure_pnpm_memory
 
-  # Verify the flag is actually being picked up by Node.js
+  # Verify the flag is actually being picked up
   local heap_limit
   heap_limit="$(node -e 'console.log(Math.round(require("v8").getHeapStatistics().heap_size_limit / 1024 / 1024))')"
-  log "V8 heap limit: ${heap_limit} MiB"
-  if [[ "$heap_limit" -lt 8192 ]]; then
-    log "Warning: heap limit looks low (${heap_limit} MiB); NODE_OPTIONS may not propagate to pnpm."
-  fi
+  log "Node.js reports heap limit: ${heap_limit} MiB"
 
   # Clean any corrupted store entries that may trigger pnpm's
   # "invalid array length" V8 bug during content-store indexing.
@@ -161,12 +182,6 @@ main() {
   corepack pnpm store prune >/dev/null 2>&1 || true
 
   log "Installing dependencies (this may take a few minutes)"
-  # --child-concurrency=1            keep parallel script pressure low
-  # --no-optional                    skip heavy optional native addons
-  # --config.package-import-method=copy
-  #     avoids the hardlink/clone code path that has been triggering
-  #     a V8 "invalid array length" crash on Open Design's
-  #     app-builder-bin alpha tarball.
   if corepack pnpm install \
        --child-concurrency=1 \
        --no-optional \
@@ -180,10 +195,29 @@ main() {
 
   log "Native pnpm install failed — falling back to Docker setup"
   if ! command -v docker >/dev/null 2>&1; then
-    fail "Docker not installed; cannot fall back. See https://github.com/nexu-io/open-design/blob/main/QUICKSTART.md"
+    log "Docker not installed; cannot fall back."
+    log "See https://github.com/nexu-io/open-design/blob/main/QUICKSTART.md"
+    exit 1
   fi
   if ! docker compose version >/dev/null 2>&1; then
-    fail "Docker Compose v2 not available; cannot fall back."
+    log "Docker Compose v2 not available; cannot fall back."
+    exit 1
+  fi
+
+  # Ensure OD_API_TOKEN is available for docker compose
+  if [ -z "${OD_API_TOKEN:-}" ]; then
+    if [ -f "${OPEN_DESIGN_DIR}/.env" ] && grep -q "^OD_API_TOKEN=" "${OPEN_DESIGN_DIR}/.env"; then
+      OD_API_TOKEN="$(grep "^OD_API_TOKEN=" "${OPEN_DESIGN_DIR}/.env" | cut -d= -f2-)"
+      export OD_API_TOKEN
+    else
+      if command -v openssl >/dev/null 2>&1; then
+        OD_API_TOKEN="$(openssl rand -hex 32)"
+      else
+        OD_API_TOKEN="$(head -c 32 /dev/urandom | xxd -p | tr -d '\n')"
+      fi
+      echo "OD_API_TOKEN=${OD_API_TOKEN}" > "${OPEN_DESIGN_DIR}/.env"
+      log "Generated OD_API_TOKEN and wrote to .env"
+    fi
   fi
 
   log "Starting Open Design via docker compose (deploy/docker-compose.yml)"
@@ -191,11 +225,6 @@ main() {
 
   log "Open Design running at http://localhost:7456"
   log "Manage with: cd ${OPEN_DESIGN_DIR}/deploy && docker compose {logs,restart,down}"
-}
-
-fail() {
-  printf 'setup-open-design: %s\n' "$1" >&2
-  exit 1
 }
 
 main "$@"

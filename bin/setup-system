@@ -1,158 +1,290 @@
 #!/bin/bash
 #
-# setup-system: Clone or update the dotfiles repository
+# setup-system: Provision an Arch system with dotfiles
 #
-# Usage: setup-system [OPTIONS]
+# Usage: setup-system [PACKAGE|all|-h|--help]
 #
-# Options:
-#   DOTFILES_REPO   Git repository URL (default: https://github.com/tim-heinsohn/dotfiles.git)
-#   DOTFILES_DIR    Target directory (default: ~/dotfiles)
+# Packages:
+#   base       System update, dotfiles, core packages, services, user groups
+#   languages  Node.js, npm packages, uv tools, Ruby/RVM
+#   devtools   Git CLIs, overcommit, terraform-ls, Bun
+#   ai         Aider, Whisper, Tree-sitter
+#   desktop    Wallpapers, scanner
+#   extras     Open Design, disk health monitoring, Java 17
+#   all        Everything (default)
 #
 # Description:
-# Clones the dotfiles repository if not present, or updates it if
-# already exists. Validates that the target is a valid git repository.
+#   Installs and configures the system in modular packages.
+#   Run with sudo access; the script keeps sudo alive automatically.
 
 set -euo pipefail
 
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
-DOTFILES_DIR=${DOTFILES_DIR:-~/dotfiles}
+DOTFILES_DIR=${DOTFILES_DIR:-$HOME/dotfiles}
+
+# ── Helpers ──────────────────────────────────────────────────────────
+
+headline() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  $1"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+run_if_exists() {
+    local script="$1"
+    shift || true
+    if [ -x "$script" ]; then
+        "$script" "$@"
+    else
+        echo "⚠  Skipping missing script: $script" >&2
+    fi
+}
+
+keep_sudo_alive() {
+    if ! sudo -v 2>/dev/null; then
+        echo "Error: sudo authentication required." >&2
+        echo "Run 'sudo -v' before this script, or run interactively first." >&2
+        exit 1
+    fi
+
+    # Refresh sudo timestamp every 60 s so it never expires during long runs
+    (
+        while true; do
+            sleep 60
+            sudo -n true 2>/dev/null || true
+        done
+    ) &
+    SUDO_KEEPALIVE_PID=$!
+    trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
+}
 
 ensure_dotfiles_repo() {
     if [ -d "${DOTFILES_DIR}/.git" ]; then
         if ! git -C "${DOTFILES_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             echo "Error: ${DOTFILES_DIR} exists but is not a valid Git repository." >&2
-            echo "Remove or move it, or set DOTFILES_DIR to a different path before rerunning." >&2
             return 1
         fi
 
         local current_branch
         current_branch=$(git -C "${DOTFILES_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
         if git -C "${DOTFILES_DIR}" rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
-            echo "Updating dotfiles repository on branch ${current_branch}..."
+            headline "Updating dotfiles repository (${current_branch})"
             git -C "${DOTFILES_DIR}" pull --ff-only
         else
             echo "Dotfiles repository already present at ${DOTFILES_DIR}." >&2
             echo "Current branch '${current_branch}' has no upstream; skipping git pull." >&2
-            echo "Set a tracking branch (git branch --set-upstream-to origin/<branch>) if you want automatic pulls." >&2
         fi
     elif [ -e "${DOTFILES_DIR}" ]; then
-        echo "Error: ${DOTFILES_DIR} exists but is not a Git repository (and is not empty)." >&2
-        echo "Move it out of the way or set DOTFILES_DIR to a new location, then rerun." >&2
+        echo "Error: ${DOTFILES_DIR} exists but is not a Git repository." >&2
         return 1
     else
+        headline "Cloning dotfiles repository"
         git clone "${DOTFILES_REPO}" "${DOTFILES_DIR}"
     fi
 }
 
+ensure_gem() {
+    if ! command -v gem >/dev/null 2>&1; then
+        if [ -s "$HOME/.rvm/scripts/rvm" ]; then
+            # shellcheck source=/dev/null
+            source "$HOME/.rvm/scripts/rvm"
+        fi
+    fi
+}
+
+# ── Packages ─────────────────────────────────────────────────────────
+
+pkg_base() {
+    headline "System Update"
+    sudo pacman -Suy --needed --noconfirm git
+    gpgconf --kill all 2>/dev/null || true
+
+    headline "Dotfiles Repository"
+    ensure_dotfiles_repo
+
+    headline "Linking dotfiles (Bombadil)"
+    mkdir -p "$HOME/.config"
+    ln -sf "${DOTFILES_DIR}/bombadil.toml" "$HOME/.config/bombadil.toml"
+    cd "${DOTFILES_DIR}"
+    bombadil link
+
+    hash -r 2>/dev/null || true
+    if command -v sheldeon >/dev/null 2>&1; then
+        sheldeon lock
+    else
+        echo "⚠  sheldeon not found, skipping lock" >&2
+    fi
+
+    headline "AUR Helper (yay)"
+    run_if_exists "${DOTFILES_DIR}/bin/setup-yay"
+
+    headline "Core Packages"
+    run_if_exists "${DOTFILES_DIR}/bin/packages-install"
+
+    headline "System Configuration"
+    run_if_exists "${DOTFILES_DIR}/docker/docker-group-setup"
+
+    headline "User Groups"
+    sudo usermod -aG wheel "$USER"
+    sudo usermod -aG video "$USER"
+    sudo usermod -aG audio "$USER"
+
+    headline "System Services"
+    sudo systemctl enable --now acpid
+    sudo systemctl enable --now bluetooth
+    sudo systemctl enable --now docker
+    sudo systemctl enable --now tailscaled
+
+    headline "Cache Cleanup"
+    sudo paccache -rk1
+}
+
+pkg_languages() {
+    headline "Node.js (NVM)"
+    if command -v yay >/dev/null 2>&1; then
+        yay -S --needed --noconfirm nvm
+    else
+        echo "⚠  yay not found, skipping nvm install" >&2
+    fi
+
+    # shellcheck source=/dev/null
+    [ -s "/usr/share/nvm/init-nvm.sh" ] && source "/usr/share/nvm/init-nvm.sh"
+    if command -v nvm >/dev/null 2>&1; then
+        nvm install 24.4.0
+        nvm alias default 24.4.0
+    else
+        echo "⚠  nvm not available, skipping Node.js setup" >&2
+    fi
+
+    headline "Global npm Packages"
+    run_if_exists "${DOTFILES_DIR}/bin/npm-packages" auto
+
+    headline "UV Python Tools"
+    run_if_exists "${DOTFILES_DIR}/bin/uv-packages" auto
+
+    headline "Ruby (RVM)"
+    run_if_exists "${DOTFILES_DIR}/ruby/rvm-setup"
+}
+
+pkg_devtools() {
+    headline "Git Service CLIs"
+    run_if_exists "${DOTFILES_DIR}/bin/git-cli-setup"
+
+    headline "Overcommit"
+    ensure_gem
+    if command -v gem >/dev/null 2>&1; then
+        gem list overcommit -i >/dev/null 2>&1 || gem install overcommit
+    else
+        echo "⚠  gem not available, skipping overcommit install" >&2
+    fi
+
+    headline "Terraform Language Server"
+    run_if_exists "${DOTFILES_DIR}/terraform-ls/install"
+
+    headline "Bun"
+    run_if_exists "${DOTFILES_DIR}/bin/setup-bun"
+}
+
+pkg_ai() {
+    headline "Aider"
+    run_if_exists "${DOTFILES_DIR}/aider/install"
+
+    headline "Whisper"
+    run_if_exists "${DOTFILES_DIR}/whisper/setup"
+
+    headline "Tree-sitter Parsers"
+    if command -v nvim >/dev/null 2>&1; then
+        nvim --headless "+TSUpdateSync" "+qa" || true
+    else
+        echo "ℹ  nvim not found, skipping tree-sitter update" >&2
+    fi
+}
+
+pkg_desktop() {
+    headline "Wallpapers"
+    run_if_exists "${DOTFILES_DIR}/bin/setup-wallpapers"
+
+    headline "Scanner"
+    if lsusb | grep -q "04b8:0142" 2>/dev/null; then
+        run_if_exists "${DOTFILES_DIR}/bin/scanner/setup-epson-v330"
+    else
+        echo "ℹ  Epson V330 not detected, skipping scanner setup"
+    fi
+}
+
+pkg_extras() {
+    headline "Open Design"
+    run_if_exists "${DOTFILES_DIR}/bin/setup-open-design"
+
+    headline "Disk Health Monitoring"
+    run_if_exists "${DOTFILES_DIR}/bin/disk-health-setup" --install
+
+    headline "Java Version"
+    sudo archlinux-java set java-17-openjdk
+}
+
+# ── Main ─────────────────────────────────────────────────────────────
+
 print_help() {
     cat <<'EOF'
-Usage: setup-system [-h|--help]
+Usage: setup-system [PACKAGE|all|-h|--help]
 
-Provisions an Arch system with this dotfiles repo, installs core packages,
-configures services, and links Bombadil-managed files.
+Provisions an Arch system with this dotfiles repo in modular packages.
 
-Environment variables:
-  DOTFILES_REPO   Source Git repository (default: https://github.com/tim-heinsohn/dotfiles.git)
-  DOTFILES_DIR    Destination directory for the clone (default: ~/dotfiles)
+Packages:
+  base       System update, dotfiles, core packages, services, user groups
+  languages  Node.js, npm packages, uv tools, Ruby/RVM
+  devtools   Git CLIs, overcommit, terraform-ls, Bun
+  ai         Aider, Whisper, Tree-sitter
+  desktop    Wallpapers, scanner
+  extras     Open Design, disk health monitoring, Java 17
+  all        Everything (default)
 
-Run the script without arguments after ensuring sudo access.
+Environment:
+  DOTFILES_REPO   Source Git repository
+                  (default: https://github.com/tim-heinsohn/dotfiles.git)
+  DOTFILES_DIR    Destination directory (default: ~/dotfiles)
+
+Examples:
+  setup-system base
+  setup-system devtools
+  setup-system all
 EOF
 }
 
-if [[ $# -gt 0 ]]; then
-    case "$1" in
+main() {
+    local target="${1:-all}"
+
+    case "$target" in
         -h|--help)
             print_help
             exit 0
             ;;
+        base|languages|devtools|ai|desktop|extras|all)
+            ;;
         *)
-            echo "Unknown option: $1" >&2
+            echo "Unknown package: $target" >&2
             print_help >&2
             exit 1
             ;;
     esac
-fi
 
-sudo pacman -Suy --needed --noconfirm git &&
-# Restart gpg daemons to use updated versions after system update
-gpgconf --kill all 2>/dev/null || true &&
-ensure_dotfiles_repo &&
-ln -sf "${DOTFILES_DIR}/bombadil.toml" "$HOME/.config/bombadil.toml" &&
-cd "${DOTFILES_DIR}" &&
-"${DOTFILES_DIR}/bin/setup-wallpapers" &&
-"${DOTFILES_DIR}/aider/install" &&
-"${DOTFILES_DIR}/bin/setup-yay" &&
-"${DOTFILES_DIR}/bin/packages-install" &&
-"${DOTFILES_DIR}/docker/docker-group-setup" &&
-"${DOTFILES_DIR}/ruby/rvm-setup" &&
-"${DOTFILES_DIR}/whisper/setup" &&
-bombadil link &&
-sheldeon lock &&
+    keep_sudo_alive
 
-yay -S --needed --noconfirm nvm
-[ -s "/usr/share/nvm/init-nvm.sh" ] && source /usr/share/nvm/init-nvm.sh
-nvm install 24.4.0
-nvm alias default 24.4.0
+    if [ "$target" = "all" ]; then
+        pkg_base
+        pkg_languages
+        pkg_devtools
+        pkg_ai
+        pkg_desktop
+        pkg_extras
+    else
+        "pkg_$target"
+    fi
 
-# Install/update npm packages
-"${DOTFILES_DIR}/bin/npm-packages" auto &&
+    headline "Done"
+    echo "Setup complete."
+}
 
-# Install/update uv tools
-"${DOTFILES_DIR}/bin/uv-packages" auto &&
-
-# Keep Tree-sitter parsers aligned with current Neovim runtime
-if command -v nvim >/dev/null 2>&1; then
-    nvim --headless "+TSUpdateSync" "+qa" || true
-fi &&
-
-# Install MCP servers
-"${DOTFILES_DIR}/bin/mcp-install" install gmail playwright &&
-
-# Setup Git service CLIs
-"${DOTFILES_DIR}/bin/git-cli-setup" &&
-
-# Setup Epson V330 scanner (if connected)
-if lsusb | grep -q "04b8:0142"; then
-    "${DOTFILES_DIR}/bin/scanner/setup-epson-v330"
-fi &&
-
-# overcommit
-gem list overcommit -i >/dev/null 2>&1 || gem install overcommit &&
-
-# terraform-ls
-"${DOTFILES_DIR}/terraform-ls/install" &&
-
-# Bun (JavaScript runtime and package manager)
-"${DOTFILES_DIR}/bin/setup-bun" &&
-
-# Open Design (local-first design tool)
-"${DOTFILES_DIR}/bin/setup-open-design" &&
-
-# add user to wheel group to get sudo privileges granted, e. g. for journalctl
-# NOTE: requires "%wheel ALL=(ALL) ALL" in visudo
-sudo usermod -aG wheel "$USER" &&
-
-# add user to video group to allow adjusting brightness w/o sudo
-sudo usermod -aG video "$USER" &&
-
-# add user to audio group for microphone access
-sudo usermod -aG audio "$USER" &&
-
-# run acpi_listen after enabling this and press brightness keys on keyboard,
-# e.g. Fn+F5/F6
-sudo systemctl enable --now acpid &&
-sudo systemctl enable --now bluetooth &&
-sudo systemctl enable --now docker &&
-sudo systemctl enable --now tailscaled &&
-# NOTE: after install, run `sudo tailscale up` to authenticate the device
-# sudo systemctl enable --now qotd &&
-
-# Setup disk health monitoring
-"${DOTFILES_DIR}/bin/disk-health-setup" --install &&
-
-# Switch to Java 17 for unciv compatibility (Java 25 causes build failures)
-sudo archlinux-java set java-17-openjdk &&
-
-sudo paccache -rk1 &&
-
-echo "Done."
+main "$@"

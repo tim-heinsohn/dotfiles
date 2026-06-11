@@ -3,6 +3,12 @@
 # Git Service CLI Setup Checker
 # Checks login status for GitHub CLI (gh), GitLab CLI (glab), and Atlassian CLI (acli)
 
+if [ -t 0 ]; then
+    INTERACTIVE=1
+else
+    INTERACTIVE=0
+fi
+
 echo "🔍 Checking Git service CLI authentication status..."
 echo
 
@@ -15,10 +21,14 @@ if command -v gh &> /dev/null; then
         echo "❌ Not logged in"
         echo "🔑 API Token: Create at https://github.com/settings/tokens"
         echo "🚀 Run: gh auth login"
-        read -p "Login now? [y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            gh auth login
+        if [ "$INTERACTIVE" -eq 1 ]; then
+            read -p "Login now? [y/N]: " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                gh auth login
+            fi
+        else
+            echo "   (non-interactive: skipping login prompt)"
         fi
     fi
 else
@@ -35,10 +45,14 @@ if command -v glab &> /dev/null; then
         echo "❌ Not logged in"
         echo "🔑 API Token: Create at https://gitlab.com/-/profile/personal_access_tokens"
         echo "🚀 Run: glab auth login"
-        read -p "Login now? [y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            glab auth login
+        if [ "$INTERACTIVE" -eq 1 ]; then
+            read -p "Login now? [y/N]: " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                glab auth login
+            fi
+        else
+            echo "   (non-interactive: skipping login prompt)"
         fi
     fi
 else
