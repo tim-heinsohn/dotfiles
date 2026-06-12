@@ -95,10 +95,35 @@ ensure_gem() {
 
 # ── Packages ─────────────────────────────────────────────────────────
 
+safe_pacman_update() {
+    # Try a fully non-interactive update first.
+    if sudo pacman -Suy --needed --noconfirm; then
+        return 0
+    fi
+
+    echo "⚠  Non-interactive update failed. Checking for known transition conflicts…" >&2
+
+    # geocode-glib split / rename (common Arch transition)
+    local conflicts=()
+    pacman -Q geocode-glib-common >/dev/null 2>&1 && conflicts+=(geocode-glib-common)
+    pacman -Q geocode-glib-2     >/dev/null 2>&1 && conflicts+=(geocode-glib-2)
+
+    if [ ${#conflicts[@]} -gt 0 ]; then
+        echo "Removing conflicting packages: ${conflicts[*]}" >&2
+        sudo pacman -Rdd --noconfirm "${conflicts[@]}" 2>/dev/null || true
+    fi
+
+    # Retry once after cleanup
+    sudo pacman -Suy --needed --noconfirm
+}
+
 pkg_base() {
     headline "System Update"
-    sudo pacman -Suy --needed --noconfirm git
+    safe_pacman_update
     gpgconf --kill all 2>/dev/null || true
+
+    headline "Git"
+    sudo pacman -S --needed --noconfirm git
 
     headline "Dotfiles Repository"
     ensure_dotfiles_repo
