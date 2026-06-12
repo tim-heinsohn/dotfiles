@@ -207,6 +207,8 @@ extra/jq
     Command-line JSON processor.
 extra/keepass
     Easy-to-use password manager for Windows, Linux, Mac OS X and mobile devices.
+extra/kitty
+    A modern, hackable, featureful, OpenGL-based terminal emulator.
 extra/kodi
     A software media player and entertainment hub for digital media (gl renderer).
 extra/kwindowsystem
