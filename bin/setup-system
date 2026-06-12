@@ -177,6 +177,11 @@ pkg_base() {
 pkg_languages() {
     headline "Node.js (NVM)"
     if command -v yay >/dev/null 2>&1; then
+        # nvm-git conflicts with the stable nvm package
+        if pacman -Q nvm-git >/dev/null 2>&1; then
+            echo "Removing conflicting nvm-git before installing nvm..."
+            sudo pacman -Rdd --noconfirm nvm-git
+        fi
         yay -S --needed --noconfirm nvm
     else
         echo "⚠  yay not found, skipping nvm install" >&2
