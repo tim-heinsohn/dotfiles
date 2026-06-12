@@ -25,7 +25,9 @@ yay -S --needed --noconfirm iscan iscan-data iscan-plugin-perfection-v330
 # Add user to scanner group
 echo "Adding user to scanner group..."
 sudo gpasswd -a "$USER" scanner
-newgrp scanner || true
+# NOTE: newgrp starts a subshell that breaks the script flow and can trigger
+# shell-rc side-effects (e.g. gopass / GPG pinentry). A logout/login is
+# required anyway for the group change to stick, so we skip it here.
 
 # Create udev rule for Epson V330 (USB ID 04b8:0142)
 echo "Creating udev rule for Epson V330..."
@@ -50,12 +52,16 @@ else
 fi
 
 # Optional: Enable network sharing
-read -p "Enable network scanner sharing (saned)? [y/N] " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Enabling scanner network sharing..."
-    sudo systemctl enable --now saned.socket
-    echo "Note: You may need to open TCP port 6566 in your firewall"
+if [ -t 0 ]; then
+    read -p "Enable network scanner sharing (saned)? [y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Enabling scanner network sharing..."
+        sudo systemctl enable --now saned.socket
+        echo "Note: You may need to open TCP port 6566 in your firewall"
+    fi
+else
+    echo "Non-interactive: skipping saned network sharing prompt"
 fi
 
 echo "Epson V330 scanner setup complete!"
