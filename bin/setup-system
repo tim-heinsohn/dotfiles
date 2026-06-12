@@ -96,6 +96,14 @@ ensure_gem() {
 # ── Packages ─────────────────────────────────────────────────────────
 
 safe_pacman_update() {
+    # Pre-populate the keyring so PGP key-import prompts are minimised.
+    # pacman still prints the prompt text, but --noconfirm auto-answers
+    # the default ("yes" for [J/n]), so the import succeeds.
+    if command -v pacman-key >/dev/null 2>&1; then
+        sudo pacman-key --init 2>/dev/null || true
+        sudo pacman-key --populate archlinux 2>/dev/null || true
+    fi
+
     # Try a fully non-interactive update first.
     if sudo pacman -Suy --needed --noconfirm; then
         return 0
@@ -103,10 +111,11 @@ safe_pacman_update() {
 
     echo "⚠  Non-interactive update failed. Checking for known transition conflicts…" >&2
 
-    # geocode-glib split / rename (common Arch transition)
+    # Known transitional / renamed packages that block the transaction
     local conflicts=()
     pacman -Q geocode-glib-common >/dev/null 2>&1 && conflicts+=(geocode-glib-common)
     pacman -Q geocode-glib-2     >/dev/null 2>&1 && conflicts+=(geocode-glib-2)
+    pacman -Q sheldon-docs       >/dev/null 2>&1 && conflicts+=(sheldon-docs)
 
     if [ ${#conflicts[@]} -gt 0 ]; then
         echo "Removing conflicting packages: ${conflicts[*]}" >&2
