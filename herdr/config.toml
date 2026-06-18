@@ -35,26 +35,24 @@ name = "vesper"
 prefix = "ctrl+b"
 
 # NOTE:
-# The live docs at herdr.dev are outdated. The real parser expects values to be
-# the key you press after the prefix, not the full shortcut. It splits on + for
-# modifiers, but prefix is not a recognized modifier token.
-# So change every prefix+... to just the post-prefix part
+# Herdr now requires explicit "prefix+" on navigate-mode bindings.
+# Without it, single-key/modifier bindings would intercept normal typing.
 
-# Navigate-mode actions
-new_workspace = "shift+n"
-rename_workspace = ";"
-close_workspace = "shift+x"
+# Navigate-mode actions (press ctrl+b, then the binding)
+new_workspace = "prefix+shift+n"
+rename_workspace = "prefix+;"
+close_workspace = "prefix+shift+x"
 # detach = ""             # optional explicit detach shortcut in server/client mode
-reload_config = "shift+r"      # optional shortcut to reload config.toml without restarting
+reload_config = "prefix+shift+r"      # optional shortcut to reload config.toml without restarting
 # open_notification_target = "" # optional shortcut to jump to the visible notification target
-new_tab = "c"
-rename_tab = ","         # optional, unset by default
-close_tab = "x"          # optional, unset by default
+new_tab = "prefix+c"
+rename_tab = "prefix+,"         # optional, unset by default
+close_tab = "prefix+x"          # optional, unset by default
 # rename_pane = ""        # optional, unset by default
 # edit_scrollback = ""    # optional, opens focused pane scrollback in $EDITOR
 # split_vertical = "v"
 # split_horizontal = "-"
-close_pane = "ctrl+shift+x"
+close_pane = "prefix+ctrl+shift+x"
 # zoom = "f"             # legacy alias: fullscreen
 # resize_mode = "r"
 # toggle_sidebar = "b"
@@ -93,7 +91,7 @@ previous_tab = "alt+p"       # optional, unset by default
 # type = "shell" runs detached in the background.
 # type = "pane" opens a temporary pane and closes it when the command exits.
 [[keys.command]]
-key = "w"
+key = "prefix+shift+w"
 type = "shell"
 command = "$HOME/bin/herdr-session-store ${HERDR_SESSION:-default}"
 
