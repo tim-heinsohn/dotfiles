@@ -10,7 +10,7 @@
 #   devtools   Git CLIs, overcommit, terraform-ls, Bun
 #   ai         Aider, Whisper, Tree-sitter
 #   desktop    Wallpapers, scanner
-#   extras     Open Design, disk health monitoring, Java 17
+#   extras     Disk health monitoring, Java 17
 #   all        Everything (default)
 #
 # Description:
@@ -253,9 +253,6 @@ pkg_desktop() {
 }
 
 pkg_extras() {
-    headline "Open Design"
-    run_if_exists "${DOTFILES_DIR}/bin/setup-open-design"
-
     headline "Disk Health Monitoring"
     run_if_exists "${DOTFILES_DIR}/bin/disk-health-setup" --install
 
@@ -277,7 +274,7 @@ Packages:
   devtools   Git CLIs, overcommit, terraform-ls, Bun
   ai         Aider, Whisper, Tree-sitter
   desktop    Wallpapers, scanner
-  extras     Open Design, disk health monitoring, Java 17
+  extras     Disk health monitoring, Java 17
   all        Everything (default)
 
 Environment:
