@@ -13,7 +13,7 @@ SKIP_DETECT="${SCAN_V330_SKIP_DETECT:-}"
 WAIT_BUTTON="${SCAN_V330_WAIT_BUTTON:-}"
 
 # Default settings
-RESOLUTION=300
+RESOLUTION=150
 MODE="Gray"
 FORMAT="png"
 OUTPUT_FILE=""
@@ -36,7 +36,7 @@ Usage: $(basename "$0") [OPTIONS] [OUTPUT_FILE]
 
 OPTIONS:
     -r, --resolution DPI    Scan resolution (75, 150, 300, 600, 1200, 2400, 4800)
-                            Default: 300
+                            Default: 150
     -m, --mode MODE         Scan mode: Color, Gray, LineArt
                             Default: Gray
     -f, --format FORMAT     Output format: pnm, tiff, png, jpeg
