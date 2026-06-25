@@ -14,6 +14,7 @@ WAIT_BUTTON="${SCAN_V330_WAIT_BUTTON:-}"
 
 # Default settings
 RESOLUTION=150
+SCAN_RESOLUTION=150
 MODE="Gray"
 FORMAT="png"
 OUTPUT_FILE=""
@@ -36,8 +37,8 @@ Usage: $(basename "$0") [OPTIONS] [OUTPUT_FILE]
 
 OPTIONS:
     -r, --resolution DPI    Scan resolution (75, 150, 300, 600, 1200, 2400, 4800)
-                            Default: 150
-    -m, --mode MODE         Scan mode: Color, Gray, LineArt
+                            Default: 150 (150 is scanned at 300 and scaled down)
+    -m, --mode MODE         Scan mode: Color, Gray, Binary/LineArt
                             Default: Gray
     -f, --format FORMAT     Output format: pnm, tiff, png, jpeg
                             Default: png
@@ -78,6 +79,69 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+normalize_mode() {
+    local normalized_mode
+    normalized_mode=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+
+    case "$normalized_mode" in
+        color)
+            echo "Color"
+            ;;
+        gray|grey|grayscale|greyscale)
+            echo "Gray"
+            ;;
+        binary|lineart|line-art)
+            echo "Binary"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+resolve_scan_resolution() {
+    case "$1" in
+        150)
+            # The V330 backend only exposes 100/200/300/... DPI. Scan at 300
+            # and scale down so the output still lands at the requested 150 DPI.
+            echo "300"
+            ;;
+        *)
+            echo "$1"
+            ;;
+    esac
+}
+
+requires_resolution_resample() {
+    [[ "$RESOLUTION" == "150" && "$SCAN_RESOLUTION" != "$RESOLUTION" ]]
+}
+
+resample_scan_output() {
+    local input_file="$1"
+    local extension="${input_file##*.}"
+    local resized_file
+    resized_file=$(mktemp "${input_file%.*}.XXXXXX.${extension}")
+
+    if command -v magick >/dev/null 2>&1; then
+        if ! magick "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" "$resized_file"; then
+            rm -f "$resized_file"
+            log_error "Failed to resample scan output to ${RESOLUTION} DPI"
+            exit 1
+        fi
+    elif command -v convert >/dev/null 2>&1; then
+        if ! convert "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" "$resized_file"; then
+            rm -f "$resized_file"
+            log_error "Failed to resample scan output to ${RESOLUTION} DPI"
+            exit 1
+        fi
+    else
+        log_error "150 DPI output requires ImageMagick (magick or convert)"
+        exit 1
+    fi
+
+    mv "$resized_file" "$input_file"
+}
+
 detect_scanner() {
     if [[ -n "$SKIP_DETECT" || -n "$FAKE_MODE" ]]; then
         DEVICE="${DEVICE:-FAKE_DEVICE}"
@@ -104,8 +168,9 @@ detect_scanner() {
         exit 1
     fi
     
-    # Extract device name from scanimage output using awk
-    DEVICE=$(echo "$scanner_info" | awk -F'\`' '{print $2}' | cut -d"'" -f1)
+    # Extract the quoted device name from scanimage output.
+    DEVICE="${scanner_info#*\`}"
+    DEVICE=$(printf '%s' "$DEVICE" | cut -d"'" -f1)
     log_info "Found scanner: $scanner_info"
     log_info "Extracted device: '$DEVICE'"
 }
@@ -117,17 +182,18 @@ validate_settings() {
         *) log_error "Invalid resolution: $RESOLUTION"; exit 1 ;;
     esac
     
-    # Validate mode
-    case "$MODE" in
-        Color|Gray|LineArt) ;;
-        *) log_error "Invalid mode: $MODE"; exit 1 ;;
-    esac
+    if ! MODE=$(normalize_mode "$MODE"); then
+        log_error "Invalid mode: $MODE"
+        exit 1
+    fi
     
     # Validate format
     case "$FORMAT" in
         pnm|tiff|png|jpeg|pdf) ;;
         *) log_error "Invalid format: $FORMAT"; exit 1 ;;
     esac
+
+    SCAN_RESOLUTION=$(resolve_scan_resolution "$RESOLUTION")
 }
 
 get_scanimage_format() {
@@ -199,7 +265,7 @@ EOF
         # Build scanimage command
         local cmd=(scanimage)
         cmd+=(-d "$DEVICE")
-        cmd+=(--resolution "$RESOLUTION")
+        cmd+=(--resolution "$SCAN_RESOLUTION")
         cmd+=(--mode "$MODE")
         cmd+=(--format="$scanimage_format")
         if [[ -n "$WAIT_BUTTON" ]]; then
@@ -218,6 +284,11 @@ EOF
         log_error "Scan produced no data"
         [[ -n "$temp_file" ]] && rm -f "$temp_file"
         exit 1
+    fi
+
+    if [[ -z "$FAKE_MODE" ]] && requires_resolution_resample; then
+        log_info "Scanner backend does not support 150 DPI directly; scaling 300 DPI output down to 150 DPI"
+        resample_scan_output "$actual_output"
     fi
 
     if [[ -n "$temp_file" ]]; then
@@ -265,6 +336,7 @@ EOF
 batch_scan() {
     local output_pattern="$1"
     local count_text=""
+    local scanned_files=()
     
     if [[ $BATCH_COUNT -gt 0 ]]; then
         count_text=" (max $BATCH_COUNT pages)"
@@ -280,10 +352,11 @@ batch_scan() {
     # Build scanimage command for batch mode
     local cmd=(scanimage)
     cmd+=(-d "$DEVICE")
-    cmd+=(--resolution "$RESOLUTION")
+    cmd+=(--resolution "$SCAN_RESOLUTION")
     cmd+=(--mode "$MODE")
     cmd+=(--format="$(get_scanimage_format)")
     cmd+=(--batch="$output_pattern")
+    cmd+=(--batch-print)
     
     if [[ $BATCH_COUNT -gt 0 ]]; then
         cmd+=(--batch-count="$BATCH_COUNT")
@@ -297,7 +370,15 @@ batch_scan() {
     log_info "Place documents in scanner and press Enter to start..."
     read -r
     
-    if "${cmd[@]}"; then
+    if mapfile -t scanned_files < <("${cmd[@]}"); then
+        if requires_resolution_resample; then
+            log_info "Scanner backend does not support 150 DPI directly; scaling batch output down to 150 DPI"
+            for scanned_file in "${scanned_files[@]}"; do
+                if [[ -f "$scanned_file" ]]; then
+                    resample_scan_output "$scanned_file"
+                fi
+            done
+        fi
         log_info "Batch scan completed"
     else
         log_error "Batch scan failed"

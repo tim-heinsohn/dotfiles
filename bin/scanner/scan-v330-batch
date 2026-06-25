@@ -36,7 +36,7 @@ Usage: $(basename "$0") [OPTIONS]
 
 OPTIONS:
     -r, --resolution DPI    Scan resolution (default: 150)
-    -m, --mode MODE         Scan mode: Color, Gray, LineArt (default: Gray)
+    -m, --mode MODE         Scan mode: Color, Gray, Binary/LineArt (default: Gray)
     -f, --format FORMAT     Output format: png, tiff, jpeg (default: png)
     -d, --directory DIR     Output directory (default: ~/Scans/batch_TIMESTAMP)
     -p, --prefix PREFIX     Filename prefix (default: scan)
@@ -74,6 +74,26 @@ log_warn() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+normalize_mode() {
+    local normalized_mode
+    normalized_mode=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+
+    case "$normalized_mode" in
+        color)
+            echo "Color"
+            ;;
+        gray|grey|grayscale|greyscale)
+            echo "Gray"
+            ;;
+        binary|lineart|line-art)
+            echo "Binary"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 create_combined_pdf() {
@@ -200,6 +220,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if ! MODE=$(normalize_mode "$MODE"); then
+    log_error "Invalid mode: $MODE"
+    usage
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Button mode (non-interactive)
