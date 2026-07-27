@@ -329,6 +329,8 @@ extra/smartmontools
     Control and monitor storage systems using SMART for disk health monitoring and failure prediction.
 extra/speech-dispatcher
     A common interface to speech synthesis.
+extra/tea
+    Command-line tool to interact with Gitea servers.
 extra/tealdeer
     A fast, unofficial tldr client.
 extra/telegram-desktop
