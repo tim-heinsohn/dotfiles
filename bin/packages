@@ -29,8 +29,6 @@ aur/qotd
     A simple RFC 865-compliant QOTD (quote of the day) daemon.
 aur/rofi-pass
     bash script to handle pass storages in a convenient way.
-aur/unciv
-    Open-source remake of Civilization V.
 aur/spotrec
     Spotify desktop client recorder for PulseAudio.
 aur/spotify

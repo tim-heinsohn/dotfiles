@@ -1,9 +1,10 @@
 #!/bin/bash
 #
-# packages-install: Install packages from the packages file
+# packages-install: Install packages from package bundles
 #
 # Description:
-# Reads package definitions from bin/packages and installs them
+# Reads package definitions from bin/packages and optionally
+# bin/packages-extended, then installs them
 # using pacman (official) or yay (AUR). Separates AUR and official
 # packages for optimal installation.
 
@@ -11,14 +12,27 @@ set -euo pipefail
 
 # Get the directory where this script is located
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-packages_file="${script_dir}/packages"
+package_files=("${script_dir}/packages")
+
+for argument in "$@"; do
+    case "$argument" in
+        --extended)
+            package_files+=("${script_dir}/packages-extended")
+            ;;
+        *)
+            echo "Unknown option: $argument" >&2
+            echo "Usage: packages-install [--extended]" >&2
+            exit 1
+            ;;
+    esac
+done
 
 # Track installation results
 failed_packages=()
 success_count=0
 
 # Collect all packages first
-all_packages=($(grep -E '^aur/|^core/|^extra/' "$packages_file" | cut -d' ' -f1))
+mapfile -t all_packages < <(grep -h -E '^aur/|^core/|^extra/' "${package_files[@]}" | cut -d' ' -f1)
 
 echo "Installing ${#all_packages[@]} packages..."
 

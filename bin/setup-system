@@ -2,7 +2,7 @@
 #
 # setup-system: Provision an Arch system with dotfiles
 #
-# Usage: setup-system [PACKAGE|all|-h|--help]
+# Usage: setup-system [PACKAGE|all] [--extended]
 #
 # Packages:
 #   base       System update, dotfiles, core packages, services, user groups
@@ -12,6 +12,9 @@
 #   desktop    Wallpapers, scanner
 #   extras     Disk health monitoring, Java 17
 #   all        Everything (default)
+#
+# Options:
+#   --extended Update opt-in package bundles, including time-consuming packages
 #
 # Description:
 #   Installs and configures the system in modular packages.
@@ -351,11 +354,16 @@ pkg_extras() {
     sudo archlinux-java set java-17-openjdk
 }
 
+pkg_extended() {
+    headline "Extended Package Bundles"
+    run_if_exists "${DOTFILES_DIR}/bin/packages-install" --extended
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 print_help() {
     cat <<'EOF'
-Usage: setup-system [PACKAGE|all|-h|--help]
+Usage: setup-system [PACKAGE|all] [--extended]
 
 Provisions an Arch system with this dotfiles repo in modular packages.
 
@@ -367,6 +375,9 @@ Packages:
   desktop    Wallpapers, scanner
   extras     Disk health monitoring, Java 17
   all        Everything (default)
+
+Options:
+  --extended Update opt-in package bundles, including time-consuming packages
 
 Environment:
   DOTFILES_REPO   Source Git repository
@@ -383,17 +394,43 @@ Examples:
   setup-system base
   setup-system devtools
   setup-system all
+  setup-system --extended
 EOF
 }
 
 main() {
-    local target="${1:-all}"
+    local target="all"
+    local update_extended=0
+    local target_set=0
+    local argument
+
+    for argument in "$@"; do
+        case "$argument" in
+            -h|--help)
+                print_help
+                exit 0
+                ;;
+            --extended)
+                update_extended=1
+                ;;
+            base|languages|devtools|ai|desktop|extras|all)
+                if (( target_set )); then
+                    echo "Only one package target may be specified." >&2
+                    print_help >&2
+                    exit 1
+                fi
+                target="$argument"
+                target_set=1
+                ;;
+            *)
+                echo "Unknown package or option: $argument" >&2
+                print_help >&2
+                exit 1
+                ;;
+        esac
+    done
 
     case "$target" in
-        -h|--help)
-            print_help
-            exit 0
-            ;;
         base|languages|devtools|ai|desktop|extras|all)
             ;;
         *)
@@ -415,6 +452,12 @@ main() {
         pkg_extras
     else
         "pkg_$target"
+    fi
+
+    if (( update_extended )); then
+        pkg_extended
+    else
+        echo "ℹ  Extended bundles are not being updated; rerun with --extended to update them."
     fi
 
     headline "Done"
