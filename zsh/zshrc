@@ -15,8 +15,6 @@ unsetopt beep
 # see </usr/share/doc/zsh-completions/README.md>
 # activate completion system and compdef command
 # (must be available before most other stuff)
-# (compdef error occurred with rvm ruby enabled
-#  when this section was further below)
 fpath=(~/.local/share/sheldon/repos/github.com/zsh-users/zsh-completions/src $fpath)
 autoload -Uz compinit
 compinit
@@ -52,11 +50,13 @@ done
 export ZSH_PLUGINS=/usr/share/zsh/plugins # Arch packages
 eval "$(sheldon source)" # sheldon
 
-# rvm
-[[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm"
-[[ -s "$HOME/.rvm/scripts/completion" ]] && source "$HOME/.rvm/scripts/completion"
+# mise-en-place (polyglot runtime manager; replaces rvm, can replace nvm/pyenv)
+# Reads .mise.toml, .tool-versions, and legacy .ruby-version / .nvmrc files.
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh)"
+fi
 
-# nvm
+# nvm (kept until mise fully takes over Node; `mise use -g node@lts` to migrate)
 [ -s "/usr/share/nvm/init-nvm.sh" ]  && npm config delete prefix 2>/dev/null && source /usr/share/nvm/init-nvm.sh
 
 
@@ -105,16 +105,12 @@ source ~/.zsh/p10k.custom.zsh
 if kimi_enabled; then
   kimi_set "on" >/dev/null 2>&1
 fi
-# >>> PATH normalize: RVM first, gcloud at end >>>
-# Ensure PATH order after all init:
-# - Keep RVM first so ruby/gem bins take precedence
-# - Move Google Cloud SDK bin to the end
+# >>> PATH normalize: gcloud at end >>>
+# mise injects its shims via `mise activate` and manages its own PATH order.
+# We only need to push the Google Cloud SDK bin to the end so its `gsutil`/etc.
+# do not shadow other tools.
 if [[ -n ${ZSH_VERSION-} ]]; then
   typeset -U path
-  # Keep RVM bin first
-  path=(${path:#$HOME/.rvm/bin})
-  path=($HOME/.rvm/bin $path)
-  # Move Google Cloud SDK bin to the end
   path=(${path:#/opt/google-cloud-cli/bin})
   path+=(/opt/google-cloud-cli/bin)
 fi

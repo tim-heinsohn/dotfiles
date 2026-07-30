@@ -2,8 +2,24 @@
 
 # Epson Perfection V330 Scanner Setup for Arch Linux
 # Based on 2025 AUR packages and SANE backend support
+# Usage: setup-epson-v330 [--enable-network]
 
 set -euo pipefail
+
+enable_network=false
+
+case "${1:-}" in
+    "") ;;
+    --enable-network) enable_network=true ;;
+    -h|--help)
+        echo "Usage: $(basename "$0") [--enable-network]"
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1" >&2
+        exit 1
+        ;;
+esac
 
 echo "Setting up Epson Perfection V330 scanner..."
 
@@ -51,17 +67,13 @@ else
     echo "  - Reboot system"
 fi
 
-# Optional: Enable network sharing
-if [ -t 0 ]; then
-    read -p "Enable network scanner sharing (saned)? [y/N] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Enabling scanner network sharing..."
-        sudo systemctl enable --now saned.socket
-        echo "Note: You may need to open TCP port 6566 in your firewall"
-    fi
+# Optional network sharing is explicit so automated setup never blocks.
+if $enable_network; then
+    echo "Enabling scanner network sharing..."
+    sudo systemctl enable --now saned.socket
+    echo "Note: You may need to open TCP port 6566 in your firewall"
 else
-    echo "Non-interactive: skipping saned network sharing prompt"
+    echo "Network scanner sharing remains disabled (use --enable-network to enable it)."
 fi
 
 echo "Epson V330 scanner setup complete!"

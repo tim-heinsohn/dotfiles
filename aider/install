@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# install: Install or update Aider with uv
+#
+# Usage: aider/install
+#
+# Description:
+# Installs Aider and its boto3 provider support as one isolated uv tool.
+# Optional Playwright support is disabled in zsh/environment and intentionally
+# omitted because its current dependency tree includes multi-gigabyte ML/CUDA
+# packages.
+#
+# Dependencies:
+# - uv
+
+set -euo pipefail
+
+AIDER_BINARY="${AIDER_BINARY:-$HOME/.local/bin/aider}"
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "Error: uv is required to install Aider." >&2
+    exit 1
+fi
+
+echo "Installing/updating aider-chat..."
+uv tool install --python python3.12 --upgrade \
+    --with boto3 \
+    aider-chat
+
+if [ ! -x "$AIDER_BINARY" ]; then
+    echo "Error: Aider executable was not created at $AIDER_BINARY." >&2
+    exit 1
+fi
+
+echo "✓ Aider available: $($AIDER_BINARY --version)"
+
+# vi: ft=bash

@@ -1,19 +1,23 @@
-#!/bin/bash
-# Ruby wrapper that ensures we use the project's Ruby version with RVM
-# Falls back to system ruby if no project-specific version is found
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Load RVM if available
+# Ruby wrapper that honors project and global versions managed by mise.
+if command -v mise >/dev/null 2>&1; then
+    exec mise exec -- ruby "$@"
+fi
+
+# Keep existing RVM installations usable when mise is unavailable.
 if [ -s "$HOME/.rvm/scripts/rvm" ]; then
+    # shellcheck source=/dev/null
     source "$HOME/.rvm/scripts/rvm"
+    exec ruby "$@"
 fi
 
-# Check if we're in an RVM-managed project
-if [ -f .ruby-version ] || [ -f .rvmrc ]; then
-    rvm current >/dev/null 2>&1 || {
-        echo "⚠️  Ruby version not available. Install with: rvm install $(cat .ruby-version 2>/dev/null || echo 'default')"
-        exit 1
-    }
+if [ -x /usr/bin/ruby ]; then
+    exec /usr/bin/ruby "$@"
 fi
 
-# Execute ruby with all passed arguments
-exec ruby "$@"
+echo "Error: Ruby is not available through mise, RVM, or /usr/bin/ruby." >&2
+exit 1
+
+# vi: ft=bash

@@ -6,7 +6,7 @@
 #
 # Packages:
 #   base       System update, dotfiles, core packages, services, user groups
-#   languages  Node.js, npm packages, uv tools, Ruby/RVM
+#   languages  Node.js, npm packages, uv tools, Ruby/mise
 #   devtools   Git CLIs, overcommit, terraform-ls, Bun
 #   ai         Aider, Whisper, Tree-sitter
 #   desktop    Wallpapers, scanner
@@ -21,6 +21,9 @@ set -euo pipefail
 
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
 DOTFILES_DIR=${DOTFILES_DIR:-$HOME/dotfiles}
+SETUP_MIN_FREE_GIB=${SETUP_MIN_FREE_GIB:-15}
+SETUP_MIN_FREE_INODES=${SETUP_MIN_FREE_INODES:-100000}
+SETUP_MIN_TMP_GIB=${SETUP_MIN_TMP_GIB:-2}
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -38,6 +41,72 @@ run_if_exists() {
         "$script" "$@"
     else
         echo "⚠  Skipping missing script: $script" >&2
+    fi
+}
+
+declare -A checked_storage_filesystems=()
+
+check_storage_path() {
+    local path="$1"
+    local required_gib="$2"
+    local filesystem mountpoint free_kib free_gib required_kib
+    local free_inodes fs_type inode_status
+
+    while [ ! -e "$path" ] && [ "$path" != "/" ]; do
+        path=$(dirname "$path")
+    done
+
+    filesystem=$(df -Pk "$path" | awk 'END { print $1 }')
+    if [ -n "${checked_storage_filesystems[$filesystem]:-}" ]; then
+        return 0
+    fi
+    checked_storage_filesystems[$filesystem]=1
+
+    mountpoint=$(df -Pk "$path" | awk 'END { print $6 }')
+    free_kib=$(df -Pk "$path" | awk 'END { print $4 }')
+    free_inodes=$(df -Pi "$path" | awk 'END { print $4 }')
+    fs_type=$(stat -f -c '%T' "$path" 2>/dev/null || true)
+    required_kib=$((required_gib * 1024 * 1024))
+    free_gib=$((free_kib / 1024 / 1024))
+
+    inode_status="${free_inodes} inodes"
+    if ! [[ "$free_inodes" =~ ^[0-9]+$ ]] \
+        || { [ "$free_inodes" = "0" ] && [ "$fs_type" = "btrfs" ]; }; then
+        inode_status="dynamic inode allocation"
+        free_inodes=""
+    fi
+
+    echo "Storage preflight: ${free_gib} GiB and ${inode_status} available on ${mountpoint}."
+
+    if (( free_kib < required_kib )); then
+        echo "Error: ${mountpoint} requires ${required_gib} GiB free; ${free_gib} GiB is available." >&2
+        return 1
+    fi
+    if [ -n "$free_inodes" ] && (( free_inodes < SETUP_MIN_FREE_INODES )); then
+        echo "Error: ${mountpoint} requires ${SETUP_MIN_FREE_INODES} free inodes; ${free_inodes} are available." >&2
+        return 1
+    fi
+}
+
+check_storage() {
+    local value failed=0
+
+    for value in "$SETUP_MIN_FREE_GIB" "$SETUP_MIN_FREE_INODES" "$SETUP_MIN_TMP_GIB"; do
+        if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+            echo "Error: storage thresholds must be non-negative integers." >&2
+            exit 1
+        fi
+    done
+
+    check_storage_path "/" "$SETUP_MIN_FREE_GIB" || failed=1
+    check_storage_path "$HOME" "$SETUP_MIN_FREE_GIB" || failed=1
+    check_storage_path "$DOTFILES_DIR" "$SETUP_MIN_FREE_GIB" || failed=1
+    check_storage_path "${TMPDIR:-/tmp}" "$SETUP_MIN_TMP_GIB" || failed=1
+
+    if (( failed )); then
+        echo "Error: insufficient storage for system setup." >&2
+        echo "Free storage (for example with ${DOTFILES_DIR}/bin/clear-cache) and retry." >&2
+        exit 1
     fi
 }
 
@@ -202,8 +271,25 @@ pkg_languages() {
     headline "UV Python Tools"
     run_if_exists "${DOTFILES_DIR}/bin/uv-packages" auto
 
-    headline "Ruby (RVM)"
-    run_if_exists "${DOTFILES_DIR}/ruby/rvm-setup"
+    headline "mise-en-place (polyglot runtime manager)"
+    run_if_exists "${DOTFILES_DIR}/bin/setup-mise"
+
+    # Ensure the freshly installed mise binary and its shims are on PATH
+    # for the rest of this script (activation via .zshrc only applies to
+    # interactive shells).
+    if [ -x "$HOME/.local/bin/mise" ]; then
+        export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+    fi
+
+    headline "Ruby (via mise)"
+    if command -v mise >/dev/null 2>&1; then
+        mise use -g ruby@3.3.6
+    else
+        echo "⚠  mise not available, skipping Ruby setup" >&2
+    fi
+
+    # Legacy RVM setup: kept for opt-in reinstall. Not run by default.
+    # To reinstall RVM manually: ${DOTFILES_DIR}/ruby/rvm-setup
 }
 
 pkg_devtools() {
@@ -213,7 +299,12 @@ pkg_devtools() {
     headline "Overcommit"
     ensure_gem
     if command -v gem >/dev/null 2>&1; then
-        gem list overcommit -i >/dev/null 2>&1 || gem install overcommit
+        if gem list -i '^overcommit$' >/dev/null 2>&1; then
+            echo "✓ Overcommit already installed: $(overcommit --version 2>/dev/null || echo 'version unavailable')"
+        else
+            gem install overcommit --no-document
+            echo "✓ Overcommit installed: $(overcommit --version 2>/dev/null || echo 'version unavailable')"
+        fi
     else
         echo "⚠  gem not available, skipping overcommit install" >&2
     fi
@@ -270,7 +361,7 @@ Provisions an Arch system with this dotfiles repo in modular packages.
 
 Packages:
   base       System update, dotfiles, core packages, services, user groups
-  languages  Node.js, npm packages, uv tools, Ruby/RVM
+  languages  Node.js, npm packages, uv tools, Ruby/mise
   devtools   Git CLIs, overcommit, terraform-ls, Bun
   ai         Aider, Whisper, Tree-sitter
   desktop    Wallpapers, scanner
@@ -281,6 +372,12 @@ Environment:
   DOTFILES_REPO   Source Git repository
                   (default: https://github.com/tim-heinsohn/dotfiles.git)
   DOTFILES_DIR    Destination directory (default: ~/dotfiles)
+  SETUP_MIN_FREE_GIB
+                  Minimum free storage required at startup (default: 15)
+  SETUP_MIN_FREE_INODES
+                  Minimum free inodes required at startup (default: 100000)
+  SETUP_MIN_TMP_GIB
+                  Minimum free temporary storage required (default: 2)
 
 Examples:
   setup-system base
@@ -306,6 +403,7 @@ main() {
             ;;
     esac
 
+    check_storage
     keep_sudo_alive
 
     if [ "$target" = "all" ]; then

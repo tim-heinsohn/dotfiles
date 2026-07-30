@@ -86,33 +86,48 @@ run_openspec_update_if_needed() {
     local after_version="$2"
 
     if [ "$before_version" = "$after_version" ]; then
-        log "openspec unchanged ($after_version); skipping 'openspec update'"
+        log "openspec unchanged ($after_version); skipping 'openspec update --force'"
         return 0
     fi
 
     if [ ! -d "$OPENSPEC_SUPERSKILLS_REPO/.git" ]; then
-        log "superskills repo not found at $OPENSPEC_SUPERSKILLS_REPO; skipping 'openspec update'"
+        log "superskills repo not found at $OPENSPEC_SUPERSKILLS_REPO; skipping 'openspec update --force'"
         return 0
     fi
 
     if ! command -v openspec >/dev/null 2>&1; then
-        log "openspec command not found; skipping 'openspec update'"
+        log "openspec command not found; skipping 'openspec update --force'"
         return 0
     fi
 
-    log "openspec changed ($before_version -> $after_version); running 'openspec update' in $OPENSPEC_SUPERSKILLS_REPO"
+    log "openspec changed ($before_version -> $after_version); running 'openspec update --force' in $OPENSPEC_SUPERSKILLS_REPO"
     pushd "$OPENSPEC_SUPERSKILLS_REPO" >/dev/null || {
-        log "Unable to enter $OPENSPEC_SUPERSKILLS_REPO; skipping 'openspec update'"
+        log "Unable to enter $OPENSPEC_SUPERSKILLS_REPO; skipping 'openspec update --force'"
         return 0
     }
 
-    if openspec update; then
-        log "✓ Successfully ran 'openspec update' in $OPENSPEC_SUPERSKILLS_REPO"
+    if openspec update --force; then
+        log "✓ Successfully ran 'openspec update --force' in $OPENSPEC_SUPERSKILLS_REPO"
     else
-        log "⚠ 'openspec update' failed in $OPENSPEC_SUPERSKILLS_REPO"
+        log "⚠ 'openspec update --force' failed in $OPENSPEC_SUPERSKILLS_REPO"
     fi
 
     popd >/dev/null
+}
+
+remove_retired_opencode_smart_title() {
+    local path
+
+    for path in \
+        "$HOME/.config/opencode/plugins/opencode-smart-title.js" \
+        "$HOME/.config/opencode/plugins/opencode-smart-title"; do
+        if [ -L "$path" ]; then
+            rm -f "$path"
+            log "Removed retired OpenCode Smart Title link: $path"
+        elif [ -e "$path" ]; then
+            log "⚠ Retaining non-symlink Smart Title path for manual review: $path"
+        fi
+    done
 }
 
 check_npm() {
@@ -125,6 +140,7 @@ check_npm() {
 check_nvm_node() {
     # Source nvm if available
     if [ -s "/usr/share/nvm/init-nvm.sh" ]; then
+        # shellcheck source=/dev/null
         source /usr/share/nvm/init-nvm.sh
     fi
 
@@ -251,104 +267,19 @@ install_or_update_packages() {
     done
 }
 
-install_opencode_smart_title_local() {
-    local repo="/srv/lib/opencode-smart-title"
-    local plugin_dir="$HOME/.config/opencode/plugins"
-    local fork_url="https://github.com/tim-heinsohn/opencode-smart-title"
-
-    # Clone repo if it doesn't exist
-    if [ ! -d "$repo" ]; then
-        log "opencode-smart-title repo not found at $repo; cloning from $fork_url"
-        mkdir -p /srv/lib
-        if git clone "$fork_url" "$repo"; then
-            log "Cloned opencode-smart-title fork successfully"
-        else
-            log "⚠ git clone failed; skipping opencode-smart-title setup"
-            return 0
-        fi
-    fi
-
-    log "Setting up local opencode-smart-title from $repo"
-    pushd "$repo" >/dev/null || { log "Unable to enter $repo"; return 0; }
-
-    # Try to update repository to latest (optional if offline)
-    if command -v git >/dev/null 2>&1; then
-        if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            # Ensure we're tracking the fork
-            local current_remote
-            current_remote="$(git remote get-url origin 2>/dev/null || echo '')"
-            if [ "$current_remote" != "$fork_url" ]; then
-                log "Updating remote to fork: $fork_url"
-                git remote set-url origin "$fork_url" || log "⚠ Failed to update remote"
-            fi
-
-            if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
-                if git fetch --quiet; then
-                    if git diff --quiet HEAD "@{u}"; then
-                        log "opencode-smart-title repo is up to date"
-                    elif git merge-base --is-ancestor HEAD "@{u}"; then
-                        if git pull --ff-only; then
-                            log "Pulled latest changes for opencode-smart-title"
-                        else
-                            log "⚠ git pull failed; continuing with current checkout"
-                        fi
-                    else
-                        log "⚠ Local branch has diverged or is ahead; skipping git pull"
-                    fi
-                else
-                    log "⚠ git fetch failed (likely no network); continuing"
-                fi
-            else
-                log "⚠ Current branch has no upstream; skipping git pull"
-            fi
-        fi
-    fi
-
-    # Keep the local plugin's AI SDK dependencies current with OpenCode's
-    # runtime. Do not run `npm ci` afterwards: it would restore the old
-    # lockfile versions and reintroduce model-spec compatibility failures.
-    log "Updating opencode-smart-title AI SDK dependencies..."
-    if npm install ai@latest @ai-sdk/openai@latest; then
-        log "Dependencies updated for opencode-smart-title"
-    else
-        log "⚠ npm install failed; skipping build"
-        popd >/dev/null
-        return 0
-    fi
-
-    # Build plugin
-    if npm run -s build; then
-        log "opencode-smart-title built successfully"
-    else
-        log "⚠ opencode-smart-title build failed; skipping link"
-        popd >/dev/null
-        return 0
-    fi
-
-    # OpenCode loads local plugins as JS/TS files directly inside the plugin
-    # directory. A symlinked dist directory is ignored by current OpenCode.
-    mkdir -p "$plugin_dir"
-    rm -rf "$plugin_dir/opencode-smart-title"
-    ln -sf "$repo/dist/index.js" "$plugin_dir/opencode-smart-title.js"
-    popd >/dev/null
-    log "Linked $plugin_dir/opencode-smart-title.js -> $repo/dist/index.js"
-}
-
 show_usage() {
-    echo "Usage: $0 [install|update|auto]"
+    echo "Usage: $0 [install|update|auto|cleanup]"
     echo ""
     echo "Commands:"
     echo "  install  - Install all packages (skip if already installed)"
     echo "  update   - Update existing packages (install if missing)"
     echo "  auto     - Install missing packages, update existing ones (default)"
+    echo "  cleanup  - Remove retired managed npm/OpenCode artifacts"
     echo ""
     echo "Managed packages:"
     for package in "${NPM_PACKAGES[@]}"; do
         echo "  - $package"
     done
-    echo ""
-    echo "Local packages built from source:"
-    echo "  - opencode-smart-title (from /srv/lib/opencode-smart-title fork)"
 }
 
 main() {
@@ -360,29 +291,32 @@ main() {
         install)
             check_npm
             check_nvm_node
+            remove_retired_opencode_smart_title
             openspec_before_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             install_packages
-            install_opencode_smart_title_local
             openspec_after_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             run_openspec_update_if_needed "$openspec_before_version" "$openspec_after_version"
             ;;
         update)
             check_npm
             check_nvm_node
+            remove_retired_opencode_smart_title
             openspec_before_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             update_packages
-            install_opencode_smart_title_local
             openspec_after_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             run_openspec_update_if_needed "$openspec_before_version" "$openspec_after_version"
             ;;
         auto)
             check_npm
             check_nvm_node
+            remove_retired_opencode_smart_title
             openspec_before_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             install_or_update_packages
-            install_opencode_smart_title_local
             openspec_after_version="$(get_global_npm_package_version "$OPENSPEC_PACKAGE")"
             run_openspec_update_if_needed "$openspec_before_version" "$openspec_after_version"
+            ;;
+        cleanup)
+            remove_retired_opencode_smart_title
             ;;
         -h|--help|help)
             show_usage

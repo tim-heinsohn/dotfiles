@@ -17,12 +17,8 @@ aur/i3lock-color
     Improved i3lock with color support.
 aur/neovim-remote
     A tool to control Neovim instances from the command line.
-aur/nvm
-    A version manager for node.js, installed per-user, and invoked per-shell.
 aur/ocrmypdf
     A tool to add an OCR text layer to scanned PDF files, allowing them to be searched
-aur/openwork
-    An Open source alternative to Claude Cowork.
 aur/pg_top
     A 'top' like tool for PostgreSQL.
 aur/pgvector 0.8.1-1 (+10 1.46)
@@ -31,8 +27,8 @@ aur/pinentry-rofi
     A rofi-based pinentry program.
 aur/qotd
     A simple RFC 865-compliant QOTD (quote of the day) daemon.
-aur/slackdump
-    Save your private and public slack messages, threads, files, and users locally.
+aur/rofi-pass
+    bash script to handle pass storages in a convenient way.
 aur/unciv
     Open-source remake of Civilization V.
 aur/spotrec
@@ -229,6 +225,8 @@ extra/mariadb
     Fast, stable and multi-threaded SQL database server.
 extra/menyoki
     Screen{shot,cast} and perform ImageOps on the command line.
+extra/mise
+    Polyglot runtime manager (Ruby, Node, Python, etc.) - asdf-compatible, replaces rvm/nvm/pyenv.
 extra/mitmproxy
     SSL-capable man-in-the-middle HTTP proxy.
 extra/mplayer
@@ -247,6 +245,8 @@ extra/ntfs-3g
     NTFS filesystem driver and utilities.
 extra/ntp
     Network Time Protocol reference implementation.
+extra/nvm
+    A version manager for node.js, installed per-user, and invoked per-shell.
 extra/nvme-cli
     NVMe management command line interface for NVMe SSD health monitoring and diagnostics.
 extra/obs-studio
@@ -313,16 +313,12 @@ extra/rofi-calc
     Do calculations in rofi.
 extra/rofi-emoji
     A Rofi plugin for selecting emojis.
-extra/rofi-pass
-    bash script to handle pass storages in a convenient way.
 extra/rsync
     A fast and versatile file copying tool for remote and local files.
 extra/seahorse
     GNOME application for managing PGP keys.
 extra/sheldon
     A fast and configurable shell plugin manager.
-extra/sheldon-docs
-    A fast and configurable shell plugin manager. (documentation)
 extra/signal-desktop
     A desktop client for the Signal private messenger.
 extra/smartmontools

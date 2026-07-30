@@ -19,7 +19,6 @@ posthooks = [ "~/dotfiles/bin/posthooks" ]
 bash_profile = { source = "shell/bash_profile", target = ".bash_profile" }
 bashrc = { source = "shell/bashrc", target = ".bashrc" }
 profile = { source = "shell/profile", target = ".profile" }
-zlogin = { source = "shell/zlogin", target = ".zlogin" }
 zshrc = { source = "zsh/zshrc", target = ".zshrc" }
 zsh_aliases = { source = "zsh/aliases", target = ".zsh/aliases" }
 zsh_environment = { source = "zsh/environment", target = ".zsh/environment" }
@@ -53,7 +52,6 @@ nvim_lsp_setup = { source = "nvim/lua/lsp_setup.lua", target = ".config/nvim/lua
 # ============================================================
 # opencode.json and .claude/settings.local.json are managed by superskills distribute-security.
 # opencode_config = { source = "opencode/opencode.json", target = "~/.config/opencode/opencode.json" }
-opencode_smart_title = { source = "opencode/smart-title.jsonc", target = "~/.config/opencode/smart-title.jsonc" }
 
 # ============================================================
 # Window Managers / Desktop

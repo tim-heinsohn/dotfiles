@@ -1,0 +1,129 @@
+#!/bin/bash
+#
+# setup-mise: Install or update mise-en-place (polyglot runtime manager)
+#
+# Usage: setup-mise
+#
+# Description:
+# Installs the latest mise GitHub release with checksum verification.
+# Downloads the platform-specific tarball and verifies its SHA256
+# checksum against the release SHASUMS256.txt.
+#
+# On Arch you may also install mise via `pacman -S mise` (extra repo).
+# This installer deliberately tracks upstream so mise does not lag behind
+# the distribution package.
+#
+# Dependencies:
+# - curl
+# - tar
+# - sha256sum (Linux) or shasum (macOS)
+
+set -euo pipefail
+
+REPO="jdx/mise"
+BINARY_NAME="mise"
+INSTALL_DIR="$HOME/.local/bin"
+
+case "$(uname -s)" in
+    Darwin) OS="macos" ;;
+    Linux)  OS="linux" ;;
+    *)      echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+
+case "$(uname -m)" in
+    x86_64|amd64)  ARCH="x64" ;;
+    arm64|aarch64) ARCH="arm64" ;;
+    *)             echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+echo "Resolving latest mise release..."
+latest_release_url=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${REPO}/releases/latest")
+VERSION="${latest_release_url%/}"
+VERSION="${VERSION##*/}"
+
+if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+    echo "Could not determine a valid mise release from: $latest_release_url" >&2
+    exit 1
+fi
+
+installed_binary="${INSTALL_DIR}/${BINARY_NAME}"
+installed_version=""
+if [ -x "$installed_binary" ]; then
+    installed_version=$("$installed_binary" --version 2>/dev/null | awk '{ print $1 }' || true)
+fi
+
+if [ "$installed_version" = "${VERSION#v}" ]; then
+    echo "mise ${VERSION} is already installed at ${installed_binary}"
+    echo "Shell activation is already configured in zsh/zshrc; no manual eval is required."
+    exit 0
+fi
+
+asset_name="mise-${VERSION}-${OS}-${ARCH}.tar.gz"
+download_url="https://github.com/${REPO}/releases/download/${VERSION}/${asset_name}"
+checksums_url="https://github.com/${REPO}/releases/download/${VERSION}/SHASUMS256.txt"
+
+TMP_DIR=$(mktemp -d)
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+echo "Downloading mise ${VERSION} for ${OS}-${ARCH}..."
+curl -fsSL -o "$TMP_DIR/${asset_name}" "$download_url"
+curl -fsSL -o "$TMP_DIR/SHASUMS256.txt" "$checksums_url"
+
+echo "Verifying checksum..."
+# mise's SHASUMS256.txt lists files as "<hash>  ./<filename>", so match on
+# either a space or a slash before the filename. `|| true` prevents pipefail
+# from killing the script before the empty-check below.
+checksum_line=$(grep -E "[ /]${asset_name}\$" "$TMP_DIR/SHASUMS256.txt" || true)
+expected_checksum=$(printf '%s' "$checksum_line" | awk '{print $1}')
+
+if [ -z "$expected_checksum" ]; then
+    echo "Could not find checksum for ${asset_name} in SHASUMS256.txt" >&2
+    echo "First 5 lines of SHASUMS256.txt for debugging:" >&2
+    head -n 5 "$TMP_DIR/SHASUMS256.txt" >&2
+    exit 1
+fi
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    actual_checksum=$(shasum -a 256 "$TMP_DIR/${asset_name}" | awk '{print $1}')
+else
+    actual_checksum=$(sha256sum "$TMP_DIR/${asset_name}" | awk '{print $1}')
+fi
+
+if [ "$actual_checksum" != "$expected_checksum" ]; then
+    echo "Checksum verification failed!" >&2
+    echo "  expected: $expected_checksum" >&2
+    echo "  actual:   $actual_checksum" >&2
+    exit 1
+fi
+
+echo "Checksum OK. Verifying archive paths..."
+if tar -tzf "$TMP_DIR/${asset_name}" | grep -E '^/|(^|/)\.\.(/|$)' >/dev/null; then
+    echo "Archive contains unsafe paths (absolute or directory traversal) -- refusing to extract" >&2
+    exit 1
+fi
+
+echo "Extracting..."
+tar -xzf "$TMP_DIR/${asset_name}" -C "$TMP_DIR"
+
+# Tarball layout: mise/bin/mise
+if [ ! -f "$TMP_DIR/mise/bin/mise" ]; then
+    echo "Expected mise/bin/mise in archive but did not find it" >&2
+    exit 1
+fi
+
+mkdir -p "$INSTALL_DIR"
+mv "$TMP_DIR/mise/bin/mise" "$installed_binary"
+chmod +x "$installed_binary"
+
+echo "Installed mise ${VERSION} to ${installed_binary}"
+echo "Verification: $("$installed_binary" --version)"
+
+echo "Shell activation is already configured in zsh/zshrc; no manual eval is required."
+echo "It takes effect in new zsh sessions; setup-system uses the new binary immediately."
+
+# vi: ft=bash
