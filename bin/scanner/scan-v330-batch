@@ -101,7 +101,7 @@ create_combined_pdf() {
         return 1
     fi
 
-    local pdf_file="$OUTPUT_DIR/${PREFIX}_combined.pdf"
+    local pdf_file="$OUTPUT_DIR/${PREFIX}.pdf"
     local image_files=()
 
     # Collect all scanned images in order
@@ -148,7 +148,7 @@ cleanup_temp_images() {
         return
     fi
 
-    local pdf_file="$OUTPUT_DIR/${PREFIX}_combined.pdf"
+    local pdf_file="$OUTPUT_DIR/${PREFIX}.pdf"
     if [[ ! -f "$pdf_file" ]]; then
         return
     fi
