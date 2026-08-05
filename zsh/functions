@@ -296,6 +296,15 @@ function wt() {
   fi
 }
 
+# Select a herdr session and attach to it.
+function hs() {
+  local session
+  session=$(herdr session list 2>/dev/null | awk 'NR > 1' | fzf --height=40% --border --prompt="herdr session> " | awk '{print $1}')
+  if [ -n "$session" ]; then
+    herdr session attach "$session"
+  fi
+}
+
 # Git worktree removal with fzf and confirmation
 function wtr() {
   local worktree=$(git worktree list | fzf --height=40% --border --prompt="Select worktree to remove: " | awk '{print $1}')

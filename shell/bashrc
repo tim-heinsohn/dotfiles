@@ -1,3 +1,12 @@
 
 # Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
 export PATH="$PATH:$HOME/.rvm/bin"
+
+# Select a herdr session and attach to it.
+hs() {
+  local session
+  session=$(herdr session list 2>/dev/null | awk 'NR > 1' | fzf --height=40% --border --prompt="herdr session> " | awk '{print $1}')
+  if [ -n "$session" ]; then
+    herdr session attach "$session"
+  fi
+}
