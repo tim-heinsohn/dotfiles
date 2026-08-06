@@ -306,6 +306,10 @@ pkg_base() {
     sudo systemctl enable --now docker
     sudo systemctl enable --now tailscaled
 
+    headline "Graphical Login (Plasma Login)"
+    sudo systemctl enable --now plasmalogin.service
+    echo "Choose your account and preferred desktop session at the graphical login screen."
+
     headline "Cache Cleanup"
     sudo paccache -rk1
 }
