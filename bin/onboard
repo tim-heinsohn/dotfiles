@@ -6,8 +6,9 @@
 #
 # Description:
 # Generates a passphrase-protected Ed25519 SSH key and an expiring modern
-# OpenPGP key. Passphrases are requested directly by ssh-keygen and GnuPG;
-# this script never accepts, stores, or prints them.
+# OpenPGP key. It reuses the configured Git identity when available. Passphrases
+# are requested directly by ssh-keygen and GnuPG; this script never accepts,
+# stores, or prints them.
 #
 # Dependencies:
 # - openssh (ssh-keygen)
@@ -33,7 +34,8 @@ usage() {
 Usage: onboard [--name NAME] [--email EMAIL]
 
 Create new local SSH and GPG credentials for the current user. Missing identity
-values are requested interactively. Existing credentials are never overwritten.
+values are read from Git configuration, then one unambiguous GPG identity, and
+only then requested interactively. Existing credentials are never overwritten.
 
 Options:
   --name NAME     Full name for the GPG user ID and SSH key comment
@@ -63,6 +65,56 @@ require_normal_user() {
 
     if [ ! -t 0 ] || [ ! -t 1 ]; then
         error "an interactive terminal is required to protect key passphrases."
+    fi
+}
+
+read_git_identity() {
+    if ! command -v git >/dev/null 2>&1; then
+        return
+    fi
+
+    if [ -z "$full_name" ]; then
+        full_name=$(git config --get user.name 2>/dev/null || true)
+    fi
+    if [ -z "$email" ]; then
+        email=$(git config --get user.email 2>/dev/null || true)
+    fi
+}
+
+read_gpg_identity() {
+    local identity
+    local -a identities=()
+
+    mapfile -t identities < <(
+        gpg --batch --with-colons --list-secret-keys 2>/dev/null \
+            | awk -F: '
+                $1 == "uid" && $2 != "r" && $10 !~ /\\/ \
+                    && $10 ~ /^[^<>[:cntrl:]]+ <[^<>[:space:]@]+@[^<>[:space:]@]+>$/ {
+                    print $10
+                }
+            ' \
+            | sort -u
+    )
+
+    if [ "${#identities[@]}" -ne 1 ]; then
+        return
+    fi
+
+    identity="${identities[0]}"
+    if [ -z "$full_name" ]; then
+        full_name="${identity% <*}"
+    fi
+    if [ -z "$email" ]; then
+        email="${identity##*<}"
+        email="${email%>}"
+    fi
+}
+
+resolve_identity() {
+    read_git_identity
+    if [ -z "$full_name" ] || [ -z "$email" ]; then
+        secure_gpg_home
+        read_gpg_identity
     fi
 }
 
@@ -164,6 +216,7 @@ main() {
     require_normal_user
     require_command ssh-keygen openssh
     require_command gpg gnupg
+    resolve_identity
     prompt_identity
 
     headline "Onboarding"
