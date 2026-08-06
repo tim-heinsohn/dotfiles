@@ -19,6 +19,12 @@
 # Description:
 #   Installs and configures the system in modular packages.
 #   Run with sudo access; the script keeps sudo alive automatically.
+#   Requires Bash (the default /bin/sh implementation on Arch Linux).
+
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "Error: setup-system requires Bash. Run it with 'bash setup-system'." >&2
+    exit 1
+fi
 
 set -euo pipefail
 
@@ -114,6 +120,11 @@ check_storage() {
 }
 
 keep_sudo_alive() {
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo "Error: sudo is required. Install and configure it for this user before running setup-system." >&2
+        exit 1
+    fi
+
     if ! sudo -v 2>/dev/null; then
         echo "Error: sudo authentication required." >&2
         echo "Run 'sudo -v' before this script, or run interactively first." >&2
@@ -165,6 +176,30 @@ ensure_gem() {
     fi
 }
 
+ensure_yay() {
+    if command -v yay >/dev/null 2>&1 && yay --version >/dev/null 2>&1; then
+        echo "yay is already available."
+        return 0
+    fi
+
+    echo "yay is not available; installing it before installing package bundles."
+    run_if_exists "${DOTFILES_DIR}/bin/setup-yay"
+
+    if ! command -v yay >/dev/null 2>&1 || ! yay --version >/dev/null 2>&1; then
+        echo "Error: yay is required to install this repository's AUR packages." >&2
+        return 1
+    fi
+}
+
+ensure_bombadil() {
+    if command -v bombadil >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "Installing toml-bombadil before linking dotfiles."
+    sudo pacman -S --needed --noconfirm toml-bombadil
+}
+
 # ── Packages ─────────────────────────────────────────────────────────
 
 safe_pacman_update() {
@@ -209,6 +244,12 @@ pkg_base() {
     headline "Dotfiles Repository"
     ensure_dotfiles_repo
 
+    headline "AUR Helper (yay)"
+    ensure_yay
+
+    headline "Dotfile Manager (Bombadil)"
+    ensure_bombadil
+
     headline "Linking dotfiles (Bombadil)"
     mkdir -p "$HOME/.config"
     ln -sf "${DOTFILES_DIR}/bombadil.toml" "$HOME/.config/bombadil.toml"
@@ -221,9 +262,6 @@ pkg_base() {
     else
         echo "⚠  sheldeon not found, skipping lock" >&2
     fi
-
-    headline "AUR Helper (yay)"
-    run_if_exists "${DOTFILES_DIR}/bin/setup-yay"
 
     headline "Core Packages"
     run_if_exists "${DOTFILES_DIR}/bin/packages-install"
@@ -351,6 +389,7 @@ pkg_extras() {
     run_if_exists "${DOTFILES_DIR}/bin/disk-health-setup" --install
 
     headline "Java Version"
+    sudo pacman -S --needed --noconfirm jdk17-openjdk
     sudo archlinux-java set java-17-openjdk
 }
 
