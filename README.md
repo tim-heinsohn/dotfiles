@@ -11,6 +11,21 @@ Bombadil is a dotfile manager that:
 
 ## Quick Start
 
+### Fresh Arch Linux Bootstrap
+
+On a fresh Arch installation, log in as a normal user with working `sudo`, then download
+and run the system setup script:
+
+```bash
+curl --fail --location --proto '=https' --tlsv1.2 \
+  https://raw.githubusercontent.com/tim-heinsohn/dotfiles/refs/heads/main/bin/setup-system \
+  -o /tmp/setup-system &&
+bash /tmp/setup-system all
+```
+
+The script installs Git, `yay`, and the remaining package dependencies. It requires at
+least 15 GiB free on the system and home filesystems, plus 2 GiB in `/tmp`.
+
 ### Viewing Current Configurations
 
 ```bash
