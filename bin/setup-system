@@ -201,6 +201,28 @@ ensure_bombadil() {
     sudo pacman -S --needed --noconfirm toml-bombadil
 }
 
+set_default_shell() {
+    local target_user current_shell
+    local zsh_path="/usr/bin/zsh"
+
+    sudo pacman -S --needed --noconfirm zsh
+
+    if [ ! -x "$zsh_path" ] || ! grep -Fxq "$zsh_path" /etc/shells; then
+        echo "Error: $zsh_path is not an approved login shell." >&2
+        return 1
+    fi
+
+    target_user=$(id -un)
+    current_shell=$(getent passwd "$target_user" | cut -d: -f7)
+    if [ "$current_shell" = "$zsh_path" ]; then
+        echo "zsh is already the default shell for $target_user."
+        return 0
+    fi
+
+    sudo chsh -s "$zsh_path" "$target_user"
+    echo "zsh is now the default shell for $target_user; it takes effect at the next login."
+}
+
 # ── Packages ─────────────────────────────────────────────────────────
 
 safe_pacman_update() {
@@ -266,6 +288,9 @@ pkg_base() {
 
     headline "Core Packages"
     run_if_exists "${DOTFILES_DIR}/bin/packages-install"
+
+    headline "Default Shell (zsh)"
+    set_default_shell
 
     headline "System Configuration"
     run_if_exists "${DOTFILES_DIR}/docker/docker-group-setup"
