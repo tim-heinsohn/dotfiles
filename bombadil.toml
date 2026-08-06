@@ -6,11 +6,11 @@
 # Template variables are rendered using Tera. Use {{ var }} syntax.
 # Note: Some zsh files (e.g., p10k.zsh) use ${#...} syntax which conflicts
 # with Tera template parsing and must be symlinked via posthooks.
-dotfiles_dir = "dotfiles"
+dotfiles_dir = "p/dotfiles"
 
 [settings]
-prehooks = [ "~/dotfiles/bin/prehooks" ]
-posthooks = [ "~/dotfiles/bin/posthooks" ]
+prehooks = [ "~/p/dotfiles/bin/prehooks" ]
+posthooks = [ "~/p/dotfiles/bin/posthooks" ]
 
 # ============================================================
 # Shell Configuration

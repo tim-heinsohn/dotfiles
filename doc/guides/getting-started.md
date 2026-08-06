@@ -43,8 +43,8 @@ This guide walks through setting up your environment with these dotfiles.
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/dotfiles.git ~/dotfiles
-cd ~/dotfiles
+git clone https://github.com/yourusername/dotfiles.git ~/p/dotfiles
+cd ~/p/dotfiles
 ```
 
 ### 2. Run Bombadil Link
@@ -66,7 +66,7 @@ ls -la ~/.zshrc
 ls -la ~/.config/nvim/
 ls -la ~/.gitconfig
 
-# Should all point to ~/dotfiles/
+# Should all point to ~/p/dotfiles/
 ```
 
 ### 4. Install Plugins

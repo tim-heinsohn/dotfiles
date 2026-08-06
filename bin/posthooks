@@ -10,18 +10,21 @@
 
 set -euo pipefail
 
+DOTFILES_DIR="$HOME/p/dotfiles"
+export DOTFILES_DIR
+
 # Setup projects and symlinks
-~/dotfiles/bin/projects-setup
-~/dotfiles/bin/binaries-symlink
+~/p/dotfiles/bin/projects-setup
+~/p/dotfiles/bin/binaries-symlink
 
 # Setup gopass cascading config
-~/dotfiles/bin/gopass-config-include
+~/p/dotfiles/bin/gopass-config-include
 
 # Setup p10k.zsh symlink (bypassing bombadil validation)
-ln -sf ~/dotfiles/zsh/p10k.zsh ~/.p10k.zsh
+ln -sf ~/p/dotfiles/zsh/p10k.zsh ~/.p10k.zsh
 # Setup p10k.claude.zsh symlink (bypassing bombadil validation due to Tera parsing ${#...})
 mkdir -p ~/.zsh
-ln -sf ~/dotfiles/zsh/p10k.claude.zsh ~/.zsh/p10k.claude.zsh
+ln -sf ~/p/dotfiles/zsh/p10k.claude.zsh ~/.zsh/p10k.claude.zsh
 
 # Symlink MCP CLI from ~/mcp if present
 if [ -x "$HOME/mcp/bin/mcp" ]; then
@@ -31,5 +34,5 @@ if [ -x "$HOME/mcp/bin/mcp" ]; then
 fi
 
 # Print reminders for manual setup steps
-echo "Run ~/dotfiles/services/setup to install and enable systemd user services."
-echo "Run ~/dotfiles/services/acpi/enable to enable brightness control."
+echo "Run ~/p/dotfiles/services/setup to install and enable systemd user services."
+echo "Run ~/p/dotfiles/services/acpi/enable to enable brightness control."

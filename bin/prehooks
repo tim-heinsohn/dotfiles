@@ -27,7 +27,7 @@ mkdir -p \
   ~/.zsh/lib
 
 # Install pinentry wrapper if changed (skip if not interactive)
-WRAPPER_SOURCE="$HOME/dotfiles/gpg/pinentry-wrapper"
+WRAPPER_SOURCE="$HOME/p/dotfiles/gpg/pinentry-wrapper"
 WRAPPER_TARGET="/usr/local/bin/pinentry-wrapper"
 
 if [ -f "$WRAPPER_SOURCE" ]; then

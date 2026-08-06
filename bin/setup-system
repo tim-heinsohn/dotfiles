@@ -29,7 +29,8 @@ fi
 set -euo pipefail
 
 DOTFILES_REPO=${DOTFILES_REPO:-https://github.com/tim-heinsohn/dotfiles.git}
-DOTFILES_DIR=${DOTFILES_DIR:-$HOME/dotfiles}
+DOTFILES_DIR=${DOTFILES_DIR:-$HOME/p/dotfiles}
+export DOTFILES_DIR
 SETUP_MIN_FREE_GIB=${SETUP_MIN_FREE_GIB:-15}
 SETUP_MIN_FREE_INODES=${SETUP_MIN_FREE_INODES:-100000}
 SETUP_MIN_TMP_GIB=${SETUP_MIN_TMP_GIB:-2}
@@ -421,7 +422,7 @@ Options:
 Environment:
   DOTFILES_REPO   Source Git repository
                   (default: https://github.com/tim-heinsohn/dotfiles.git)
-  DOTFILES_DIR    Destination directory (default: ~/dotfiles)
+  DOTFILES_DIR    Destination directory (default: ~/p/dotfiles)
   SETUP_MIN_FREE_GIB
                   Minimum free storage required at startup (default: 15)
   SETUP_MIN_FREE_INODES

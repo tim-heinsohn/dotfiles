@@ -23,8 +23,9 @@ curl --fail --location --proto '=https' --tlsv1.2 \
 bash /tmp/setup-system all
 ```
 
-The script installs Git, `yay`, and the remaining package dependencies. It requires at
-least 15 GiB free on the system and home filesystems, plus 2 GiB in `/tmp`.
+The script clones the repository to `~/p/dotfiles`, installs Git, `yay`, and the remaining
+package dependencies. It requires at least 15 GiB free on the system and home filesystems,
+plus 2 GiB in `/tmp`.
 
 ### Viewing Current Configurations
 
