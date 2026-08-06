@@ -89,6 +89,13 @@ secret_gpg_key_exists() {
         | awk -F: '$1 == "sec" { found = 1 } END { exit !found }'
 }
 
+secure_gpg_home() {
+    local gpg_home="$HOME/.gnupg"
+
+    mkdir -p "$gpg_home"
+    chmod 700 "$gpg_home"
+}
+
 generate_ssh_key() {
     headline "SSH key"
 
@@ -109,6 +116,7 @@ generate_gpg_key() {
     local user_id fingerprint
 
     headline "GPG key"
+    secure_gpg_home
 
     if secret_gpg_key_exists; then
         echo "Existing GPG secret key retained for: $email"

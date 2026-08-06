@@ -35,9 +35,10 @@ high bcrypt KDF work factor, without exposing private-key material or the passph
 
 ### Requirement: Secure GPG key generation
 
-The command SHALL interactively generate a modern GPG signing and encryption key with a
-finite expiry, without accepting a passphrase through command arguments or environment
-variables.
+The command SHALL ensure the default GnuPG home directory (`~/.gnupg`) exists with
+owner-only (`0700`) permissions before querying or creating secret keys. It SHALL then
+interactively generate a modern GPG signing and encryption key with a finite expiry, without
+accepting a passphrase through command arguments or environment variables.
 
 #### Scenario: New GPG identity
 
@@ -49,3 +50,9 @@ variables.
 
 - **WHEN** a corresponding secret key already exists
 - **THEN** the command SHALL leave it unchanged and report that it was retained.
+
+#### Scenario: Unsafe GnuPG home permissions
+
+- **WHEN** the default GnuPG home directory exists with broader permissions
+- **THEN** the command SHALL restrict it to owner-only (`0700`) permissions before GPG key
+  operations.

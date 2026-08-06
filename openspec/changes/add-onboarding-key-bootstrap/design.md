@@ -23,7 +23,8 @@ environment variables, logs, or repository files.
     OpenSSH default; command-line passphrases expose secrets through process inspection
     and shell history.
 - Decision: Generate a GPG key through GnuPG's interactive key-generation flow, using its
-  modern default algorithm profile and a finite expiration.
+  modern default algorithm profile and a finite expiration. Ensure the default GnuPG home
+  directory exists with owner-only (`0700`) permissions before any GPG operation.
   - Alternatives considered: batch mode with a passphrase file or environment variable.
     Interactive pinentry avoids handling the passphrase in the script.
 - Decision: Stop before an existing SSH private key or secret GPG key is modified.
