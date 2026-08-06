@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+#
+# onboard: Create local SSH and GPG credentials for a new user account
+#
+# Usage: onboard [--name NAME] [--email EMAIL]
+#
+# Description:
+# Generates a passphrase-protected Ed25519 SSH key and an expiring modern
+# OpenPGP key. Passphrases are requested directly by ssh-keygen and GnuPG;
+# this script never accepts, stores, or prints them.
+#
+# Dependencies:
+# - openssh (ssh-keygen)
+# - gnupg (gpg)
+
+set -euo pipefail
+
+SSH_KEY_PATH="$HOME/.ssh/id_ed25519"
+SSH_KDF_ROUNDS=100
+GPG_KEY_EXPIRY="1y"
+full_name=""
+email=""
+
+headline() {
+    echo
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  $1"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+usage() {
+    cat <<'EOF'
+Usage: onboard [--name NAME] [--email EMAIL]
+
+Create new local SSH and GPG credentials for the current user. Missing identity
+values are requested interactively. Existing credentials are never overwritten.
+
+Options:
+  --name NAME     Full name for the GPG user ID and SSH key comment
+  --email EMAIL   Email address for the GPG user ID and SSH key comment
+  -h, --help      Show this help
+EOF
+}
+
+error() {
+    echo "Error: $*" >&2
+    exit 1
+}
+
+require_command() {
+    local command="$1"
+    local package="$2"
+
+    if ! command -v "$command" >/dev/null 2>&1; then
+        error "$command is required. Install it with: sudo pacman -S $package"
+    fi
+}
+
+require_normal_user() {
+    if [ "$(id -u)" -eq 0 ]; then
+        error "run onboard as the target user, not as root or through sudo."
+    fi
+
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        error "an interactive terminal is required to protect key passphrases."
+    fi
+}
+
+prompt_identity() {
+    if [ -z "$full_name" ]; then
+        read -r -p "Full name: " full_name
+    fi
+    if [ -z "$email" ]; then
+        read -r -p "Email address: " email
+    fi
+
+    if [ -z "$full_name" ] || [[ "$full_name" == -* ]] \
+        || [[ "$full_name" == *[[:cntrl:]]* ]] \
+        || [[ "$full_name" == *'<'* ]] || [[ "$full_name" == *'>'* ]]; then
+        error "provide a non-empty name without control characters or angle brackets."
+    fi
+    if [[ "$email" == -* ]] || ! [[ "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+$ ]]; then
+        error "provide a valid email address."
+    fi
+}
+
+secret_gpg_key_exists() {
+    gpg --batch --with-colons --list-secret-keys "$email" 2>/dev/null \
+        | awk -F: '$1 == "sec" { found = 1 } END { exit !found }'
+}
+
+generate_ssh_key() {
+    headline "SSH key"
+
+    mkdir -p "$HOME/.ssh"
+    chmod 700 "$HOME/.ssh"
+    if [ -e "$SSH_KEY_PATH" ] || [ -L "$SSH_KEY_PATH" ]; then
+        echo "Existing SSH private key retained: $SSH_KEY_PATH"
+        return
+    fi
+
+    echo "Choose a strong passphrase when prompted by ssh-keygen."
+    ssh-keygen -t ed25519 -a "$SSH_KDF_ROUNDS" -f "$SSH_KEY_PATH" \
+        -C "$full_name <$email>"
+    echo "SSH public key created: ${SSH_KEY_PATH}.pub"
+}
+
+generate_gpg_key() {
+    local user_id fingerprint
+
+    headline "GPG key"
+
+    if secret_gpg_key_exists; then
+        echo "Existing GPG secret key retained for: $email"
+        return
+    fi
+
+    user_id="$full_name <$email>"
+    echo "Choose a strong passphrase in the GnuPG prompt."
+    gpg --quick-generate-key "$user_id" future-default default "$GPG_KEY_EXPIRY"
+
+    fingerprint=$(gpg --batch --with-colons --list-secret-keys "$email" \
+        | awk -F: '$1 == "fpr" { print $10; exit }')
+    if [ -z "$fingerprint" ]; then
+        error "GPG key generation did not produce a secret key for $email."
+    fi
+    echo "GPG key created with fingerprint: $fingerprint"
+}
+
+parse_arguments() {
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --name)
+                [ "$#" -ge 2 ] || error "--name requires a value."
+                full_name="$2"
+                shift 2
+                ;;
+            --email)
+                [ "$#" -ge 2 ] || error "--email requires a value."
+                email="$2"
+                shift 2
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                error "unknown option: $1"
+                ;;
+        esac
+    done
+}
+
+main() {
+    parse_arguments "$@"
+    require_normal_user
+    require_command ssh-keygen openssh
+    require_command gpg gnupg
+    prompt_identity
+
+    headline "Onboarding"
+    generate_ssh_key
+    generate_gpg_key
+
+    headline "Further steps"
+    echo "Next: back up your credentials and add the public keys to the services you use."
+    echo "This script does not upload or export keys."
+}
+
+main "$@"
+
+# vi: ft=bash
