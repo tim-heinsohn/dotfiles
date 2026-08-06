@@ -45,6 +45,7 @@ This directory contains utility scripts for system management and development.
 | `setup-system` | System setup utilities |
 | `setup-wallpapers` | Setup wallpaper management |
 | `toggle-keyboard-layout` | Toggle keyboard layout |
+| `user-add` | Interactively create a local desktop user |
 
 ## MCP and AI Tools
 

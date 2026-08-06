@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+#
+# user-add: Interactively create a local desktop user
+#
+# Usage: user-add
+#
+# Description:
+# Creates a normal local account with a home directory, a private primary
+# group, and zsh as its login shell. Administrator access is opt-in. The
+# password is requested directly by passwd and is never handled by this script.
+#
+# Dependencies:
+# - shadow (useradd, passwd)
+# - sudo
+# - zsh
+
+set -euo pipefail
+
+ZSH_PATH="/usr/bin/zsh"
+username=""
+grant_wheel=0
+
+usage() {
+    cat <<'EOF'
+Usage: user-add
+
+Interactively create one normal local desktop account. The command creates its
+home directory and private group, sets zsh as its login shell, and asks whether
+to grant administrator access through wheel. It then invokes passwd securely.
+EOF
+}
+
+error() {
+    echo "Error: $*" >&2
+    exit 1
+}
+
+require_command() {
+    local command="$1"
+
+    command -v "$command" >/dev/null 2>&1 || error "$command is required."
+}
+
+require_normal_user() {
+    if [ "$(id -u)" -eq 0 ]; then
+        error "run user-add as an administrator through sudo, not as root."
+    fi
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        error "an interactive terminal is required."
+    fi
+}
+
+validate_username() {
+    if ! [[ "$username" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+        error "username must start with a lowercase letter and contain only lowercase letters, digits, _ or -."
+    fi
+    if [ "$username" = "root" ]; then
+        error "root is reserved."
+    fi
+    if getent passwd "$username" >/dev/null; then
+        error "user already exists: $username"
+    fi
+}
+
+check_zsh() {
+    if [ ! -x "$ZSH_PATH" ] || ! grep -Fxq "$ZSH_PATH" /etc/shells; then
+        error "$ZSH_PATH is not an installed, approved login shell."
+    fi
+}
+
+ask_wheel_access() {
+    local answer
+
+    read -r -p "Grant administrator access through wheel? [y/N] " answer
+    case "$answer" in
+        y|Y|yes|YES)
+            grant_wheel=1
+            ;;
+        ""|n|N|no|NO)
+            ;;
+        *)
+            error "answer yes or no."
+            ;;
+    esac
+}
+
+confirm_creation() {
+    local answer access
+
+    if [ "$grant_wheel" -eq 1 ]; then
+        access="wheel administrator"
+    else
+        access="standard user (no wheel access)"
+    fi
+
+    echo
+    echo "New account: $username"
+    echo "Login shell: $ZSH_PATH"
+    echo "Access: $access"
+    read -r -p "Create this account? [y/N] " answer
+    case "$answer" in
+        y|Y|yes|YES)
+            ;;
+        *)
+            echo "Cancelled."
+            exit 0
+            ;;
+    esac
+}
+
+create_user() {
+    local -a useradd_args=(useradd -m -U -s "$ZSH_PATH")
+
+    if [ "$grant_wheel" -eq 1 ]; then
+        useradd_args+=(-G wheel)
+    fi
+
+    sudo "${useradd_args[@]}" "$username"
+    sudo passwd "$username"
+}
+
+main() {
+    case "${1:-}" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        "")
+            ;;
+        *)
+            error "user-add does not accept arguments."
+            ;;
+    esac
+
+    require_normal_user
+    require_command getent
+    require_command useradd
+    require_command passwd
+    require_command sudo
+    check_zsh
+
+    read -r -p "New username: " username
+    validate_username
+    ask_wheel_access
+    confirm_creation
+    create_user
+
+    echo "Account created. Sign in through Plasma Login and choose an available desktop session."
+}
+
+main "$@"
+
+# vi: ft=bash
