@@ -205,6 +205,8 @@ extra/kitty
     A modern, hackable, featureful, OpenGL-based terminal emulator.
 extra/kodi
     A software media player and entertainment hub for digital media (gl renderer).
+extra/kwin
+    KDE Plasma window manager and Wayland compositor.
 extra/kwindowsystem
     Access to the windowing system.
 extra/libreoffice-fresh
@@ -267,6 +269,10 @@ extra/pavucontrol
     A volume control for the PulseAudio sound server.
 extra/pdftk
     Command-line tool for working with PDFs.
+extra/plasma-login-manager
+    KDE Plasma graphical login and session manager.
+extra/plasma-meta
+    Complete KDE Plasma desktop, including the Wayland session.
 extra/plocate
     Alternative to locate, faster and compatible with mlocate's database.
 extra/poppler
