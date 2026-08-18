@@ -16,6 +16,19 @@ for link in ~/bin/setup-*; do
     fi
 done
 
+# Retire scanner commands superseded by the batch-only `scan` command.
+for link in ~/bin/scan-v330 ~/bin/scan-v330-batch; do
+    if [ -L "$link" ]; then
+        target=$(readlink "$link")
+        case "$target" in
+            "$DOTFILES_DIR"/bin/scanner/scan-v330|"$DOTFILES_DIR"/bin/scanner/scan-v330-batch)
+                rm -f "$link"
+                echo "Removed stale symlink: $link"
+                ;;
+        esac
+    fi
+done
+
 # Loop through each file in $DOTFILES_DIR/bin
 for file in "$DOTFILES_DIR"/bin/* "$DOTFILES_DIR"/bin/live-usb/* "$DOTFILES_DIR"/bin/printer/* "$DOTFILES_DIR"/bin/scanner/*; do
     # Skip directories - only symlink regular files

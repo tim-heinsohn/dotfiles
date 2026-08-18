@@ -1,12 +1,15 @@
 #!/bin/bash
 
-# Epson V330 Batch Scanning
+# scan: Epson V330 batch scanning
+#
+# Usage: scan [options]
 # Interactive mode: keyboard controls
 # Button mode (--button): Start key on scanner triggers each page scan
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FAKE_MODE="${SCAN_V330_FAKE:-}"
+SKIP_DETECT="${SCAN_V330_SKIP_DETECT:-}"
 
 # Default settings
 RESOLUTION=150
@@ -14,12 +17,15 @@ MODE="Gray"
 FORMAT="png"
 OUTPUT_DIR="$HOME/Scans/batch_$(date +%Y%m%d_%H%M%S)"
 PREFIX="scan"
+PREFIX_SET=false
 START_COUNT=1
 CREATE_PDF=true
 BUTTON_MODE=false
 MAX_PAGES=0        # 0 = unlimited (button mode only)
-DEVICE=""          # passed through to scan-v330 when set
+DEVICE=""
 KEEP_IMAGES=false  # keep individual image files after PDF creation
+APPEND_TO=""
+PDF_FILE=""
 
 # Colors
 GREEN='\033[0;32m'
@@ -38,8 +44,11 @@ OPTIONS:
     -r, --resolution DPI    Scan resolution (default: 150)
     -m, --mode MODE         Scan mode: Color, Gray, Binary/LineArt (default: Gray)
     -f, --format FORMAT     Output format: png, tiff, jpeg (default: png)
+    -b, --batch             Enable batch mode (the default)
     -d, --directory DIR     Output directory (default: ~/Scans/batch_TIMESTAMP)
     -p, --prefix PREFIX     Filename prefix (default: scan)
+    -a, --append-to FILE    Append pages to an existing PDF. The prefix must
+                            match the PDF filename when explicitly provided.
     -s, --start NUM         Starting number (default: 1)
     --no-pdf                Skip combined PDF generation
     --keep                  Keep individual image files after PDF creation
@@ -96,12 +105,99 @@ normalize_mode() {
     esac
 }
 
+resolve_scan_resolution() {
+    case "$1" in
+        150)
+            # The V330 backend only exposes 100/200/300/... DPI.
+            echo "300"
+            ;;
+        *)
+            echo "$1"
+            ;;
+    esac
+}
+
+resample_scan_output() {
+    local input_file="$1"
+    local extension="${input_file##*.}"
+    local resized_file
+    resized_file=$(mktemp "${input_file%.*}.XXXXXX.${extension}")
+
+    if command -v magick >/dev/null 2>&1; then
+        magick "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" "$resized_file"
+    elif command -v convert >/dev/null 2>&1; then
+        convert "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" "$resized_file"
+    else
+        rm -f "$resized_file"
+        log_error "150 DPI output requires ImageMagick (magick or convert)"
+        return 1
+    fi
+
+    mv "$resized_file" "$input_file"
+}
+
+detect_scanner() {
+    if [[ -n "$SKIP_DETECT" || -n "$FAKE_MODE" ]]; then
+        DEVICE="${DEVICE:-FAKE_DEVICE}"
+        log_warn "Skipping scanner detection (debug mode)"
+        return
+    fi
+
+    local scanner_info
+    scanner_info=$(scanimage -L 2>/dev/null | grep "Epson Perfection V330" || true)
+
+    if [[ -z "$scanner_info" ]]; then
+        log_error "Epson Perfection V330 scanner not found"
+        log_error "Please connect the scanner via USB and make sure it is powered on."
+        if command -v lsusb >/dev/null 2>&1 && ! lsusb 2>/dev/null | grep -qi epson; then
+            log_error "No Epson device found on USB (lsusb shows no Epson entry)."
+        fi
+        return 1
+    fi
+
+    DEVICE="${scanner_info#*\`}"
+    DEVICE=$(printf '%s' "$DEVICE" | cut -d"'" -f1)
+    log_info "Found scanner: $scanner_info"
+}
+
+scan_page() {
+    local filepath="$1"
+    local wait_for_button="${2:-false}"
+    local scan_resolution
+    scan_resolution=$(resolve_scan_resolution "$RESOLUTION")
+
+    if [[ -n "$FAKE_MODE" ]]; then
+        log_warn "Generating fake scan output (debug mode)"
+        if command -v magick >/dev/null 2>&1; then
+            magick -size 600x600 xc:white "$filepath"
+        elif command -v convert >/dev/null 2>&1; then
+            convert -size 600x600 xc:white "$filepath"
+        else
+            log_error "Fake scan output requires ImageMagick"
+            return 1
+        fi
+    else
+        local cmd=(scanimage -d "$DEVICE" --resolution "$scan_resolution" --mode "$MODE" "--format=$FORMAT")
+        [[ "$wait_for_button" == "true" ]] && cmd+=(--wait-for-button=yes)
+        "${cmd[@]}" > "$filepath"
+    fi
+
+    if [[ ! -s "$filepath" ]]; then
+        log_error "Scan produced no data"
+        return 1
+    fi
+
+    if [[ -z "$FAKE_MODE" && "$RESOLUTION" == "150" && "$scan_resolution" != "$RESOLUTION" ]]; then
+        log_info "Scanner backend does not support 150 DPI directly; scaling output down to 150 DPI"
+        resample_scan_output "$filepath"
+    fi
+}
+
 create_combined_pdf() {
     if [[ "$CREATE_PDF" != "true" ]]; then
         return 1
     fi
 
-    local pdf_file="$OUTPUT_DIR/${PREFIX}.pdf"
     local image_files=()
 
     # Collect all scanned images in order
@@ -117,16 +213,16 @@ create_combined_pdf() {
     log_info "Creating combined PDF with ${#image_files[@]} pages..."
 
     if command -v img2pdf &> /dev/null; then
-        if img2pdf --output "$pdf_file" "${image_files[@]}"; then
-            log_info "✓ Created: $pdf_file"
+        if img2pdf --output "$PDF_FILE" "${image_files[@]}"; then
+            log_info "Created: $PDF_FILE"
             return 0
         else
             log_error "Failed to create PDF with img2pdf"
             return 1
         fi
     elif command -v convert &> /dev/null; then
-        if convert "${image_files[@]}" "$pdf_file"; then
-            log_info "✓ Created: $pdf_file"
+        if convert "${image_files[@]}" "$PDF_FILE"; then
+            log_info "Created: $PDF_FILE"
             return 0
         else
             log_error "Failed to create PDF with ImageMagick"
@@ -148,8 +244,7 @@ cleanup_temp_images() {
         return
     fi
 
-    local pdf_file="$OUTPUT_DIR/${PREFIX}.pdf"
-    if [[ ! -f "$pdf_file" ]]; then
+    if [[ ! -f "$PDF_FILE" ]]; then
         return
     fi
 
@@ -160,6 +255,42 @@ cleanup_temp_images() {
         removed=$((removed + 1))
     done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0)
     log_info "Removed $removed temporary image file(s)"
+}
+
+append_to_pdf() {
+    local append_directory
+    append_directory=$(dirname "$APPEND_TO")
+    local append_basename
+    append_basename=$(basename "$APPEND_TO")
+    local temporary_file
+    temporary_file=$(mktemp "$append_directory/.${append_basename}.XXXXXX.pdf")
+
+    # Build beside the destination so the final move is atomic.
+    if ! pdfunite "$APPEND_TO" "$PDF_FILE" "$temporary_file"; then
+        rm -f "$temporary_file"
+        log_error "Failed to append scanned pages to: $APPEND_TO"
+        return 1
+    fi
+
+    mv "$temporary_file" "$APPEND_TO"
+    log_info "Appended scanned pages to: $APPEND_TO"
+}
+
+finish_batch() {
+    local current_count="$1"
+    local successful_scans="$2"
+
+    if ! create_combined_pdf; then
+        return 1
+    fi
+
+    if [[ -n "$APPEND_TO" ]]; then
+        append_to_pdf || return 1
+    fi
+
+    cleanup_temp_images
+    [[ -n "$APPEND_TO" ]] && rm -f "$PDF_FILE"
+    print_summary "$current_count" "$successful_scans"
 }
 
 # Parse arguments
@@ -177,12 +308,24 @@ while [[ $# -gt 0 ]]; do
             FORMAT="$2"
             shift 2
             ;;
+        -b|--batch)
+            shift
+            ;;
         -d|--directory)
             OUTPUT_DIR="$2"
             shift 2
             ;;
         -p|--prefix)
             PREFIX="$2"
+            PREFIX_SET=true
+            shift 2
+            ;;
+        -a|--append-to)
+            if [[ $# -lt 2 ]]; then
+                log_error "$1 requires a PDF path"
+                exit 1
+            fi
+            APPEND_TO="$2"
             shift 2
             ;;
         -s|--start)
@@ -227,6 +370,49 @@ if ! MODE=$(normalize_mode "$MODE"); then
     exit 1
 fi
 
+case "$RESOLUTION" in
+    75|150|200|300|600|1200|2400|4800) ;;
+    *) log_error "Invalid resolution: $RESOLUTION"; exit 1 ;;
+esac
+
+case "$FORMAT" in
+    png|tiff|jpeg) ;;
+    *) log_error "Invalid format: $FORMAT (use png, tiff, or jpeg)"; exit 1 ;;
+esac
+
+if ! [[ "$START_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+    log_error "Starting page number must be a positive integer: $START_COUNT"
+    exit 1
+fi
+
+if ! [[ "$MAX_PAGES" =~ ^[0-9]+$ ]]; then
+    log_error "Page count must be a non-negative integer: $MAX_PAGES"
+    exit 1
+fi
+
+if [[ -n "$APPEND_TO" ]]; then
+    if [[ "$CREATE_PDF" != "true" ]]; then
+        log_error "--append-to cannot be used with --no-pdf"
+        exit 1
+    fi
+    if [[ ! -f "$APPEND_TO" ]] || ! file --brief --mime-type -- "$APPEND_TO" | grep -qx 'application/pdf'; then
+        log_error "--append-to must reference an existing PDF: $APPEND_TO"
+        exit 1
+    fi
+    if ! command -v pdfunite >/dev/null 2>&1; then
+        log_error "Appending PDFs requires pdfunite (install poppler)"
+        exit 1
+    fi
+
+    append_prefix=$(basename "$APPEND_TO")
+    append_prefix="${append_prefix%.*}"
+    if [[ "$PREFIX_SET" == "true" && "$PREFIX" != "$append_prefix" ]]; then
+        log_error "Prefix '$PREFIX' does not match append target '$append_prefix.pdf'"
+        exit 1
+    fi
+    PREFIX="$append_prefix"
+fi
+
 # ---------------------------------------------------------------------------
 # Button mode (non-interactive)
 # ---------------------------------------------------------------------------
@@ -249,10 +435,8 @@ run_button_mode() {
 
     # Ensure clean finish on Ctrl+C or terminal close
     trap 'echo; log_info "Interrupted — finishing up..."; \
-          create_combined_pdf; \
-          cleanup_temp_images; \
-          print_summary "$current_count" "$successful_scans"; \
-          exit 0' INT TERM HUP
+          finish_batch "$current_count" "$successful_scans"; \
+          exit $?' INT TERM HUP
 
     while true; do
         # Stop after MAX_PAGES if set
@@ -268,15 +452,8 @@ run_button_mode() {
 
         log_info "Page $current_count — waiting for Start button press..."
 
-        # Pass device override if set; SCAN_V330_WAIT_BUTTON tells scan-v330
-        # to add --wait-for-button=yes to the scanimage command.
-        local extra_args=()
-        [[ -n "$DEVICE" ]] && extra_args+=("--device" "$DEVICE")
-
-        if SCAN_V330_WAIT_BUTTON=1 \
-           "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" \
-           "${extra_args[@]}" "$filepath"; then
-            log_info "✓ Saved: $filename"
+        if scan_page "$filepath" true; then
+            log_info "Saved: $filename"
             current_count=$((current_count + 1))
             successful_scans=$((successful_scans + 1))
         else
@@ -284,9 +461,7 @@ run_button_mode() {
         fi
     done
 
-    create_combined_pdf
-    cleanup_temp_images
-    print_summary "$current_count" "$successful_scans"
+    finish_batch "$current_count" "$successful_scans"
 }
 
 # ---------------------------------------------------------------------------
@@ -312,10 +487,8 @@ run_interactive_mode() {
 
     # Ensure clean finish on Ctrl+C or terminal close
     trap 'echo; log_info "Interrupted — finishing up..."; \
-          create_combined_pdf; \
-          cleanup_temp_images; \
-          print_summary "$current_count" "$successful_scans"; \
-          exit 0' INT TERM HUP
+          finish_batch "$current_count" "$successful_scans"; \
+          exit $?' INT TERM HUP
 
     while true; do
         # Generate filename
@@ -338,8 +511,8 @@ run_interactive_mode() {
             $'\n'|"")
                 # Scan current page
                 log_info "Scanning page $current_count..."
-                if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
-                    log_info "✓ Saved: $filename"
+                if scan_page "$filepath"; then
+                    log_info "Saved: $filename"
                     current_count=$((current_count + 1))
                     successful_scans=$((successful_scans + 1))
                 else
@@ -360,9 +533,11 @@ run_interactive_mode() {
                 ;;
             r|R)
                 log_info "Rescanning page $current_count..."
-                if "$SCRIPT_DIR/scan-v330" -r "$RESOLUTION" -m "$MODE" -f "$FORMAT" "$filepath"; then
-                    log_info "✓ Rescanned: $filename"
-                    if [[ ! -f "$filepath" ]]; then
+                local was_scanned=false
+                [[ -f "$filepath" ]] && was_scanned=true
+                if scan_page "$filepath"; then
+                    log_info "Rescanned: $filename"
+                    if [[ "$was_scanned" == "false" ]]; then
                         successful_scans=$((successful_scans + 1))
                     fi
                 else
@@ -385,10 +560,7 @@ run_interactive_mode() {
                 fi
                 ;;
             q|Q)
-                create_combined_pdf
-                cleanup_temp_images
-                log_info "Batch scanning completed. Files saved to: $OUTPUT_DIR"
-                print_summary "$current_count" "$successful_scans"
+                finish_batch "$current_count" "$successful_scans"
                 exit 0
                 ;;
             *)
@@ -397,9 +569,7 @@ run_interactive_mode() {
         esac
     done
 
-    create_combined_pdf
-    cleanup_temp_images
-    print_summary "$current_count" "$successful_scans"
+    finish_batch "$current_count" "$successful_scans"
 }
 
 print_summary() {
@@ -418,11 +588,22 @@ print_summary() {
 # Main
 # ---------------------------------------------------------------------------
 
-# Create output directory
+# Create output directory and the combined-PDF destination.
 mkdir -p "$OUTPUT_DIR"
+if [[ -n "$APPEND_TO" ]]; then
+    PDF_FILE=$(mktemp "$OUTPUT_DIR/.${PREFIX}.XXXXXX.pdf")
+else
+    PDF_FILE="$OUTPUT_DIR/${PREFIX}.pdf"
+fi
+
+if [[ -z "$DEVICE" ]]; then
+    detect_scanner
+fi
 
 if [[ "$BUTTON_MODE" == "true" ]]; then
     run_button_mode
 else
     run_interactive_mode
 fi
+
+# vi: ft=bash
