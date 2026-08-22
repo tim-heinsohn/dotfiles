@@ -155,8 +155,27 @@ detect_scanner() {
         return
     fi
 
+    local scanner_output=""
+    local detection_status=0
+    log_info "Detecting scanner..."
+    if scanner_output=$(timeout --signal=TERM --kill-after=2s 10s scanimage -L 2>/dev/null); then
+        :
+    else
+        detection_status=$?
+    fi
+
+    if [[ "$detection_status" -eq 124 || "$detection_status" -eq 137 ]]; then
+        log_error "Scanner detection timed out after 10 seconds"
+        if command -v lsusb >/dev/null 2>&1 && lsusb 2>/dev/null | grep -qi epson; then
+            log_error "The Epson scanner is visible on USB. Power-cycle it and retry."
+        else
+            log_error "No Epson device found on USB. Check its power and connection."
+        fi
+        return 1
+    fi
+
     local scanner_info
-    scanner_info=$(scanimage -L 2>/dev/null | grep "Epson Perfection V330" || true)
+    scanner_info=$(printf '%s\n' "$scanner_output" | grep "Epson Perfection V330" || true)
 
     if [[ -z "$scanner_info" ]]; then
         log_error "Epson Perfection V330 scanner not found"
