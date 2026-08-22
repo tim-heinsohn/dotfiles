@@ -15,7 +15,7 @@ unsetopt beep
 # see </usr/share/doc/zsh-completions/README.md>
 # activate completion system and compdef command
 # (must be available before most other stuff)
-fpath=(~/.local/share/sheldon/repos/github.com/zsh-users/zsh-completions/src $fpath)
+fpath=(~/.zsh/completions ~/.local/share/sheldon/repos/github.com/zsh-users/zsh-completions/src $fpath)
 autoload -Uz compinit
 compinit
 

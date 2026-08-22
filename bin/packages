@@ -3,6 +3,8 @@ aur/acpilight
 aur/antigravity
     An agentic development platform from Google, evolving the IDE into the agent-first era.
     A small command-line utility to show and change EXIF information in JPEG files.
+aur/beads-bin
+    Graph-based memory + issue tracker for coding agents (binary release; pinned to v1.1.2).
 aur/bruno-bin
     Opensource API Client for Exploring and Testing APIs.
 aur/google-chrome
@@ -121,6 +123,8 @@ extra/direnv
     A shell extension that manages your environment.
 extra/dnsmasq
     A lightweight, easy to configure DNS forwarder and DHCP server.
+extra/dolt
+    Git for data! A version controlled relational database.
 extra/docker
     Pack, ship and run any application as a lightweight container.
 extra/docker-buildx

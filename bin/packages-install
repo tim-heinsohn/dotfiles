@@ -31,6 +31,45 @@ done
 failed_packages=()
 success_count=0
 
+# AUR packages normally follow the latest PKGBUILD. Keep Beads at the version
+# required by its Dolt integration by building the reviewed AUR revision.
+declare -A pinned_aur_package_versions=(
+    ["beads-bin"]="1.1.2-1"
+)
+declare -A pinned_aur_package_commits=(
+    ["beads-bin"]="e759241d64de3eb0e14912437027d6af10fdaa7f"
+)
+
+install_pinned_aur_package() (
+    local package_name="$1"
+    local expected_version="${pinned_aur_package_versions[$package_name]}"
+    local commit="${pinned_aur_package_commits[$package_name]}"
+    local installed_version build_dir
+
+    installed_version=$(pacman -Q "$package_name" 2>/dev/null | cut -d' ' -f2 || true)
+    if [[ "$installed_version" == "$expected_version" ]]; then
+        echo "✓ $package_name is pinned at $expected_version"
+        return 0
+    fi
+
+    build_dir=$(mktemp -d)
+    trap 'rm -rf "$build_dir"' EXIT
+
+    # The fixed commit and PKGBUILD checksum make this reproducible while
+    # retaining makepkg's normal source-integrity verification.
+    git clone --quiet "https://aur.archlinux.org/${package_name}.git" "$build_dir"
+    git -C "$build_dir" checkout --detach --quiet "$commit"
+    if [[ "$(git -C "$build_dir" rev-parse HEAD)" != "$commit" ]]; then
+        echo "Pinned AUR commit verification failed for $package_name" >&2
+        return 1
+    fi
+
+    (
+        cd "$build_dir"
+        makepkg --syncdeps --install --noconfirm
+    )
+)
+
 # Collect all packages first
 mapfile -t all_packages < <(grep -h -E '^aur/|^core/|^extra/' "${package_files[@]}" | cut -d' ' -f1)
 
@@ -92,7 +131,21 @@ if [[ ${#aur_packages[@]} -gt 0 ]]; then
                 sudo pacman -R --noconfirm "$old_pkg"
             fi
         fi
-        if yay -S --needed --noconfirm "$pkg"; then
+        package_name="${pkg#aur/}"
+        if [[ -n "${pinned_aur_package_versions[$package_name]:-}" ]]; then
+            if install_pinned_aur_package "$package_name"; then
+                package_installed=1
+            else
+                package_installed=0
+            fi
+        else
+            if yay -S --needed --noconfirm "$pkg"; then
+                package_installed=1
+            else
+                package_installed=0
+            fi
+        fi
+        if [[ "$package_installed" -eq 1 ]]; then
             success_count=$((success_count + 1))
             # After an Antigravity upgrade, wipe the stale Service Worker cache.
             # A version bump changes the service-worker.js query string, which

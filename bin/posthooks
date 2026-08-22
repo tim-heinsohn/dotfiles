@@ -25,6 +25,12 @@ ln -sf ~/p/dotfiles/zsh/p10k.zsh ~/.p10k.zsh
 # Setup p10k.claude.zsh symlink (bypassing bombadil validation due to Tera parsing ${#...})
 mkdir -p ~/.zsh
 ln -sf ~/p/dotfiles/zsh/p10k.claude.zsh ~/.zsh/p10k.claude.zsh
+mkdir -p ~/.zsh/completions
+# Preserve other local completions while managing Beads from this repository.
+ln -sf "$DOTFILES_DIR/zsh/completions/_bd" ~/.zsh/completions/_bd
+if [ "$(readlink ~/.zsh/completions/completions 2>/dev/null || true)" = "$DOTFILES_DIR/zsh/completions" ]; then
+    rm ~/.zsh/completions/completions
+fi
 
 # Symlink MCP CLI from ~/mcp if present
 if [ -x "$HOME/mcp/bin/mcp" ]; then
