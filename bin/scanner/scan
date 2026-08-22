@@ -19,6 +19,7 @@ OUTPUT_DIR="$HOME/Scans/batch_$(date +%Y%m%d_%H%M%S)"
 PREFIX="scan"
 PREFIX_SET=false
 START_COUNT=1
+START_COUNT_SET=false
 CREATE_PDF=true
 BUTTON_MODE=false
 MAX_PAGES=0        # 0 = unlimited (button mode only)
@@ -26,6 +27,7 @@ DEVICE=""
 KEEP_IMAGES=false  # keep individual image files after PDF creation
 APPEND_TO=""
 PDF_FILE=""
+ACTIVE_SCAN_FILE=""
 
 # Colors
 GREEN='\033[0;32m'
@@ -49,7 +51,7 @@ OPTIONS:
     -p, --prefix PREFIX     Filename prefix (default: scan)
     -a, --append-to FILE    Append pages to an existing PDF. The prefix must
                             match the PDF filename when explicitly provided.
-    -s, --start NUM         Starting number (default: 1)
+    -s, --start NUM         Starting number (default: 1, or next page when appending)
     --no-pdf                Skip combined PDF generation
     --keep                  Keep individual image files after PDF creation
     --button                Non-interactive mode: press scanner Start key to
@@ -119,14 +121,24 @@ resolve_scan_resolution() {
 
 resample_scan_output() {
     local input_file="$1"
-    local extension="${input_file##*.}"
+    local output_format="$2"
     local resized_file
-    resized_file=$(mktemp "${input_file%.*}.XXXXXX.${extension}")
+    resized_file=$(mktemp "${input_file}.XXXXXX")
 
     if command -v magick >/dev/null 2>&1; then
-        magick "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" "$resized_file"
+        if ! magick "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" \
+            "${output_format}:$resized_file"; then
+            rm -f -- "$resized_file"
+            log_error "Failed to scale scan output to $RESOLUTION DPI"
+            return 1
+        fi
     elif command -v convert >/dev/null 2>&1; then
-        convert "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" "$resized_file"
+        if ! convert "$input_file" -resize 50% -units PixelsPerInch -density "$RESOLUTION" \
+            "${output_format}:$resized_file"; then
+            rm -f -- "$resized_file"
+            log_error "Failed to scale scan output to $RESOLUTION DPI"
+            return 1
+        fi
     else
         rm -f "$resized_file"
         log_error "150 DPI output requires ImageMagick (magick or convert)"
@@ -164,33 +176,59 @@ scan_page() {
     local filepath="$1"
     local wait_for_button="${2:-false}"
     local scan_resolution
+    local staged_file="${filepath}.part"
     scan_resolution=$(resolve_scan_resolution "$RESOLUTION")
+    rm -f -- "$staged_file"
+    ACTIVE_SCAN_FILE="$staged_file"
 
     if [[ -n "$FAKE_MODE" ]]; then
         log_warn "Generating fake scan output (debug mode)"
         if command -v magick >/dev/null 2>&1; then
-            magick -size 600x600 xc:white "$filepath"
+            if ! magick -size 600x600 xc:white "${FORMAT}:$staged_file"; then
+                rm -f -- "$staged_file"
+                ACTIVE_SCAN_FILE=""
+                return 1
+            fi
         elif command -v convert >/dev/null 2>&1; then
-            convert -size 600x600 xc:white "$filepath"
+            if ! convert -size 600x600 xc:white "${FORMAT}:$staged_file"; then
+                rm -f -- "$staged_file"
+                ACTIVE_SCAN_FILE=""
+                return 1
+            fi
         else
+            rm -f -- "$staged_file"
+            ACTIVE_SCAN_FILE=""
             log_error "Fake scan output requires ImageMagick"
             return 1
         fi
     else
         local cmd=(scanimage -d "$DEVICE" --resolution "$scan_resolution" --mode "$MODE" "--format=$FORMAT")
         [[ "$wait_for_button" == "true" ]] && cmd+=(--wait-for-button=yes)
-        "${cmd[@]}" > "$filepath"
+        if ! "${cmd[@]}" > "$staged_file"; then
+            rm -f -- "$staged_file"
+            ACTIVE_SCAN_FILE=""
+            return 1
+        fi
     fi
 
-    if [[ ! -s "$filepath" ]]; then
+    if [[ ! -s "$staged_file" ]]; then
+        rm -f -- "$staged_file"
+        ACTIVE_SCAN_FILE=""
         log_error "Scan produced no data"
         return 1
     fi
 
     if [[ -z "$FAKE_MODE" && "$RESOLUTION" == "150" && "$scan_resolution" != "$RESOLUTION" ]]; then
         log_info "Scanner backend does not support 150 DPI directly; scaling output down to 150 DPI"
-        resample_scan_output "$filepath"
+        if ! resample_scan_output "$staged_file" "$FORMAT"; then
+            rm -f -- "$staged_file"
+            ACTIVE_SCAN_FILE=""
+            return 1
+        fi
     fi
+
+    mv -- "$staged_file" "$filepath"
+    ACTIVE_SCAN_FILE=""
 }
 
 create_combined_pdf() {
@@ -203,7 +241,7 @@ create_combined_pdf() {
     # Collect all scanned images in order
     while IFS= read -r -d '' file; do
         image_files+=("$file")
-    done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0 | sort -z)
+    done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f -size +0c \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0 | sort -z)
 
     if [[ ${#image_files[@]} -eq 0 ]]; then
         log_warn "No images found to combine into PDF"
@@ -330,6 +368,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -s|--start)
             START_COUNT="$2"
+            START_COUNT_SET=true
             shift 2
             ;;
         --no-pdf)
@@ -403,6 +442,30 @@ if [[ -n "$APPEND_TO" ]]; then
         log_error "Appending PDFs requires pdfunite (install poppler)"
         exit 1
     fi
+    if ! command -v pdfinfo >/dev/null 2>&1; then
+        log_error "Determining the next page number requires pdfinfo (install poppler)"
+        exit 1
+    fi
+
+    pdf_metadata=""
+    if ! pdf_metadata=$(pdfinfo "$APPEND_TO" 2>/dev/null); then
+        log_error "Could not read page count from PDF: $APPEND_TO"
+        exit 1
+    fi
+    existing_page_count=""
+    while IFS=: read -r metadata_key metadata_value; do
+        if [[ "$metadata_key" == "Pages" ]]; then
+            existing_page_count="${metadata_value//[[:space:]]/}"
+            break
+        fi
+    done <<< "$pdf_metadata"
+    if ! [[ "$existing_page_count" =~ ^[0-9]+$ ]]; then
+        log_error "Could not read page count from PDF: $APPEND_TO"
+        exit 1
+    fi
+    if [[ "$START_COUNT_SET" != "true" ]]; then
+        START_COUNT=$((existing_page_count + 1))
+    fi
 
     append_prefix=$(basename "$APPEND_TO")
     append_prefix="${append_prefix%.*}"
@@ -435,6 +498,7 @@ run_button_mode() {
 
     # Ensure clean finish on Ctrl+C or terminal close
     trap 'echo; log_info "Interrupted — finishing up..."; \
+          rm -f -- "${ACTIVE_SCAN_FILE:-}"; ACTIVE_SCAN_FILE=""; \
           finish_batch "$current_count" "$successful_scans"; \
           exit $?' INT TERM HUP
 
@@ -487,6 +551,7 @@ run_interactive_mode() {
 
     # Ensure clean finish on Ctrl+C or terminal close
     trap 'echo; log_info "Interrupted — finishing up..."; \
+          rm -f -- "${ACTIVE_SCAN_FILE:-}"; ACTIVE_SCAN_FILE=""; \
           finish_batch "$current_count" "$successful_scans"; \
           exit $?' INT TERM HUP
 
