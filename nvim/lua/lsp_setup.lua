@@ -1,13 +1,9 @@
-local util = require('lspconfig.util')
-
 ---@diagnostic disable: undefined-global
-local lspconfig = require('lspconfig')
-lspconfig.ruby_lsp.setup{}
--- lspconfig.rubocop.setup{}
-lspconfig.solargraph.setup{
+
+vim.lsp.config('solargraph', {
   cmd = { "solargraph", "stdio" },
   filetypes = { "ruby" },
-  root_dir = require('lspconfig.util').root_pattern("Gemfile", ".git", "."),
+  root_markers = { "Gemfile", ".git" },
   settings = {
     solargraph = {
       diagnostics = true,
@@ -18,9 +14,8 @@ lspconfig.solargraph.setup{
       rspec = true,
     }
   }
-}
+})
 
-lspconfig.ansiblels.setup{}
 -- TODO: does not work yet
 vim.filetype.add({
   pattern = {
@@ -28,28 +23,24 @@ vim.filetype.add({
   },
 })
 
-lspconfig.ts_ls.setup{}
-lspconfig.pyright.setup{}
-lspconfig.eslint.setup{
+vim.lsp.config('eslint', {
   settings = {
     eslint = {
       enable = true,
       packageManager = "npm",
     }
   }
-}
+})
 
-lspconfig.bashls.setup{
+vim.lsp.config('bashls', {
   filetypes = { "bash", "sh", "zsh" }
-}
-lspconfig.lua_ls.setup{}
+})
 
-lspconfig.docker_compose_language_service.setup{
+vim.lsp.config('docker_compose_language_service', {
   cmd = { "docker-compose-langserver", "--stdio" },
   filetypes = { "yaml.docker-compose" },
-  root_dir = util.root_pattern('docker-compose.yaml', 'docker-compose.yml', 'compose.yaml', 'compose.yml'),
-  single_file_support = true,
-}
+  root_markers = { 'docker-compose.yaml', 'docker-compose.yml', 'compose.yaml', 'compose.yml' },
+})
 -- add filetype detection
 vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
  pattern = { "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml" },
@@ -57,9 +48,21 @@ vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
    vim.bo.filetype = "yaml.docker-compose"
  end,
 })
-lspconfig.dockerls.setup{}
 
-lspconfig.terraformls.setup{}
+vim.lsp.enable({
+  'ruby_lsp',
+  -- 'rubocop',
+  'solargraph',
+  'ansiblels',
+  'ts_ls',
+  'pyright',
+  'eslint',
+  'bashls',
+  'lua_ls',
+  'docker_compose_language_service',
+  'dockerls',
+  'terraformls',
+})
 
 vim.diagnostic.config({
   float = {
