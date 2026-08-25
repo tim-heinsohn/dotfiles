@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# wellbeing-snooze: Temporary bypass for the digital wellbeing lock.
+# wellbeing-snooze: Temporarily suppress digital wellbeing warnings.
 #
 # Usage: wellbeing-snooze [minutes]
 #
 # Description:
-# Creates a temporary lockfile to bypass the wellbeing-lock for the
+# Creates a temporary file to suppress wellbeing warnings for the
 # specified number of minutes (default 15).
 #
 # Dependencies:

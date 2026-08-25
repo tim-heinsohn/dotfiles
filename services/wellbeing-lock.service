@@ -1,5 +1,5 @@
 [Unit]
-Description=Digital Wellbeing Screen Lock
+Description=Digital Wellbeing Warning
 After=graphical-session.target
 
 [Service]

@@ -252,6 +252,22 @@ safe_pacman_update() {
         sudo pacman -Rdd --noconfirm "${conflicts[@]}" 2>/dev/null || true
     fi
 
+    # cewe-fotowelt 8.1.1 depends on the obsolete libjpeg virtual package.
+    # Update its AUR metadata before libjpeg-turbo drops that provides entry.
+    if pacman -Q cewe-fotowelt >/dev/null 2>&1; then
+        if ! command -v yay >/dev/null 2>&1; then
+            echo "Error: yay is required to update the installed cewe-fotowelt package." >&2
+            return 1
+        fi
+        echo "Updating cewe-fotowelt for the libjpeg-turbo transition..." >&2
+        (
+            local build_dir
+            build_dir=$(mktemp -d "${TMPDIR:-/tmp}/setup-system-cewe.XXXXXX")
+            trap 'rm -rf "$build_dir"' EXIT
+            yay -S --builddir "$build_dir" --needed --noconfirm cewe-fotowelt
+        )
+    fi
+
     # Retry once after cleanup
     sudo pacman -Suy --needed --noconfirm
 }
