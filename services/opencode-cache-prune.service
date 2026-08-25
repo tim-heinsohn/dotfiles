@@ -1,0 +1,7 @@
+[Unit]
+Description=Prune @latest OpenCode plugin caches
+Documentation=https://github.com/backnotprop/plannotator
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -c 'if [ -d "$HOME/.cache/opencode/packages" ]; then find "$HOME/.cache/opencode/packages" -maxdepth 3 -type d -name "*@latest" -exec rm -rf {} + 2>/dev/null || true; fi'

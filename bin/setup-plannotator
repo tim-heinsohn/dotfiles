@@ -1,0 +1,82 @@
+#!/bin/bash
+#
+# setup-plannotator: Install or update plannotator standalone CLI binary
+#
+# Usage: setup-plannotator [version]
+#
+# Description:
+# Installs the standalone plannotator binary from GitHub releases with
+# SHA256 checksum verification. Downloads only the compiled executable
+# to ~/.local/bin without mutating agent configs or prompting interactively.
+#
+# Dependencies:
+# - curl
+# - sha256sum (Linux) or shasum (macOS)
+
+set -euo pipefail
+
+VERSION="${1:-v0.27.8}"
+REPO="backnotprop/plannotator"
+BINARY_NAME="plannotator"
+INSTALL_DIR="${PLANNOTATOR_INSTALL_DIR:-$HOME/.local/bin}"
+
+case "$(uname -s)" in
+    Darwin) OS="darwin" ;;
+    Linux)  OS="linux" ;;
+    *)      echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+
+case "$(uname -m)" in
+    x86_64|amd64)  ARCH="x64" ;;
+    arm64|aarch64) ARCH="arm64" ;;
+    *)             echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+ASSET_NAME="${BINARY_NAME}-${OS}-${ARCH}"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET_NAME}"
+CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+
+TMP_DIR=$(mktemp -d)
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+echo "Downloading plannotator ${VERSION} for ${OS}-${ARCH}..."
+curl -fsSL -o "$TMP_DIR/${ASSET_NAME}" "$DOWNLOAD_URL"
+curl -fsSL -o "$TMP_DIR/${ASSET_NAME}.sha256" "$CHECKSUM_URL"
+
+echo "Verifying checksum..."
+expected_checksum=$(cut -d' ' -f1 < "$TMP_DIR/${ASSET_NAME}.sha256")
+
+if [ -z "$expected_checksum" ]; then
+    echo "Could not parse checksum from ${ASSET_NAME}.sha256" >&2
+    exit 1
+fi
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    actual_checksum=$(shasum -a 256 "$TMP_DIR/${ASSET_NAME}" | awk '{print $1}')
+else
+    actual_checksum=$(sha256sum "$TMP_DIR/${ASSET_NAME}" | awk '{print $1}')
+fi
+
+if [ "$actual_checksum" != "$expected_checksum" ]; then
+    echo "Checksum verification failed!" >&2
+    echo "Expected: $expected_checksum" >&2
+    echo "Actual:   $actual_checksum" >&2
+    exit 1
+fi
+
+echo "Checksum OK."
+mkdir -p "$INSTALL_DIR"
+mv "$TMP_DIR/${ASSET_NAME}" "$INSTALL_DIR/${BINARY_NAME}"
+chmod +x "$INSTALL_DIR/${BINARY_NAME}"
+
+echo "Installed plannotator ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
+
+if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+    echo "Verification: $("$BINARY_NAME" --version 2>/dev/null || echo 'installed successfully')"
+else
+    echo "Warning: ${INSTALL_DIR} is not on your PATH. Add it to your shell profile:"
+    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+fi

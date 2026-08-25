@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily cleanup of @latest OpenCode plugin caches
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+AccuracySec=1h
+Unit=opencode-cache-prune.service
+
+[Install]
+WantedBy=timers.target

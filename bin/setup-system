@@ -8,7 +8,7 @@
 #   base       System update, dotfiles, core packages, services, user groups
 #   languages  Node.js, npm packages, uv tools, Ruby/mise
 #   devtools   Git CLIs, overcommit, terraform-ls, Bun
-#   ai         Aider, Whisper, Tree-sitter
+#   ai         Aider, Whisper, Tree-sitter, Plannotator
 #   desktop    Wallpapers, scanner
 #   extras     Disk health monitoring, Java 17
 #   all        Everything (default)
@@ -410,6 +410,9 @@ pkg_ai() {
     headline "Whisper"
     run_if_exists "${DOTFILES_DIR}/whisper/setup"
 
+    headline "Plannotator"
+    run_if_exists "${DOTFILES_DIR}/bin/setup-plannotator"
+
     headline "Tree-sitter Parsers"
     if command -v nvim >/dev/null 2>&1; then
         nvim --headless "+TSUpdateSync" "+qa" || true
@@ -456,7 +459,7 @@ Packages:
   base       System update, dotfiles, core packages, services, user groups
   languages  Node.js, npm packages, uv tools, Ruby/mise
   devtools   Git CLIs, overcommit, terraform-ls, Bun
-  ai         Aider, Whisper, Tree-sitter
+  ai         Aider, Whisper, Tree-sitter, Plannotator
   desktop    Wallpapers, scanner
   extras     Disk health monitoring, Java 17
   all        Everything (default)

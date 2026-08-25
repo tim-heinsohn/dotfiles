@@ -16,6 +16,10 @@ Reverse proxy and service configurations.
 - `browser-workspace-restore.service`: restore browser windows to cached i3 workspaces
 - `browser-workspace-snapshot.service`: take one browser workspace snapshot
 - `browser-workspace-snapshot.timer`: periodic snapshot scheduler
+- `opencode-cache-prune.service`: prune `@latest` OpenCode plugin caches
+- `opencode-cache-prune.timer`: daily timer for OpenCode `@latest` plugin cache invalidation
+- `wellbeing-lock.service`: digital wellbeing screen lock trigger
+- `wellbeing-lock.timer`: schedule for digital wellbeing screen lock
 
 ## Traefik
 

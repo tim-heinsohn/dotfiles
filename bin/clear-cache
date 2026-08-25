@@ -94,6 +94,16 @@ clear_go_cache() {
   clear_cache_dir "$dir" "Go build"
 }
 
+clear_opencode_latest_plugin_cache() {
+  local dir="$HOME/.cache/opencode/packages"
+  if [[ -d $dir ]]; then
+    log "Pruning @latest OpenCode plugin caches in $dir"
+    find "$dir" -maxdepth 3 -type d -name "*@latest" -exec rm -rf {} + 2>/dev/null || true
+  else
+    log "Skipping OpenCode plugin cache ($dir not found)"
+  fi
+}
+
 clear_npm_cache() {
   local cache_dir="$HOME/.npm/_cacache"
   if command -v npm >/dev/null 2>&1; then
@@ -168,6 +178,7 @@ clear_pip_cache
 clear_spotify_cache
 clear_go_cache
 clear_npm_cache
+clear_opencode_latest_plugin_cache
 
 # Journald vacuum (30 days)
 if command -v journalctl >/dev/null 2>&1; then
