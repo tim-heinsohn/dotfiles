@@ -4,6 +4,9 @@ After=graphical-session.target
 
 [Service]
 Type=simple
+# The user manager can restart while the X session remains active.
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority
 ExecStart=%h/bin/xmodmap-watchdog
 Restart=always
 RestartSec=10

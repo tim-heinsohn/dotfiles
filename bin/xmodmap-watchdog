@@ -10,8 +10,30 @@ restore_settings() {
     fi
 }
 
+sync_at_spi_bus() {
+    local response bus_address current_address
+
+    # GTK reads this X11 property before querying D-Bus. Keep it aligned when
+    # the AT-SPI service is restarted without restarting the X session.
+    response="$(gdbus call --session \
+        --dest org.a11y.Bus \
+        --object-path /org/a11y/bus \
+        --method org.a11y.Bus.GetAddress 2>/dev/null)" || return
+    bus_address="${response#\(\'}"
+    bus_address="${bus_address%%\',\)}"
+
+    [[ -n "${XDG_RUNTIME_DIR:-}" ]] || return
+    [[ "$bus_address" == "unix:path=${XDG_RUNTIME_DIR}/at-spi/"* ]] || return
+
+    current_address="$(xprop -root AT_SPI_BUS 2>/dev/null || true)"
+    [[ "$current_address" == "AT_SPI_BUS(STRING) = \"$bus_address\"" ]] && return
+
+    xprop -root -f AT_SPI_BUS 8s -set AT_SPI_BUS "$bus_address" >/dev/null 2>&1 || true
+}
+
 # Main loop - check every 10 seconds
 while true; do
     restore_settings
+    sync_at_spi_bus
     sleep 10
 done

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#
+# ShellCheck wrapper: Run ShellCheck in a memory-bounded user scope.
+#
+# Usage: shellcheck [options] <files...>
+#
+# Description:
+# Limits each ShellCheck invocation so a pathological analysis fails without
+# contributing to a system-wide out-of-memory condition.
+#
+# Dependencies:
+# - /usr/bin/shellcheck
+# - systemd user manager
+
+set -euo pipefail
+
+exec systemd-run --user --scope --quiet --collect \
+  --property=MemoryHigh=1G \
+  --property=MemoryMax=2G \
+  --property=OOMPolicy=kill \
+  /usr/bin/shellcheck "$@"
+
+# vi: ft=bash
