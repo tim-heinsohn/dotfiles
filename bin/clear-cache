@@ -3,12 +3,14 @@ set -euo pipefail
 
 INTENSE=false
 ASSUME_YES=false
+FORCE=false
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--intense] [--yes]
+Usage: $(basename "$0") [--intense] [--yes] [--force]
   --intense   add aggressive cleanups (docker system prune -a, pacman -Scc)
   -y, --yes   automatically approve prompts triggered by --intense
+  -f, --force  pass --force to uv cache clean (bypass its in-use check)
 USAGE
 }
 
@@ -20,6 +22,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -y|--yes)
       ASSUME_YES=true
+      shift
+      ;;
+    -f|--force)
+      FORCE=true
       shift
       ;;
     -h|--help)
@@ -115,6 +121,66 @@ clear_npm_cache() {
   clear_cache_dir "$cache_dir" "npm"
 }
 
+clear_uv_cache() {
+  local timeout_seconds=30
+  local status
+  local cache_dir
+  local uv_processes
+  local -a uv_command=(uv cache clean)
+
+  if ! command -v uv >/dev/null 2>&1; then
+    log "Skipping uv cache (uv not installed)"
+    return 0
+  fi
+  if ! command -v timeout >/dev/null 2>&1; then
+    log "Cannot safely clear uv cache: the 'timeout' command is not available"
+    log "Install coreutils or run 'uv cache clean' manually with no uv processes active."
+    return 127
+  fi
+
+  cache_dir=$(uv cache dir 2>/dev/null || printf '%s' "${UV_CACHE_DIR:-$HOME/.cache/uv}")
+  if $FORCE; then
+    uv_command+=(--force)
+    log "Running: uv cache clean --force (bypassing the in-use check)"
+  else
+    log "Running: uv cache clean (waiting up to ${timeout_seconds}s for other uv processes)"
+  fi
+
+  if timeout --signal=TERM --kill-after=2s "${timeout_seconds}s" "${uv_command[@]}" >/dev/null; then
+    return 0
+  else
+    status=$?
+  fi
+
+  if [[ $status -ne 124 && $status -ne 137 ]]; then
+    log "uv cache clean failed with exit status $status (cache: $cache_dir)"
+    return "$status"
+  fi
+
+  log "uv cache clean timed out after ${timeout_seconds}s (cache: $cache_dir)"
+  log "Cause: uv protects the cache while another uv process may be using it."
+  log "The wait is intentional, but uv does not impose a timeout itself."
+
+  if command -v pgrep >/dev/null 2>&1; then
+    uv_processes=$(pgrep -af '(^|/)uv([[:space:]]|$)' || true)
+    if [[ -n $uv_processes ]]; then
+      log "Currently running uv processes:"
+      while IFS= read -r process; do
+        [[ -n $process ]] && log "  $process"
+      done <<< "$uv_processes"
+    else
+      log "No matching uv process is visible now; retry in case it just exited."
+    fi
+  else
+    log "Install procps to list the uv process holding the cache lock."
+  fi
+
+  log "Close tools that use uv, wait for their processes to finish, and retry."
+  log "Retry with '$(basename "$0") --force' only after confirming no uv process needs this cache."
+  log "This forwards --force to uv and bypasses its in-use check."
+  return 124
+}
+
 confirm_action() {
   local prompt=$1
   if $ASSUME_YES; then
@@ -166,7 +232,7 @@ if $INTENSE; then
 fi
 
 # uv cache
-run_if_present uv uv cache clean >/dev/null
+clear_uv_cache
 
 # yay cache
 run_if_present yay yay -Scc --noconfirm >/dev/null
@@ -201,5 +267,7 @@ fi
 log "Done."
 log "Additional disk-space ideas:"
 log "- Remove old PostgreSQL backups under /var/lib/postgres/data-old-* once new clusters are stable."
-log "- Review orphaned packages with: sudo pacman -Rns \$(pacman -Qdtq) after checking the list." 
+log "- Review orphaned packages with: sudo pacman -Rns \$(pacman -Qdtq) after checking the list."
 log "- Use sudo ncdu / or sudo du -xh /var | sort -h | tail to spot large directories before upgrades."
+
+# vi: ft=bash
