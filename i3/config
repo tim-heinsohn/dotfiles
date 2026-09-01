@@ -93,7 +93,7 @@ tiling_drag modifier titlebar
 # bindsym $mod+Return exec i3-sensible-terminal --login
 # NOTE: i3-sensible-terminal uses $TERMINAL, otherwise just checks for common terminals
 # NOTE: WezTerm is configured on its own to use zsh or bash with -l, see ~/.wezterm.lua
-bindsym $mod+Return exec i3-sensible-terminal
+bindsym $mod+Return exec kitty
 
 # Open workspace 5 with a tmuxp profile in WezTerm.
 bindsym $mod+Shift+Return workspace number 5; exec --no-startup-id wezterm start --always-new-process --cwd "$HOME/dotfiles" -- zsh -lc "$HOME/dotfiles/bin/tmux-session dotfiles"
