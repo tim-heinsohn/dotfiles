@@ -19,6 +19,9 @@ font pango:Iosevka Term 11
 # https://wiki.archlinux.org/index.php/XDG_Autostart
 exec --no-startup-id dex --autostart --environment i3
 
+# Keep D-Bus-activated prompts connected to the current X session after user-manager recovery.
+exec_always --no-startup-id dbus-update-activation-environment --systemd DISPLAY XAUTHORITY
+
 # Preserve keyboard layout and ensure key repeat is enabled.
 exec_always --no-startup-id sh -c 'setxkbmap fr; xset r on; xset r 22; xset r rate 250 35'
 
