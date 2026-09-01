@@ -42,8 +42,11 @@ exec_always --no-startup-id systemctl --user start dunst.service
 # Night light / blue light filter
 exec_always --no-startup-id systemctl --user restart gammastep.service
 
+# Apply a wallpaper as soon as the i3 session starts. fcron rotates it afterwards.
+exec --no-startup-id sh -c 'test -d /srv/Wallpapers && feh --bg-fill --randomize --no-fehbg /srv/Wallpapers /srv/Wallpapers'
+
 # Screenshot tool (system tray daemon)
-exec --no-startup-id flameshot
+# Flameshot is launched by its XDG autostart entry through dex above.
 
 # Sequenced startup: gpg-prewarm first (gets focus, one prompt), then browsers,
 # then tmuxp sessions. Prevents the race where browsers steal focus from the

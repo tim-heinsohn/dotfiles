@@ -331,6 +331,8 @@ extra/signal-desktop
     A desktop client for the Signal private messenger.
 extra/smartmontools
     Control and monitor storage systems using SMART for disk health monitoring and failure prediction.
+extra/strace
+    Diagnostic utility for tracing system calls and signals.
 extra/speech-dispatcher
     A common interface to speech synthesis.
 extra/tea
