@@ -550,6 +550,10 @@ main() {
 
     headline "Done"
     echo "Setup complete."
+    echo
+    echo "You may want to run additionally:"
+    echo "  ${DOTFILES_DIR}/bin/setup-openproject-cli --login"
+    echo "    Install and securely configure the optional OpenProject CLI."
 }
 
 main "$@"

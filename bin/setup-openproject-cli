@@ -1,0 +1,153 @@
+#!/bin/bash
+#
+# setup-openproject-cli: Install the pinned OpenProject CLI release securely
+#
+# Usage: setup-openproject-cli [--login]
+#
+# Description:
+# Downloads OpenProject CLI v0.5.5 from its GitHub release, verifies the
+# platform-specific SHA256 recorded in this script, and installs `op` to
+# ~/.local/bin. The optional --login flow creates the CLI configuration
+# directory with owner-only permissions before prompting for an API token.
+#
+# Dependencies:
+# - curl
+# - unzip
+# - sha256sum (Linux) or shasum (macOS)
+
+set -euo pipefail
+
+VERSION="v0.5.5"
+REPOSITORY="opf/openproject-cli"
+INSTALL_DIR="${OPENPROJECT_CLI_INSTALL_DIR:-$HOME/.local/bin}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/openproject"
+CONFIG_FILE="${CONFIG_DIR}/config"
+LOGIN=0
+
+usage() {
+    cat <<'USAGE'
+Usage: setup-openproject-cli [--login]
+
+Install the pinned OpenProject CLI release after SHA256 verification.
+
+Options:
+  --login       Authenticate after installation.
+  -h, --help    Show this help.
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --login)
+            LOGIN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+case "$(uname -s)" in
+    Darwin) OS="darwin" ;;
+    Linux) OS="linux" ;;
+    *)
+        echo "Unsupported OS: $(uname -s)" >&2
+        exit 1
+        ;;
+esac
+
+case "$(uname -m)" in
+    x86_64|amd64) ARCH="amd64" ;;
+    arm64|aarch64) ARCH="arm64" ;;
+    *)
+        echo "Unsupported architecture: $(uname -m)" >&2
+        exit 1
+        ;;
+esac
+
+ASSET_NAME="openproject-cli_${OS}_${ARCH}_${VERSION}.zip"
+case "${OS}_${ARCH}" in
+    linux_amd64) EXPECTED_SHA256="9b9cf794406c687c91cd01fa9784a18cee985a40a50270d1f611e22b3bb4aa92" ;;
+    linux_arm64) EXPECTED_SHA256="c03a40069ad648df779814b862ececb5aeb0f54eaaea9fb9b2a4585c604f2f00" ;;
+    darwin_amd64) EXPECTED_SHA256="01f15eb9723ec53716440e1ea4f6d6bf083f70dbf07dae662b7a2c62affcf3d0" ;;
+    darwin_arm64) EXPECTED_SHA256="860f214dce57fe0c61ec494aec58169bd4e637ca7a0ff49ef4def40a67978e82" ;;
+esac
+DOWNLOAD_URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${ASSET_NAME}"
+
+TMP_DIR=$(mktemp -d)
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+echo "Downloading OpenProject CLI ${VERSION} for ${OS}-${ARCH}..."
+curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
+    --output "$TMP_DIR/$ASSET_NAME" "$DOWNLOAD_URL"
+
+if [[ "$OS" == "Darwin" ]]; then
+    ACTUAL_SHA256=$(shasum -a 256 "$TMP_DIR/$ASSET_NAME" | awk '{print $1}')
+else
+    ACTUAL_SHA256=$(sha256sum "$TMP_DIR/$ASSET_NAME" | awk '{print $1}')
+fi
+
+if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+    echo "Checksum verification failed for ${ASSET_NAME}" >&2
+    echo "Expected: ${EXPECTED_SHA256}" >&2
+    echo "Actual:   ${ACTUAL_SHA256}" >&2
+    exit 1
+fi
+
+if [[ "$(unzip -Z1 "$TMP_DIR/$ASSET_NAME")" != "op" ]]; then
+    echo "Release archive must contain only the op binary" >&2
+    exit 1
+fi
+
+unzip -qq "$TMP_DIR/$ASSET_NAME" -d "$TMP_DIR/extracted"
+[[ -f "$TMP_DIR/extracted/op" ]] || {
+    echo "Release archive did not contain the op binary" >&2
+    exit 1
+}
+
+mkdir -p "$INSTALL_DIR"
+install -m 0755 "$TMP_DIR/extracted/op" "$INSTALL_DIR/op"
+"$INSTALL_DIR/op" --version
+
+# The token is persisted by `op login`; ensure it is never readable by other users.
+if [[ -L "$CONFIG_DIR" ]]; then
+    echo "Refusing to use symlinked configuration directory: ${CONFIG_DIR}" >&2
+    exit 1
+fi
+mkdir -p "$CONFIG_DIR"
+chmod 700 "$CONFIG_DIR"
+
+if [[ -e "$CONFIG_FILE" || -L "$CONFIG_FILE" ]]; then
+    if [[ -L "$CONFIG_FILE" || ! -f "$CONFIG_FILE" ]]; then
+        echo "Refusing to change non-regular configuration file: ${CONFIG_FILE}" >&2
+        exit 1
+    fi
+    chmod 600 "$CONFIG_FILE"
+fi
+
+if (( LOGIN )); then
+    umask 077
+    "$INSTALL_DIR/op" login
+    [[ -f "$CONFIG_FILE" && ! -L "$CONFIG_FILE" ]] || {
+        echo "OpenProject CLI did not create ${CONFIG_FILE}" >&2
+        exit 1
+    }
+    chmod 600 "$CONFIG_FILE"
+    echo "Configured OpenProject CLI with owner-only permissions."
+else
+    echo "Installed OpenProject CLI to ${INSTALL_DIR}/op"
+    echo "To configure it securely, run:"
+    echo "  $0 --login"
+fi
+
+# vi: ft=bash

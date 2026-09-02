@@ -1,0 +1,121 @@
+#!/bin/bash
+#
+# setup-openproject-cli test: Deterministic installer test with local command mocks
+
+set -euo pipefail
+
+self=$(readlink -f "$0")
+
+case "${0##*/}" in
+    uname)
+        case "${1:-}" in
+            -s) printf '%s\n' Linux ;;
+            -m) printf '%s\n' x86_64 ;;
+            *) exit 64 ;;
+        esac
+        exit 0
+        ;;
+    curl)
+        while [[ $# -gt 0 ]]; do
+            if [[ "$1" == "--output" ]]; then
+                : > "$2"
+                exit 0
+            fi
+            shift
+        done
+        exit 64
+        ;;
+    sha256sum)
+        printf '%s  %s\n' \
+            '9b9cf794406c687c91cd01fa9784a18cee985a40a50270d1f611e22b3bb4aa92' "$1"
+        exit 0
+        ;;
+    unzip)
+        if [[ "$1" == "-Z1" ]]; then
+            printf '%s\n' op
+            exit 0
+        fi
+
+        while [[ $# -gt 0 ]]; do
+            if [[ "$1" == "-d" ]]; then
+                mkdir -p "$2"
+                ln -s "$self" "$2/op"
+                exit 0
+            fi
+            shift
+        done
+        exit 64
+        ;;
+    op)
+        case "${1:-}" in
+            --version)
+                printf '%s\n' 'OpenProject CLI: test'
+                exit 0
+                ;;
+            login)
+                [[ $# -eq 1 ]] || exit 65
+                : "${XDG_CONFIG_HOME:?}"
+                : "${OP_LOGIN_MARKER:?}"
+                : > "$XDG_CONFIG_HOME/openproject/config"
+                : > "$OP_LOGIN_MARKER"
+                exit 0
+                ;;
+            *) exit 64 ;;
+        esac
+        ;;
+esac
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+setup_script="${script_dir}/../bin/setup-openproject-cli"
+test_root=$(mktemp -d)
+
+cleanup() {
+    rm -rf "$test_root"
+}
+trap cleanup EXIT
+
+mock_bin="$test_root/mock-bin"
+config_root="$test_root/config"
+install_dir="$test_root/install"
+mkdir -p "$mock_bin" "$config_root/openproject"
+
+for command in uname curl sha256sum unzip; do
+    ln -s "$self" "$mock_bin/$command"
+done
+
+config_file="$config_root/openproject/config"
+: > "$config_file"
+chmod 755 "$config_root/openproject"
+chmod 644 "$config_file"
+
+export PATH="$mock_bin:$PATH"
+export XDG_CONFIG_HOME="$config_root"
+export OPENPROJECT_CLI_INSTALL_DIR="$install_dir"
+export OP_LOGIN_MARKER="$test_root/login-invoked"
+
+"$setup_script"
+
+[[ -x "$install_dir/op" ]]
+[[ "$(stat -c '%a' "$config_root/openproject")" == 700 ]]
+[[ "$(stat -c '%a' "$config_file")" == 600 ]]
+
+"$setup_script" --login
+
+[[ -f "$OP_LOGIN_MARKER" ]]
+[[ "$(stat -c '%a' "$config_file")" == 600 ]]
+
+if "$setup_script" --login work >/dev/null 2>&1; then
+    echo "profile arguments must be rejected for the pinned legacy CLI" >&2
+    exit 1
+fi
+
+rm "$config_file"
+ln -s "$test_root/not-a-config" "$config_file"
+if "$setup_script" >/dev/null 2>&1; then
+    echo "symlinked configuration files must be rejected" >&2
+    exit 1
+fi
+
+printf '%s\n' 'setup-openproject-cli: PASS'
+
+# vi: ft=bash
