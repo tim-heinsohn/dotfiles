@@ -25,7 +25,10 @@ if command -v gh &> /dev/null; then
             read -p "Login now? [y/N]: " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                gh auth login
+                echo "Browser authentication will wait up to five minutes."
+                if ! timeout 5m gh auth login; then
+                    echo "Warning: GitHub login did not complete. Retry later with 'gh auth login'." >&2
+                fi
             fi
         else
             echo "   (non-interactive: skipping login prompt)"
