@@ -58,11 +58,12 @@ fi
 
 # nvm (kept until mise fully takes over Node; `mise use -g node@lts` to migrate)
 # Arch's nvm startup can resolve the default alias to N/A after mise activation,
-# so select the version provisioned by bin/setup-system explicitly.
+# so select the version provisioned by bin/setup-system explicitly. Keep the
+# previous version available until setup-system installs the new pinned version.
 if [ -s "/usr/share/nvm/init-nvm.sh" ]; then
   npm config delete prefix 2>/dev/null
   source /usr/share/nvm/init-nvm.sh
-  nvm use 24.4.0 --silent >/dev/null 2>&1 || true
+  nvm use 24.15.0 --silent >/dev/null 2>&1 || nvm use 24.4.0 --silent >/dev/null 2>&1 || true
 fi
 
 

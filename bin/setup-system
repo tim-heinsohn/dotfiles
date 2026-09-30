@@ -349,9 +349,9 @@ pkg_languages() {
     # shellcheck source=/dev/null
     [ -s "/usr/share/nvm/init-nvm.sh" ] && source "/usr/share/nvm/init-nvm.sh"
     if command -v nvm >/dev/null 2>&1; then
-        nvm install 24.4.0
-        nvm alias default 24.4.0
-        nvm use 24.4.0 --silent
+        nvm install 24.15.0
+        nvm alias default 24.15.0
+        nvm use 24.15.0 --silent
     else
         echo "⚠  nvm not available, skipping Node.js setup" >&2
     fi
