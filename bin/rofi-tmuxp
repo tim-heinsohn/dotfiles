@@ -117,7 +117,7 @@ launch_session() {
   local session="$1"
   local tmux_session_script="$HOME/dotfiles/bin/tmux-session"
 
-  # Use tmux-session script which handles resolution and WezTerm tab titling
+  # Use tmux-session script which handles profile resolution.
   exec rofi-sensible-terminal -e "$tmux_session_script" "$session"
 }
 

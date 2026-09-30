@@ -61,7 +61,6 @@ i3_status = { source = "i3/i3status.conf", target = ".config/i3status/config" }
 i3_status_with_hostname = { source = "i3/i3status_with_hostname", target = ".config/i3/i3status_with_hostname" }
 rofi = { source = "rofi/config", target = ".config/rofi/config.rasi" }
 rofi_pass = { source = "rofi/rofi-pass", target = ".config/rofi-pass/config" }
-wezterm = { source = "wezterm/wezterm.lua", target = "~/.wezterm.lua" }
 
 # ============================================================
 # Development Tools

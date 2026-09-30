@@ -90,7 +90,6 @@ Usage: tmux-session <profile>
 
 Description:
   Opens or attaches to a tmux session defined by a tmuxp YAML profile.
-  Automatically sets WezTerm tab title when running inside WezTerm.
 
 Session Behavior:
   - If session doesn't exist: Creates it with tmuxp and attaches
@@ -185,11 +184,6 @@ fi
 
 session_name="$(awk -F': *' '/^session_name:/ {print $2; exit}' "$profile_path" | tr -d '"')"
 session_name="${session_name:-$profile}"
-
-# Set WezTerm tab title if running in WezTerm
-if [ -n "${WEZTERM_PANE:-}" ] && command -v wezterm >/dev/null 2>&1; then
-  wezterm cli set-tab-title "$profile" 2>/dev/null || true
-fi
 
 if ! tmux has-session -t "$session_name" 2>/dev/null; then
   run_tmuxp load -d "$profile_path"

@@ -16,13 +16,13 @@
 # directories that read from the other store would then hit a cold cache
 # during tmuxp fan-out and trigger the pinentry-rofi storm. This script
 # probes one representative file per store and prompts (in a single
-# WezTerm window) for the passphrase. The user's personal password
+# Kitty window) for the passphrase. The user's personal password
 # happens to unlock both the personal and the team-shared work keys, so
 # in practice one passphrase entry suffices.
 #
 # Modes:
 #   (no flag)  Outer mode: checks every probe file's cache state; if any
-#              is cold, opens a WezTerm window running gpg-prewarm --inner
+#              is cold, opens a Kitty window running gpg-prewarm --inner
 #              and blocks until it closes.
 #
 #   --inner    Inner mode: runs inside the terminal. Prompts once for the
@@ -42,7 +42,7 @@
 #
 # Dependencies:
 # - gpg (with allow-loopback-pinentry in ~/.gnupg/gpg-agent.conf)
-# - wezterm (outer mode only)
+# - kitty (outer mode only)
 
 set -euo pipefail
 
@@ -114,7 +114,7 @@ if [ -z "${DISPLAY:-}" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# INNER MODE – runs inside the WezTerm window
+# INNER MODE – runs inside the Kitty window
 # ---------------------------------------------------------------------------
 if [ "${1:-}" = "--inner" ]; then
   if _all_warm; then
@@ -187,9 +187,8 @@ if _all_warm; then
   exit 0
 fi
 
-# At least one keygrip is cold. Open a WezTerm window running inner mode
-# and wait for it. `wezterm start` blocks until the process inside exits.
-wezterm start \
-  --always-new-process \
+# At least one keygrip is cold. Open a Kitty window running inner mode
+# and wait for it. `kitty` blocks until the process inside exits.
+kitty \
   --class "gpg-prewarm" \
-  -- "$0" --inner
+  "$0" --inner

@@ -7,7 +7,7 @@ Quick reference for finding things in this repository.
 ### Shell & Terminal
 - Zsh config: `zsh/`
 - Bash config: `shell/`
-- Terminal: `wezterm/`, `alacritty/` (if exists)
+- Terminal: Kitty (launched from `i3/config`)
 
 ### Editor
 - Neovim: `nvim/`

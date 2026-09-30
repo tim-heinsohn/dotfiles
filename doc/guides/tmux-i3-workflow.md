@@ -3,7 +3,7 @@
 ## Goal
 
 Use i3 to place windows on workspaces and tmux to manage terminal sessions,
-windows, and panes inside WezTerm.
+windows, and panes inside Kitty.
 
 ## Current Setup
 
@@ -12,7 +12,7 @@ windows, and panes inside WezTerm.
 - Startup autoloader: `bin/tmuxp-autoload`
 - Default profile for dotfiles: `tmuxp/dotfiles.yaml`
 - i3 shortcut for workspace 5:
-  - `Mod+Shift+Return` starts `tmux-session dotfiles` in WezTerm
+  - `Mod+Shift+Return` starts `tmux-session dotfiles` in Kitty
 
 At i3 startup, autoload entries are read from:
 

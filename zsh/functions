@@ -1,6 +1,5 @@
 # FUNCTIONS
 function aichat-session() {
-  wezterm cli set-tab-title "/$1"
   aichat -s "$1"
 }
 
@@ -25,30 +24,6 @@ function gpe() {
 function gpfzf() {
   export pw=$(gopass ls -f | fzf --no-multi)
   echo "$pw"
-}
-
-# WezTerm tab management
-# Current tab title only
-function wti() {
-  wezterm cli set-tab-title "$1"
-}
-
-# Triple-tab creation with naming pattern for multiple terms
-function wta() {
-  for term in "$@"; do
-    local dir=$(pwd)  # Capture current directory
-    # Rename current tab
-    wezterm cli set-tab-title "#${term}"
-
-    # Create tab 2 (~ suffix) with proper directory and title
-    wezterm cli spawn --cwd "$dir" -- zsh -lic "echo -ne '\e]0;${term}>\a'; zsh"
-
-    # Create tab 3 (> suffix) with proper directory and title
-    wezterm cli spawn --cwd "$dir" -- zsh -lic "echo -ne '\e]0;${term}~\a'; zsh"
-
-    # Create empty tab with default directory
-    wezterm cli spawn -- zsh -l
-  done
 }
 
 # tldr w/ fuzzy search
@@ -288,11 +263,96 @@ if [[ -n "$__CLAUDE_BIN" && -x "$__CLAUDE_BIN" ]]; then
   }
 fi
 
-# Git worktree selection with fzf
+# Select a Git worktree or create one from the latest origin/main.
 function wt() {
-  local worktree=$(git worktree list | fzf --height=40% --border --prompt="Select worktree: " | awk '{print $1}')
-  if [ -n "$worktree" ]; then
-    cd "$worktree" || return 1
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Not a git repository" >&2
+    return 1
+  fi
+
+  local main_worktree selected
+  main_worktree=$(git worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
+  if [[ -z "$main_worktree" ]]; then
+    echo "Could not determine the main worktree" >&2
+    return 1
+  fi
+
+  selected=$( {
+    print -r -- '> Create worktree'
+    git -C "$main_worktree" worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print }'
+  } | fzf --height=40% --border --prompt="Select worktree: ")
+
+  if [[ -z "$selected" ]]; then
+    return 0
+  fi
+
+  if [[ "$selected" != '> Create worktree' ]]; then
+    cd "$selected" || return 1
+    return 0
+  fi
+
+  echo "Fetching origin/main..."
+  if ! git -C "$main_worktree" fetch origin main; then
+    echo "Could not fetch origin/main" >&2
+    return 1
+  fi
+
+  local repo_name branch worktree_name new_worktree
+  repo_name=${main_worktree:t}
+  echo "Worktree folder prefix (fixed): ${repo_name}-"
+  read -r "branch?Branch name: "
+  if [[ -z "$branch" ]]; then
+    echo "Cancelled."
+    return 0
+  fi
+  if ! git check-ref-format --branch "$branch" >/dev/null 2>&1; then
+    echo "Invalid branch name: $branch" >&2
+    return 1
+  fi
+  if git -C "$main_worktree" show-ref --verify --quiet "refs/heads/$branch"; then
+    echo "Branch already exists: $branch" >&2
+    return 1
+  fi
+
+  worktree_name="${repo_name}-${branch//\//-}"
+  new_worktree="${main_worktree:h}/$worktree_name"
+  if [[ -e "$new_worktree" ]]; then
+    echo "Worktree directory already exists: $new_worktree" >&2
+    return 1
+  fi
+
+  if ! git -C "$main_worktree" worktree add -b "$branch" "$new_worktree" FETCH_HEAD; then
+    return 1
+  fi
+  cd "$new_worktree" || return 1
+
+  local -a bootstrap_scripts
+  local script bootstrap_script
+  for script in bin/setup-worktree bin/bootstrap-worktree bin/bootstrap; do
+    [[ -f "$new_worktree/$script" ]] && bootstrap_scripts+=("$script")
+  done
+
+  if (( ${#bootstrap_scripts[@]} == 0 )); then
+    echo "No worktree bootstrap script found to run."
+    return 0
+  fi
+
+  if (( ${#bootstrap_scripts[@]} == 1 )); then
+    bootstrap_script="${bootstrap_scripts[1]}"
+  else
+    bootstrap_script=$(print -rl -- "${bootstrap_scripts[@]}" | fzf \
+      --height=40% --border --prompt="Bootstrap script: ")
+    [[ -n "$bootstrap_script" ]] || return 0
+  fi
+
+  read -q "REPLY?Run $bootstrap_script in $worktree_name? (y/N) "
+  echo
+  if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+    if [[ ! -x "$new_worktree/$bootstrap_script" ]]; then
+      echo "Bootstrap script is not executable: $bootstrap_script" >&2
+      return 1
+    fi
+    "./$bootstrap_script"
   fi
 }
 

@@ -88,9 +88,7 @@ if [ -n "$DISPLAY" ] && [ -f "/usr/bin/gopass" ] && [ "${SKIP_GOPASS_LOAD:-0}" !
   fi
 fi
 
-if [ -f "/usr/bin/wezterm" ]; then
-  export TERMINAL=/usr/bin/wezterm
-fi
+export TERMINAL=kitty
 
 export REDIS_URL=redis://localhost:6379
 
