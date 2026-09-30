@@ -6,3 +6,17 @@
 .env
 .env.local
 tmp
+
+# FLEET:STOWAGE:START — managed by fleet crew muster; do not edit
+/AGENTS.md
+/opencode.json
+/.claude/agents/*
+/.claude/commands/*
+/.codex/agents/*
+/.codex/commands/*
+/.gemini/agents/*
+/.gemini/commands/*
+/.opencode/agents/*
+/.opencode/commands/*
+.opencode/package-lock.json
+# FLEET:STOWAGE:END

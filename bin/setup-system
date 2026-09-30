@@ -5,7 +5,7 @@
 # Usage: setup-system [PACKAGE|all] [--extended]
 #
 # Packages:
-#   base       System update, dotfiles, core packages, services, user groups
+#   base       System update, dotfiles, rtk, core packages, services, user groups
 #   languages  Node.js, npm packages, uv tools, Ruby/mise
 #   devtools   Git CLIs, overcommit, terraform-ls, Bun
 #   ai         Aider, Whisper, Tree-sitter, Plannotator
@@ -295,6 +295,9 @@ pkg_base() {
     cd "${DOTFILES_DIR}"
     bombadil link
 
+    headline "RTK"
+    run_if_exists "${DOTFILES_DIR}/bin/setup-rtk"
+
     hash -r 2>/dev/null || true
     if command -v sheldeon >/dev/null 2>&1; then
         sheldeon lock
@@ -457,7 +460,7 @@ Usage: setup-system [PACKAGE|all] [--extended]
 Provisions an Arch system with this dotfiles repo in modular packages.
 
 Packages:
-  base       System update, dotfiles, core packages, services, user groups
+  base       System update, dotfiles, rtk, core packages, services, user groups
   languages  Node.js, npm packages, uv tools, Ruby/mise
   devtools   Git CLIs, overcommit, terraform-ls, Bun
   ai         Aider, Whisper, Tree-sitter, Plannotator
