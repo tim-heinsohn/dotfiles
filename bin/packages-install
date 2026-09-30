@@ -92,8 +92,36 @@ for pkg in "${all_packages[@]}"; do
     fi
 done
 
+# Package replacement map: if the new package conflicts with an explicitly
+# approved predecessor, remove the predecessor before installing the bundle.
+# Do not infer replacements from pacman errors: that could remove an unrelated
+# package during unattended setup.
+declare -A package_replaces=(
+    ["extra/pipewire-pulse"]="pulseaudio"
+    ["aur/antigravity"]="antigravity-bin"
+)
+
+remove_official_predecessors() {
+    local package predecessor
+
+    for package in "${official_packages[@]}"; do
+        predecessor="${package_replaces[$package]:-}"
+        if [[ -z "$predecessor" ]] || ! pacman -Q "$predecessor" &>/dev/null; then
+            continue
+        fi
+
+        echo "Replacing $predecessor with ${package#*/}..."
+        if ! sudo pacman -R --noconfirm "$predecessor"; then
+            echo "Error: could not remove $predecessor required for ${package#*/}." >&2
+            echo "Resolve its dependencies, then rerun packages-install." >&2
+            return 1
+        fi
+    done
+}
+
 # Install official packages in batch
 if [[ ${#official_packages[@]} -gt 0 ]]; then
+    remove_official_predecessors
     echo "Installing ${#official_packages[@]} official packages..."
     if sudo pacman -S --needed --noconfirm "${official_packages[@]}"; then
         success_count=$((success_count + ${#official_packages[@]}))
@@ -110,13 +138,6 @@ if [[ ${#official_packages[@]} -gt 0 ]]; then
         done
     fi
 fi
-
-# Package rename/replacement map: if the old package is installed and conflicts
-# with the new one, remove it first before installing.
-# Format: ["new/pkg"]="old-pkg-name"
-declare -A package_replaces=(
-    ["aur/antigravity"]="antigravity-bin"
-)
 
 # Install AUR packages individually (they can't be batched as easily)
 if [[ ${#aur_packages[@]} -gt 0 ]]; then
