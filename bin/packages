@@ -236,6 +236,8 @@ extra/menyoki
     Screen{shot,cast} and perform ImageOps on the command line.
 extra/mise
     Polyglot runtime manager (Ruby, Node, Python, etc.) - asdf-compatible, replaces rvm/nvm/pyenv.
+extra/mmctl
+    Open source Slack-alternative in Golang and React.
 extra/mitmproxy
     SSL-capable man-in-the-middle HTTP proxy.
 extra/mplayer
