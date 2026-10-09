@@ -23,3 +23,7 @@ id_ed25519
 *.gpg
 secrets/
 credentials/
+
+# Python
+**/__pycache__/
+*.pyc
