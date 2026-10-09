@@ -3,7 +3,7 @@
 .agignore
 .aider*
 .claude/*.local.json
-.envrc
+.env
 .fdignore
 .nvimrc
 .vim*
