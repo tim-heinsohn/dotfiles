@@ -26,7 +26,9 @@ MAX_PAGES=0        # 0 = unlimited (button mode only)
 DEVICE=""
 KEEP_IMAGES=false  # keep individual image files after PDF creation
 APPEND_TO=""
+SINGLE_FILES=false # one PDF per scan instead of a combined PDF
 PDF_FILE=""
+WORK_DIR=""        # private staging area for page images, outside OUTPUT_DIR
 ACTIVE_SCAN_FILE=""
 
 # Colors
@@ -52,6 +54,8 @@ OPTIONS:
     -a, --append-to FILE    Append pages to an existing PDF. The prefix must
                             match the PDF filename when explicitly provided.
     -s, --start NUM         Starting number (default: 1, or next page when appending)
+    --single-files          Save each scan as its own PDF (PREFIX_NNN.pdf)
+                            instead of one combined PDF
     --no-pdf                Skip combined PDF generation
     --keep                  Keep individual image files after PDF creation
     --button                Non-interactive mode: press scanner Start key to
@@ -257,17 +261,45 @@ scan_page() {
     ACTIVE_SCAN_FILE=""
 }
 
-create_combined_pdf() {
-    if [[ "$CREATE_PDF" != "true" ]]; then
+# Convert images into OUTPUT. Built under a hidden name beside the destination
+# and moved into place, so file watchers only ever see the finished PDF.
+images_to_pdf() {
+    local output="$1"
+    shift
+    local output_directory output_basename temporary_file
+    output_directory=$(dirname "$output")
+    output_basename=$(basename "$output" .pdf)
+    temporary_file=$(mktemp "$output_directory/.${output_basename}.XXXXXX.pdf")
+
+    if command -v img2pdf &> /dev/null; then
+        if ! img2pdf --output "$temporary_file" "$@"; then
+            rm -f -- "$temporary_file"
+            log_error "Failed to create PDF with img2pdf"
+            return 1
+        fi
+    elif command -v convert &> /dev/null; then
+        if ! convert "$@" "$temporary_file"; then
+            rm -f -- "$temporary_file"
+            log_error "Failed to create PDF with ImageMagick"
+            return 1
+        fi
+    else
+        rm -f -- "$temporary_file"
+        log_error "Neither img2pdf nor ImageMagick available for PDF creation"
+        log_info "Install with: yay -S img2pdf"
         return 1
     fi
 
+    mv -- "$temporary_file" "$output"
+}
+
+create_combined_pdf() {
     local image_files=()
 
     # Collect all scanned images in order
     while IFS= read -r -d '' file; do
         image_files+=("$file")
-    done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f -size +0c \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0 | sort -z)
+    done < <(find "$WORK_DIR" -maxdepth 1 -type f -size +0c \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0 | sort -z)
 
     if [[ ${#image_files[@]} -eq 0 ]]; then
         log_warn "No images found to combine into PDF"
@@ -276,49 +308,41 @@ create_combined_pdf() {
 
     log_info "Creating combined PDF with ${#image_files[@]} pages..."
 
-    if command -v img2pdf &> /dev/null; then
-        if img2pdf --output "$PDF_FILE" "${image_files[@]}"; then
-            log_info "Created: $PDF_FILE"
-            return 0
-        else
-            log_error "Failed to create PDF with img2pdf"
-            return 1
-        fi
-    elif command -v convert &> /dev/null; then
-        if convert "${image_files[@]}" "$PDF_FILE"; then
-            log_info "Created: $PDF_FILE"
-            return 0
-        else
-            log_error "Failed to create PDF with ImageMagick"
-            return 1
-        fi
-    else
-        log_error "Neither img2pdf nor ImageMagick available for PDF creation"
-        log_info "Install with: yay -S img2pdf"
-        return 1
-    fi
+    images_to_pdf "$PDF_FILE" "${image_files[@]}" || return 1
+    log_info "Created: $PDF_FILE"
 }
 
-cleanup_temp_images() {
-    if [[ "$KEEP_IMAGES" == "true" ]]; then
+# Move page images from the staging area to OUTPUT_DIR. Pass "rescue" to do so
+# even when they were not requested, so a failed PDF step loses no scans.
+export_images() {
+    if [[ "${1:-}" != "rescue" && "$KEEP_IMAGES" != "true" && "$CREATE_PDF" == "true" ]]; then
         return
     fi
 
-    if [[ "$CREATE_PDF" != "true" ]]; then
-        return
-    fi
-
-    if [[ ! -f "$PDF_FILE" ]]; then
-        return
-    fi
-
-    log_info "Removing temporary image files..."
-    local removed=0
+    local exported=0
     while IFS= read -r -d '' file; do
-        rm -f "$file"
-        removed=$((removed + 1))
-    done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0)
-    log_info "Removed $removed temporary image file(s)"
+        mv -f -- "$file" "$OUTPUT_DIR/"
+        exported=$((exported + 1))
+    done < <(find "$WORK_DIR" -maxdepth 1 -type f -size +0c \( -name "*.png" -o -name "*.tiff" -o -name "*.jpeg" -o -name "*.jpg" \) -print0)
+    [[ "$exported" -gt 0 ]] && log_info "Saved $exported image file(s) to: $OUTPUT_DIR"
+    return 0
+}
+
+# Called after each successful scan; in single-files mode this writes the
+# page's own PDF right away, so an interrupted run keeps every finished page.
+finalize_page() {
+    local filepath="$1"
+    local filename
+    filename=$(basename "$filepath")
+
+    if [[ "$SINGLE_FILES" != "true" ]]; then
+        log_info "Scanned: $filename"
+        return
+    fi
+
+    local pdf_name="${filename%.*}.pdf"
+    images_to_pdf "$OUTPUT_DIR/$pdf_name" "$filepath" || return 1
+    log_info "Saved: $pdf_name"
 }
 
 append_to_pdf() {
@@ -344,16 +368,14 @@ finish_batch() {
     local current_count="$1"
     local successful_scans="$2"
 
-    if ! create_combined_pdf; then
-        return 1
+    if [[ "$SINGLE_FILES" != "true" && "$CREATE_PDF" == "true" ]]; then
+        if ! create_combined_pdf || { [[ -n "$APPEND_TO" ]] && ! append_to_pdf; }; then
+            export_images rescue
+            return 1
+        fi
     fi
 
-    if [[ -n "$APPEND_TO" ]]; then
-        append_to_pdf || return 1
-    fi
-
-    cleanup_temp_images
-    [[ -n "$APPEND_TO" ]] && rm -f "$PDF_FILE"
+    export_images
     print_summary "$current_count" "$successful_scans"
 }
 
@@ -396,6 +418,10 @@ while [[ $# -gt 0 ]]; do
             START_COUNT="$2"
             START_COUNT_SET=true
             shift 2
+            ;;
+        --single-files)
+            SINGLE_FILES=true
+            shift
             ;;
         --no-pdf)
             CREATE_PDF=false
@@ -453,6 +479,17 @@ fi
 if ! [[ "$MAX_PAGES" =~ ^[0-9]+$ ]]; then
     log_error "Page count must be a non-negative integer: $MAX_PAGES"
     exit 1
+fi
+
+if [[ "$SINGLE_FILES" == "true" ]]; then
+    if [[ -n "$APPEND_TO" ]]; then
+        log_error "--single-files cannot be used with --append-to"
+        exit 1
+    fi
+    if [[ "$CREATE_PDF" != "true" ]]; then
+        log_error "--single-files cannot be used with --no-pdf"
+        exit 1
+    fi
 fi
 
 if [[ -n "$APPEND_TO" ]]; then
@@ -515,7 +552,11 @@ run_button_mode() {
     [[ "$MAX_PAGES" -gt 0 ]] && echo "Max pages: $MAX_PAGES"
     echo
     echo "Place each page on the scanner and press the Start key to scan it."
-    echo "Press Ctrl+C to finish and generate the combined PDF."
+    if [[ "$SINGLE_FILES" == "true" ]]; then
+        echo "Each scan is saved as its own PDF. Press Ctrl+C to finish."
+    else
+        echo "Press Ctrl+C to finish and generate the combined PDF."
+    fi
     echo
     echo "Starting with page $START_COUNT..."
 
@@ -538,12 +579,11 @@ run_button_mode() {
 
         local filename
         filename=$(printf "%s_%03d.%s" "$PREFIX" "$current_count" "$FORMAT")
-        local filepath="$OUTPUT_DIR/$filename"
+        local filepath="$WORK_DIR/$filename"
 
         log_info "Page $current_count — waiting for Start button press..."
 
-        if scan_page "$filepath" true; then
-            log_info "Saved: $filename"
+        if scan_page "$filepath" true && finalize_page "$filepath"; then
             current_count=$((current_count + 1))
             successful_scans=$((successful_scans + 1))
         else
@@ -585,7 +625,7 @@ run_interactive_mode() {
         # Generate filename
         local filename
         filename=$(printf "%s_%03d.%s" "$PREFIX" "$current_count" "$FORMAT")
-        local filepath="$OUTPUT_DIR/$filename"
+        local filepath="$WORK_DIR/$filename"
 
         log_prompt "Page $current_count - Place document and press Enter to scan (or n/p/r/s/q): "
 
@@ -602,8 +642,7 @@ run_interactive_mode() {
             $'\n'|"")
                 # Scan current page
                 log_info "Scanning page $current_count..."
-                if scan_page "$filepath"; then
-                    log_info "Saved: $filename"
+                if scan_page "$filepath" && finalize_page "$filepath"; then
                     current_count=$((current_count + 1))
                     successful_scans=$((successful_scans + 1))
                 else
@@ -626,8 +665,7 @@ run_interactive_mode() {
                 log_info "Rescanning page $current_count..."
                 local was_scanned=false
                 [[ -f "$filepath" ]] && was_scanned=true
-                if scan_page "$filepath"; then
-                    log_info "Rescanned: $filename"
+                if scan_page "$filepath" && finalize_page "$filepath"; then
                     if [[ "$was_scanned" == "false" ]]; then
                         successful_scans=$((successful_scans + 1))
                     fi
@@ -679,10 +717,14 @@ print_summary() {
 # Main
 # ---------------------------------------------------------------------------
 
-# Create output directory and the combined-PDF destination.
+# Create output directory and the combined-PDF destination. Page images are
+# staged outside OUTPUT_DIR so watchers on it (e.g. index-docs-watch) never
+# see intermediate files.
 mkdir -p "$OUTPUT_DIR"
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/scan.XXXXXX")
+trap 'rm -rf -- "$WORK_DIR"' EXIT
 if [[ -n "$APPEND_TO" ]]; then
-    PDF_FILE=$(mktemp "$OUTPUT_DIR/.${PREFIX}.XXXXXX.pdf")
+    PDF_FILE="$WORK_DIR/${PREFIX}.pdf"
 else
     PDF_FILE="$OUTPUT_DIR/${PREFIX}.pdf"
 fi
