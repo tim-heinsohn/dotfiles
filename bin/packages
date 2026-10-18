@@ -201,6 +201,8 @@ extra/imagemagick
     An image viewing/manipulation program.
 extra/img2pdf
     Losslessly convert raster images to PDF.
+extra/inotify-tools 4.25.9.0-1 (153.4 KiB 858.3 KiB)
+    inotify-tools is a C library and a set of command-line programs for Linux providing a simple interface to inotify.
 extra/intel-ucode
     Microcode update files for Intel CPUs.
 extra/jq
