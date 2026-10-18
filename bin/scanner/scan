@@ -155,40 +155,47 @@ detect_scanner() {
         return
     fi
 
-    local scanner_output=""
-    local detection_status=0
     log_info "Detecting scanner..."
-    if scanner_output=$(timeout --signal=TERM --kill-after=2s 10s scanimage -L 2>/dev/null); then
-        :
-    else
-        detection_status=$?
+
+    # Address the V330 (04b8:0142) directly via its USB bus/device number.
+    # A full `scanimage -L` probes every SANE backend (incl. network discovery)
+    # and regularly takes longer than the scanner itself needs to respond.
+    local usb_line=""
+    if command -v lsusb >/dev/null 2>&1; then
+        usb_line=$(lsusb -d 04b8:0142 2>/dev/null | head -n1 || true)
     fi
 
-    if [[ "$detection_status" -eq 124 || "$detection_status" -eq 137 ]]; then
-        log_error "Scanner detection timed out after 10 seconds"
-        if command -v lsusb >/dev/null 2>&1 && lsusb 2>/dev/null | grep -qi epson; then
-            log_error "The Epson scanner is visible on USB. Power-cycle it and retry."
-        else
-            log_error "No Epson device found on USB. Check its power and connection."
-        fi
-        return 1
-    fi
-
-    local scanner_info
-    scanner_info=$(printf '%s\n' "$scanner_output" | grep "Epson Perfection V330" || true)
-
-    if [[ -z "$scanner_info" ]]; then
+    if [[ -z "$usb_line" ]]; then
         log_error "Epson Perfection V330 scanner not found"
         log_error "Please connect the scanner via USB and make sure it is powered on."
-        if command -v lsusb >/dev/null 2>&1 && ! lsusb 2>/dev/null | grep -qi epson; then
-            log_error "No Epson device found on USB (lsusb shows no Epson entry)."
-        fi
+        log_error "No Epson device found on USB (lsusb shows no Epson entry)."
         return 1
     fi
 
-    DEVICE="${scanner_info#*\`}"
-    DEVICE=$(printf '%s' "$DEVICE" | cut -d"'" -f1)
-    log_info "Found scanner: $scanner_info"
+    local bus dev candidate
+    bus=$(awk '{print $2}' <<<"$usb_line")
+    dev=$(awk '{print $4}' <<<"$usb_line" | tr -d ':')
+    candidate="epkowa:interpreter:${bus}:${dev}"
+
+    # Right after power-on the lamp warms up (LED blinking) and the scanner
+    # does not answer yet, so retry for a while before giving up.
+    local deadline=$((SECONDS + 60)) announced=""
+    until timeout --signal=TERM --kill-after=2s 15s scanimage -d "$candidate" -A >/dev/null 2>&1; do
+        if (( SECONDS >= deadline )); then
+            log_error "Scanner on USB ($candidate) did not respond within 60 seconds"
+            log_error "If the LED keeps blinking, check the transport lock on the bottom, then power-cycle it."
+            return 1
+        fi
+        if [[ -z "$announced" ]]; then
+            log_warn "Scanner not ready yet (warming up?), waiting..."
+            announced=1
+        fi
+        sleep 3
+    done
+
+    DEVICE="$candidate"
+    local scanner_info="$usb_line"
+    log_info "Found scanner: $scanner_info ($DEVICE)"
 }
 
 scan_page() {
