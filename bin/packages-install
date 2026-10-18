@@ -7,6 +7,18 @@
 # bin/packages-extended, then installs them
 # using pacman (official) or yay (AUR). Separates AUR and official
 # packages for optimal installation.
+#
+# Package list format (bin/packages, bin/packages-extended):
+# Each entry is a "<repo>/<name>" line at column 0, followed by an indented
+# description line, sorted alphabetically within each repo:
+#
+#   extra/inotify-tools
+#       inotify-tools is a C library and a set of command-line programs ...
+#
+# When adding entries pasted from yay/pacman search output, strip the
+# version and size fields (e.g. "4.25.9.0-1 (153.4 KiB 858.3 KiB)").
+# The list must not pin versions; use pinned_aur_package_versions below
+# when a pin is really needed.
 
 set -euo pipefail
 

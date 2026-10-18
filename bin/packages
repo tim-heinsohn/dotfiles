@@ -23,7 +23,7 @@ aur/ocrmypdf
     A tool to add an OCR text layer to scanned PDF files, allowing them to be searched
 aur/pg_top
     A 'top' like tool for PostgreSQL.
-aur/pgvector 0.8.1-1 (+10 1.46)
+aur/pgvector
     A vector similarity search extension for PostgreSQL.
 aur/pinentry-rofi
     A rofi-based pinentry program.
@@ -95,13 +95,13 @@ extra/bluez-utils
     Development and debugging utilities for the Bluetooth protocol stack.
 extra/blueman
     GTK+ Bluetooth Manager.
-extra/btop 1.4.7-1 (597.6 KiB 1.7 MiB)
+extra/btop
     A monitor of system resources, bpytop ported to C++.
 extra/brightnessctl
     A program to read and control device brightness.
 extra/caddy
     A powerful, enterprise-ready, open source web server with automatic HTTPS.
-extra/calibre 8.7.0-4 (34.7 MiB 116.2 MiB)
+extra/calibre
     Ebook management application.
 extra/chromium
     An open-source browser project for a safer, faster, and more stable web.
@@ -169,7 +169,7 @@ extra/gimagereader-qt
     A simple Gtk/Qt front-end to tesseract-ocr.
 extra/git
     The fast distributed version control system.
-extra/git-delta 0.18.2-6 (3.4 MiB 9.2 MiB)
+extra/git-delta
     Syntax-highlighting pager for git and diff output.
 extra/git-filter-repo
     Quickly rewrite git repository history.
@@ -201,7 +201,7 @@ extra/imagemagick
     An image viewing/manipulation program.
 extra/img2pdf
     Losslessly convert raster images to PDF.
-extra/inotify-tools 4.25.9.0-1 (153.4 KiB 858.3 KiB)
+extra/inotify-tools
     inotify-tools is a C library and a set of command-line programs for Linux providing a simple interface to inotify.
 extra/intel-ucode
     Microcode update files for Intel CPUs.
@@ -259,7 +259,7 @@ extra/nvme-cli
     NVMe management command line interface for NVMe SSD health monitoring and diagnostics.
 extra/obs-studio
     Free and open source software for video recording and live streaming.
-extra/obsidian 1.12.4-1 (6.2 MiB 23.2 MiB)
+extra/obsidian
     A powerful knowledge base that works on top of a local folder of plain text Markdown files.
 extra/p7zip
     A file archiver with a high compression ratio.
@@ -385,9 +385,9 @@ extra/typst
     A markup-based typesetting system for the sciences.
 extra/tig
     Text-mode interface for Git.
-extra/tmux 3.6_a-1 (485.2 KiB 1.1 MiB)
+extra/tmux
     Terminal multiplexer
-extra/tmuxp 1.64.0-1 (191.9 KiB 1.0 MiB)
+extra/tmuxp
     Tmux session manager built on libtmux
 extra/toml-bombadil
     Adotfile manager with templating.
