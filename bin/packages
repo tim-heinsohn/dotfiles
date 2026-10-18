@@ -2,18 +2,19 @@ aur/acpilight
     A backward-compatible xbacklight replacement with ACPI kernel support.
 aur/antigravity
     An agentic development platform from Google, evolving the IDE into the agent-first era.
-    A small command-line utility to show and change EXIF information in JPEG files.
 aur/beads-bin
     Graph-based memory + issue tracker for coding agents (binary release; pinned to v1.1.2).
 aur/bruno-bin
     Opensource API Client for Exploring and Testing APIs.
+aur/exif
+    A small command-line utility to show and change EXIF information in JPEG files.
 aur/google-chrome
     A browser that combines a minimal design with sophisticated technology.
 aur/herdr-bin
     Supervise multiple coding agents in one terminal.
- aur/hey-bin
+aur/hey-bin
     HTTP load generator, ApacheBench (ab) replacement.
- aur/html2md
+aur/html2md
     A command-line tool to convert HTML to Markdown.
 aur/i3lock-color
     Improved i3lock with color support.
