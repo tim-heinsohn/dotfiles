@@ -8,9 +8,17 @@ FORCE=false
 usage() {
   cat <<USAGE
 Usage: $(basename "$0") [--intense] [--yes] [--force]
-  --intense   add aggressive cleanups (docker system prune -a, pacman -Scc)
+  --intense   add aggressive cleanups (aggressive Docker prune, pacman -Scc, Playwright)
   -y, --yes   automatically approve prompts triggered by --intense
-  -f, --force  pass --force to uv cache clean (bypass its in-use check)
+  -f, --force  aggressive Docker prune without prompting, and pass --force to
+               uv cache clean (bypass its in-use check)
+
+Docker cleanup never removes containers, so anything used by a running or
+stopped container is kept.
+  default:  dangling images, unused anonymous volumes, dangling build cache
+  -f:       also all unused images, all unused volumes (including named ones
+            no container references, e.g. after 'docker compose down'),
+            and all build cache
 USAGE
 }
 
@@ -41,7 +49,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 log() {
-  echo "[clear-cache] $*"
+  echo "[clear-disk] $*"
 }
 
 clear_cache_dir() {
@@ -205,18 +213,43 @@ run_if_present() {
   "$@"
 }
 
-# Docker cleanup
-if command -v docker >/dev/null 2>&1; then
-  run_if_present docker docker volume prune -f >/dev/null
-  if $INTENSE && confirm_action "Run docker system prune -a --volumes and docker builder prune?"; then
-    log "Running: docker system prune -a --volumes -f"
-    docker system prune -a --volumes -f >/dev/null
-    log "Running: docker builder prune -f"
-    docker builder prune -f >/dev/null
+docker_prune() {
+  log "Running: docker $*"
+  docker "$@" >/dev/null
+}
+
+# Docker cleanup. Containers are never pruned: images and volumes still
+# referenced by any container (running or stopped) are left alone.
+clear_docker() {
+  local aggressive=false
+
+  if ! command -v docker >/dev/null 2>&1; then
+    log "Skipping Docker cleanup (docker not installed)"
+    return 0
   fi
-else
-  log "Skipping Docker cleanup (docker not installed)"
-fi
+  if ! docker info >/dev/null 2>&1; then
+    log "Skipping Docker cleanup (daemon not reachable)"
+    return 0
+  fi
+
+  if $FORCE; then
+    aggressive=true
+  elif $INTENSE && confirm_action "Prune all unused Docker images, volumes and build cache?"; then
+    aggressive=true
+  fi
+
+  if $aggressive; then
+    docker_prune image prune -a -f
+    docker_prune volume prune -a -f
+    docker_prune builder prune -a -f
+  else
+    docker_prune image prune -f
+    docker_prune volume prune -f
+    docker_prune builder prune -f
+  fi
+}
+
+clear_docker
 
 # Pacman cache trimming
 run_if_present paccache sudo paccache -rk1 >/dev/null

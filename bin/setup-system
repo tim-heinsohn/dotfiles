@@ -115,7 +115,7 @@ check_storage() {
 
     if (( failed )); then
         echo "Error: insufficient storage for system setup." >&2
-        echo "Free storage (for example with ${DOTFILES_DIR}/bin/clear-cache) and retry." >&2
+        echo "Free storage (for example with ${DOTFILES_DIR}/bin/clear-disk) and retry." >&2
         exit 1
     fi
 }

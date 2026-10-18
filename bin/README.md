@@ -39,7 +39,7 @@ This directory contains utility scripts for system management and development.
 
 | Script | Description |
 |--------|-------------|
-| `clear-cache` | Clear various caches |
+| `clear-disk` | Free disk space (caches, logs, unused Docker data) |
 | `fix-display-offset` | Fix display offset issues |
 | `fix-pandoc-latex` | Fix pandoc LaTeX issues |
 | `setup-system` | System setup utilities |
