@@ -50,7 +50,8 @@ OPTIONS:
     -f, --format FORMAT     Output format: png, tiff, jpeg (default: png)
     -b, --batch             Enable batch mode (the default)
     -d, --directory DIR     Output directory (default: ~/Scans/batch_TIMESTAMP)
-    -p, --prefix PREFIX     Filename prefix (default: scan)
+    -p, --prefix PREFIX     Filename prefix (default: TIMESTAMP-scan, with
+                            TIMESTAMP as YYYY-mm-dd-HH-MM-SS)
     -a, --append-to FILE    Append pages to an existing PDF. The prefix must
                             match the PDF filename when explicitly provided.
     -s, --start NUM         Starting number (default: 1, or next page when appending)
@@ -293,6 +294,19 @@ images_to_pdf() {
     mv -- "$temporary_file" "$output"
 }
 
+# Print PATH, or PATH with a running number before the extension (-2, -3, ...)
+# if a file of that name already exists.
+next_free_path() {
+    local path="$1"
+    local stem="${path%.*}" extension="${path##*.}"
+    local number=2
+    while [[ -e "$path" ]]; do
+        path="${stem}-${number}.${extension}"
+        number=$((number + 1))
+    done
+    echo "$path"
+}
+
 create_combined_pdf() {
     local image_files=()
 
@@ -307,6 +321,9 @@ create_combined_pdf() {
     fi
 
     log_info "Creating combined PDF with ${#image_files[@]} pages..."
+
+    # Never overwrite an existing PDF in the output directory.
+    [[ -z "$APPEND_TO" ]] && PDF_FILE=$(next_free_path "$PDF_FILE")
 
     images_to_pdf "$PDF_FILE" "${image_files[@]}" || return 1
     log_info "Created: $PDF_FILE"
@@ -537,6 +554,8 @@ if [[ -n "$APPEND_TO" ]]; then
         exit 1
     fi
     PREFIX="$append_prefix"
+elif [[ "$PREFIX_SET" != "true" ]]; then
+    PREFIX="$(date +%Y-%m-%d-%H-%M-%S)-$PREFIX"
 fi
 
 # ---------------------------------------------------------------------------
@@ -710,7 +729,8 @@ print_summary() {
     echo "  Attempted pages: $((current_count - START_COUNT))"
     echo "  Successful scans: $successful_scans"
     echo "  Files in: $OUTPUT_DIR"
-    ls -la "$OUTPUT_DIR" 2>/dev/null || true
+    # Latest seven entries only; skip the "total" line
+    ls -lAt "$OUTPUT_DIR" 2>/dev/null | tail -n +2 | head -n 7 || true
 }
 
 # ---------------------------------------------------------------------------
