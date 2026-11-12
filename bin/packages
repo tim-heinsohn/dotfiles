@@ -88,6 +88,8 @@ extra/aws-cli
     Universal Command Line Interface for Amazon Web Services.
 extra/bat
     Cat clone with syntax highlighting and git integration.
+extra/bats
+    Bash Automated Testing System.
 extra/bind
     A complete, highly portable implementation of the DNS protocol. # nslookup
 extra/bluez
